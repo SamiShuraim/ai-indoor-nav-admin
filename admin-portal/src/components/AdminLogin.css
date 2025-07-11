@@ -1,0 +1,51 @@
+/* Admin Login Component Specific Styles */
+.login-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  transition: transform 0.3s ease;
+}
+
+.login-container:hover {
+  transform: translateY(-2px);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: -0.5px;
+}
+
+.login-header p {
+  margin: 0;
+  color: #666;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 24px;
+  }
+  
+  .login-header h1 {
+    font-size: 24px;
+  }
+} 
