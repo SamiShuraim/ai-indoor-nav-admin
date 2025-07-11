@@ -1,0 +1,60 @@
+/* Header Component Styles */
+.header {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header__content {
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header__text {
+  flex: 1;
+}
+
+.header__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.header__subtitle {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 24px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .header__content {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .header__actions {
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .header__title {
+    font-size: 20px;
+  }
+} 

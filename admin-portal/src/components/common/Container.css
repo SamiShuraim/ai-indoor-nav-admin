@@ -1,0 +1,73 @@
+/* Container Component Styles */
+.container {
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Variants */
+.container--page {
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.container--section {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.container--centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Sizes */
+.container--small {
+  max-width: 480px;
+}
+
+.container--medium {
+  max-width: 768px;
+}
+
+.container--large {
+  max-width: 1200px;
+}
+
+.container--full {
+  max-width: 100%;
+}
+
+/* Content padding for page containers */
+.container--page.container--small,
+.container--page.container--medium,
+.container--page.container--large {
+  padding: 2rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .container--page.container--small,
+  .container--page.container--medium,
+  .container--page.container--large {
+    padding: 1rem;
+  }
+
+  .container--section {
+    padding: 1.5rem;
+  }
+
+  .container--centered {
+    padding: 16px;
+  }
+} 
