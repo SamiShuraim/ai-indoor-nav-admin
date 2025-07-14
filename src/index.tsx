@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
-import './utils/debugHelpers'; // Initialize debug helpers
 import { createLogger } from './utils/logger';
 import './utils/loggerHelpers'; // Initialize logger helpers
 
