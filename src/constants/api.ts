@@ -4,6 +4,7 @@ export const API_BASE_URL = 'http://localhost:5090';
 // API Endpoints
 export const API_ENDPOINTS = {
   LOGIN: '/api/Login',
+  VALIDATE: '/api/Login/validate',
   DASHBOARD: '/dashboard',
   
   // Buildings
