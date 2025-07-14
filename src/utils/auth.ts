@@ -17,37 +17,57 @@ const ERROR_MESSAGES = {
 export const getStoredToken = (): string | null => {
   logger.debug('Attempting to retrieve stored token from localStorage');
   
-  const token = localStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+  // Try localStorage first
+  let token = localStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+  
+  // If not in localStorage, try sessionStorage
+  if (!token) {
+    token = sessionStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+    logger.debug('Token not found in localStorage, checked sessionStorage');
+  }
   
   if (token) {
-    logger.info('Token successfully retrieved from localStorage', { tokenLength: token.length });
+    logger.info('Token successfully retrieved', { 
+      tokenLength: token.length,
+      storage: localStorage.getItem(STORAGE_KEYS.JWT_TOKEN) ? 'localStorage' : 'sessionStorage'
+    });
   } else {
-    logger.debug('No token found in localStorage');
+    logger.debug('No token found in either localStorage or sessionStorage');
   }
   
   return token;
 };
 
-export const setStoredToken = (token: string): void => {
-  logger.info('Storing JWT token in localStorage', { tokenLength: token.length });
+export const setStoredToken = (token: string, useSessionStorage: boolean = false): void => {
+  const storageType = useSessionStorage ? 'sessionStorage' : 'localStorage';
+  logger.info(`Storing JWT token in ${storageType}`, { tokenLength: token.length });
   
   try {
-    localStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
-    logger.debug('Token successfully stored in localStorage');
+    if (useSessionStorage) {
+      sessionStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+      // Also remove from localStorage if it exists there
+      localStorage.removeItem(STORAGE_KEYS.JWT_TOKEN);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+      // Also remove from sessionStorage if it exists there
+      sessionStorage.removeItem(STORAGE_KEYS.JWT_TOKEN);
+    }
+    logger.debug(`Token successfully stored in ${storageType}`);
   } catch (error) {
-    logger.error('Failed to store token in localStorage', error as Error);
+    logger.error(`Failed to store token in ${storageType}`, error as Error);
     throw error;
   }
 };
 
 export const removeStoredToken = (): void => {
-  logger.info('Removing JWT token from localStorage');
+  logger.info('Removing JWT token from both localStorage and sessionStorage');
   
   try {
     localStorage.removeItem(STORAGE_KEYS.JWT_TOKEN);
-    logger.debug('Token successfully removed from localStorage');
+    sessionStorage.removeItem(STORAGE_KEYS.JWT_TOKEN);
+    logger.debug('Token successfully removed from both storage locations');
   } catch (error) {
-    logger.error('Failed to remove token from localStorage', error as Error);
+    logger.error('Failed to remove token from storage', error as Error);
     throw error;
   }
 };
@@ -244,8 +264,14 @@ export const validateToken = async (): Promise<boolean> => {
   const startTime = performance.now();
   logger.authEvent('Token validation started');
   
+  const token = getStoredToken();
+  if (!token) {
+    logger.authEvent('Token validation failed - no token found');
+    return false;
+  }
+  
   try {
-    const response = await fetchWithAuth(API_ENDPOINTS.DASHBOARD);
+    const response = await fetchWithAuth(API_ENDPOINTS.VALIDATE);
     const duration = performance.now() - startTime;
     
     const isValid = response.ok;
@@ -256,11 +282,20 @@ export const validateToken = async (): Promise<boolean> => {
       status: response.status 
     });
     
+    // If token is invalid, remove it from localStorage
+    if (!isValid) {
+      logger.authEvent('Token invalid - removing from localStorage', { status: response.status });
+      removeStoredToken();
+    }
+    
     return isValid;
   } catch (error) {
     const duration = performance.now() - startTime;
     logger.performanceLog('Token validation (FAILED)', duration);
-    logger.authEvent('Token validation error', { error: (error as Error).message });
+    logger.authEvent('Token validation error - removing token', { error: (error as Error).message });
+    
+    // Remove token on any error (network issues, server errors, etc.)
+    removeStoredToken();
     return false;
   }
 }; 
