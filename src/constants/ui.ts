@@ -81,6 +81,30 @@ export const UI_MESSAGES = {
   FLOOR_EDITOR_POIS_TAB: 'Points of Interest',
   FLOOR_EDITOR_NODES_TAB: 'Navigation Nodes',
   FLOOR_EDITOR_EDGES_TAB: 'Connections',
+  
+  // Floor Editor Drawing Tools
+  FLOOR_EDITOR_TOOL_POI: 'POI/Polygon',
+  FLOOR_EDITOR_TOOL_BEACONS: 'Beacons',
+  FLOOR_EDITOR_TOOL_NODES: 'Route Nodes',
+  FLOOR_EDITOR_TOOL_WALLS: 'Walls',
+  FLOOR_EDITOR_LAYERS_TITLE: 'Layers',
+  FLOOR_EDITOR_NO_LAYERS: 'No layers created yet',
+  FLOOR_EDITOR_LAYER_VISIBLE: 'Layer visible',
+  FLOOR_EDITOR_LAYER_HIDDEN: 'Layer hidden',
+  FLOOR_EDITOR_DRAWING_MODE: 'Drawing Mode',
+  FLOOR_EDITOR_SELECT_MODE: 'Select Mode',
+  FLOOR_EDITOR_CLEAR_ALL: 'Clear All',
+  FLOOR_EDITOR_ZOOM_IN: 'Zoom In',
+  FLOOR_EDITOR_ZOOM_OUT: 'Zoom Out',
+  FLOOR_EDITOR_RESET_VIEW: 'Reset View',
+  
+  // Floor Editor Polygon Dialog
+  FLOOR_EDITOR_POLYGON_DIALOG_TITLE: 'Configure Polygon',
+  FLOOR_EDITOR_POLYGON_NAME_LABEL: 'Name',
+  FLOOR_EDITOR_POLYGON_NAME_PLACEHOLDER: 'Enter polygon name',
+  FLOOR_EDITOR_POLYGON_IS_WALL_LABEL: 'This is a wall',
+  FLOOR_EDITOR_POLYGON_SAVE: 'Save Polygon',
+  FLOOR_EDITOR_POLYGON_CANCEL: 'Cancel',
 } as const;
 
 // External URLs
