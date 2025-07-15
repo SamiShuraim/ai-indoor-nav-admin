@@ -171,21 +171,38 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
   const getUserLocationAndCenter = (mapInstance: Map) => {
     if ('geolocation' in navigator) {
-      logger.info('Requesting user location permission');
+      logger.info('🌍 Requesting user location permission - this should show a browser popup');
+      console.log('🌍 GEOLOCATION: Starting location request...');
+      
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          logger.info('User location obtained, centering map', { latitude, longitude });
-          mapInstance.setCenter([longitude, latitude]);
-          mapInstance.setZoom(18);
+          console.log('🎯 GEOLOCATION SUCCESS:', { latitude, longitude });
+          logger.info('🎯 User location obtained, centering map NOW!', { latitude, longitude });
+          
+          // Force center the map
+          mapInstance.flyTo({
+            center: [longitude, latitude],
+            zoom: 18,
+            duration: 2000
+          });
           
           // Add a marker at user's location
           new Marker({ color: '#ef4444' })
             .setLngLat([longitude, latitude])
-            .setPopup(new Popup().setHTML('<strong>Your Location</strong>'))
+            .setPopup(new Popup().setHTML('<strong>🎯 Your Location</strong>'))
             .addTo(mapInstance);
+            
+          console.log('✅ GEOLOCATION: Map centered and marker added');
         },
         (error) => {
+          console.error('❌ GEOLOCATION ERROR:', { 
+            code: error.code, 
+            message: error.message,
+            PERMISSION_DENIED: error.code === 1,
+            POSITION_UNAVAILABLE: error.code === 2,
+            TIMEOUT: error.code === 3
+          });
           logger.warn('Geolocation error - using default location', error);
           logger.info('Geolocation error details', { 
             code: error.code, 
@@ -195,11 +212,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
+          timeout: 15000,  // Increased timeout
+          maximumAge: 0    // Don't use cached location
         }
       );
     } else {
+      console.warn('❌ Geolocation not supported by this browser');
       logger.warn('Geolocation not supported by this browser');
     }
   };
