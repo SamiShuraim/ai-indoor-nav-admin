@@ -1,4 +1,7 @@
+import { Map, Marker, Popup, config } from '@maptiler/sdk';
+import '@maptiler/sdk/dist/maptiler-sdk.css';
 import React, { useEffect, useRef, useState } from 'react';
+import { MAPTILER_API_KEY } from '../constants/api';
 import { UI_MESSAGES } from '../constants/ui';
 import { Floor, FloorLayoutData, floorLayoutApi, floorsApi } from '../utils/api';
 import { createLogger } from '../utils/logger';
@@ -15,7 +18,7 @@ interface FloorEditorProps {
 // Drawing tool types
 type DrawingTool = 'select' | 'pan' | 'poi' | 'beacons' | 'nodes' | 'walls';
 
-// Sample data interfaces
+// Sample data interfaces (keeping your existing structure)
 interface Point {
   x: number;
   y: number;
@@ -53,7 +56,7 @@ interface Edge {
   visible: boolean;
 }
 
-// Sample data
+// Sample data (keeping your existing data)
 const SAMPLE_POLYGONS: Polygon[] = [
   {
     id: '1',
@@ -114,39 +117,35 @@ const SAMPLE_EDGES: Edge[] = [
 ];
 
 const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
+  // Immediate log to see if component is being created
+  console.log('FloorEditor component starting - immediate console log', { floorId });
+  logger.info('FloorEditor component render start', { floorId });
+  
   const [floor, setFloor] = useState<Floor | null>(null);
   const [floorData, setFloorData] = useState<FloorLayoutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Drawing state
+  // Map state
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<Map | null>(null);
+  const [mapLoading, setMapLoading] = useState(true);
+  const [currentCoordinates, setCurrentCoordinates] = useState<{ lng: number; lat: number } | null>(null);
+  
+  // Drawing state (keeping your existing structure)
   const [activeTool, setActiveTool] = useState<DrawingTool>('select');
   const [polygons, setPolygons] = useState<Polygon[]>(SAMPLE_POLYGONS);
   const [beacons, setBeacons] = useState<Beacon[]>(SAMPLE_BEACONS);
   const [nodes, setNodes] = useState<RouteNode[]>(SAMPLE_NODES);
   const [edges, setEdges] = useState<Edge[]>(SAMPLE_EDGES);
-  const [currentDrawing, setCurrentDrawing] = useState<Point[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   
   // Selection state
   const [selectedItem, setSelectedItem] = useState<{type: 'polygon' | 'beacon' | 'node', id: string} | null>(null);
   
-  // Pan state
-  const [isPanning, setIsPanning] = useState(false);
-  const [lastPanPoint, setLastPanPoint] = useState<Point | null>(null);
-  
   // Polygon dialog state
   const [showPolygonDialog, setShowPolygonDialog] = useState(false);
-  const [pendingPolygon, setPendingPolygon] = useState<Point[]>([]);
   const [polygonName, setPolygonName] = useState('');
   const [isWallMode, setIsWallMode] = useState(false);
-  
-  // Canvas ref
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     logger.info('FloorEditor component mounted', { floorId });
@@ -154,56 +153,175 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     
     return () => {
       logger.info('FloorEditor component unmounted');
+      if (map.current) {
+        map.current.remove();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorId]);
 
-  // Resize canvas to fit container
-  const resizeCanvas = () => {
-    if (containerRef.current) {
-      const container = containerRef.current;
-      const rect = container.getBoundingClientRect();
-      const newWidth = Math.floor(rect.width - 32); // Subtract padding
-      const newHeight = Math.floor(rect.height - 32); // Subtract padding
-      
-      if (newWidth > 0 && newHeight > 0) {
-        setCanvasSize({ width: newWidth, height: newHeight });
-        logger.debug('Canvas resized', { width: newWidth, height: newHeight });
-      }
+  // Separate effect for map initialization - only after loading is complete and container is ready
+  useEffect(() => {
+    if (!loading && mapContainer.current && !map.current) {
+      logger.info('Initializing map after loading complete');
+      initializeMap();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  const initializeMap = () => {
+    if (!mapContainer.current) {
+      logger.warn('Map container not available');
+      return;
+    }
+
+    try {
+      logger.info('Initializing map', { 
+        apiKey: MAPTILER_API_KEY ? 'SET' : 'NOT_SET'
+      });
+
+      // Configure MapTiler SDK
+      config.apiKey = MAPTILER_API_KEY;
+
+      // Initialize map with basic style that should work
+      const mapInstance = new Map({
+        container: mapContainer.current,
+        style: 'streets-v2', // Using built-in style
+        center: [-157.8583, 21.3099], // Honolulu coordinates as default
+        zoom: 15
+      });
+
+      map.current = mapInstance;
+
+      mapInstance.on('load', () => {
+        setMapLoading(false);
+        logger.info('Map loaded successfully');
+        
+        // Try to get user's location
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude } = position.coords;
+              mapInstance.setCenter([longitude, latitude]);
+              mapInstance.setZoom(18);
+              logger.info('User location set', { latitude, longitude });
+            },
+            (error) => {
+              logger.warn('Geolocation error', error);
+              // Keep default location (Honolulu)
+            }
+          );
+        }
+      });
+
+      mapInstance.on('error', (e) => {
+        logger.error('Map error event', new Error(e.error?.message || 'Map error occurred'));
+        setError('Map failed to load. Please check your API key.');
+        setMapLoading(false);
+      });
+
+      // Mouse move event to track coordinates
+      mapInstance.on('mousemove', (e) => {
+        setCurrentCoordinates({
+          lng: Number(e.lngLat.lng.toFixed(6)),
+          lat: Number(e.lngLat.lat.toFixed(6))
+        });
+      });
+
+      // Click handlers for different tools
+      mapInstance.on('click', (e) => {
+        handleMapClick(e);
+      });
+
+      // Set a timeout to catch cases where the map never loads
+      setTimeout(() => {
+        if (mapLoading) {
+          logger.error('Map loading timeout - map failed to load within 30 seconds');
+          setError('Map loading timeout. Please check your internet connection and API key.');
+          setMapLoading(false);
+        }
+      }, 30000);
+
+    } catch (error) {
+      logger.error('Failed to initialize map', error as Error);
+      setError('Failed to initialize map. Please check the MapTiler configuration.');
+      setMapLoading(false);
     }
   };
 
-  // Handle window resize and initial sizing
-  useEffect(() => {
-    resizeCanvas();
-    
-    const handleResize = () => {
-      resizeCanvas();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    
-    // Also resize on container size changes (using ResizeObserver if available)
-    let resizeObserver: ResizeObserver | null = null;
-    if (containerRef.current && window.ResizeObserver) {
-      resizeObserver = new ResizeObserver(() => {
-        resizeCanvas();
-      });
-      resizeObserver.observe(containerRef.current);
-    }
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-    };
-  }, []);
+  const handleMapClick = (e: any) => {
+    if (!map.current) return;
 
-  useEffect(() => {
-    drawCanvas();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polygons, beacons, nodes, edges, zoom, pan, currentDrawing, selectedNodeId, selectedItem, canvasSize]);
+    const { lng, lat } = e.lngLat;
+    logger.userAction('Map clicked', { lng, lat, activeTool });
+
+    switch (activeTool) {
+      case 'beacons':
+        addBeacon(lng, lat);
+        break;
+      case 'nodes':
+        addNode(lng, lat);
+        break;
+      case 'poi':
+        // For POI/polygon creation, you might want to collect multiple points
+        // This is a simplified version
+        createSimplePOI(lng, lat);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const addBeacon = (lng: number, lat: number) => {
+    const newBeacon: Beacon = {
+      id: Date.now().toString(),
+      name: `Beacon ${beacons.length + 1}`,
+      x: lng,
+      y: lat,
+      visible: true
+    };
+    
+    setBeacons(prev => [...prev, newBeacon]);
+    
+    // Add marker to map
+    new Marker({ color: '#fbbf24' })
+      .setLngLat([lng, lat])
+      .setPopup(new Popup().setHTML(`<strong>${newBeacon.name}</strong>`))
+      .addTo(map.current!);
+      
+    logger.userAction('Beacon added', { beacon: newBeacon });
+  };
+
+  const addNode = (lng: number, lat: number) => {
+    const newNode: RouteNode = {
+      id: Date.now().toString(),
+      x: lng,
+      y: lat,
+      connections: [],
+      visible: true
+    };
+    
+    setNodes(prev => [...prev, newNode]);
+    
+    // Add marker to map
+    new Marker({ color: '#3b82f6' })
+      .setLngLat([lng, lat])
+      .setPopup(new Popup().setHTML(`<strong>Node ${newNode.id}</strong>`))
+      .addTo(map.current!);
+      
+    logger.userAction('Node added', { node: newNode });
+  };
+
+  const createSimplePOI = (lng: number, lat: number) => {
+    // This is a simplified POI creation - in a real implementation you'd want
+    // to collect multiple points to create a polygon
+    setPendingPolygonCenter({ lng, lat });
+    setPolygonName('');
+    setIsWallMode(false);
+    setShowPolygonDialog(true);
+  };
+
+  const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{ lng: number; lat: number } | null>(null);
 
   const loadFloorData = async () => {
     const numericFloorId = parseInt(floorId, 10);
@@ -252,498 +370,39 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     }
   };
 
-  const drawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Apply zoom and pan
-    ctx.save();
-    ctx.scale(zoom, zoom);
-    ctx.translate(pan.x, pan.y);
-
-    // Draw grid
-    drawGrid(ctx);
-
-    // Draw polygons
-    polygons.forEach(polygon => {
-      if (polygon.visible) {
-        drawPolygon(ctx, polygon);
-      }
-    });
-
-    // Draw edges
-    edges.forEach(edge => {
-      if (edge.visible) {
-        drawEdge(ctx, edge);
-      }
-    });
-
-    // Draw beacons
-    beacons.forEach(beacon => {
-      if (beacon.visible) {
-        drawBeacon(ctx, beacon);
-      }
-    });
-
-    // Draw nodes
-    nodes.forEach(node => {
-      if (node.visible) {
-        drawNode(ctx, node, node.id === selectedNodeId);
-      }
-    });
-
-    // Draw current drawing
-    if (currentDrawing.length > 0) {
-      drawCurrentDrawing(ctx);
-    }
-
-    ctx.restore();
-  };
-
-  const drawGrid = (ctx: CanvasRenderingContext2D) => {
-    const gridSize = 20;
-    ctx.strokeStyle = '#f0f0f0';
-    ctx.lineWidth = 1;
-
-    for (let x = 0; x < canvasSize.width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvasSize.height);
-      ctx.stroke();
-    }
-
-    for (let y = 0; y < canvasSize.height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvasSize.width, y);
-      ctx.stroke();
-    }
-  };
-
-  const drawPolygon = (ctx: CanvasRenderingContext2D, polygon: Polygon) => {
-    if (polygon.points.length < 3) return;
-
-    const isSelected = selectedItem?.type === 'polygon' && selectedItem?.id === polygon.id;
-    
-    ctx.fillStyle = polygon.color + (isSelected ? '60' : '40'); // More opacity if selected
-    ctx.strokeStyle = isSelected ? '#ef4444' : polygon.color;
-    ctx.lineWidth = isSelected ? 3 : 2;
-
-    ctx.beginPath();
-    ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
-    for (let i = 1; i < polygon.points.length; i++) {
-      ctx.lineTo(polygon.points[i].x, polygon.points[i].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw selection highlight
-    if (isSelected) {
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Draw label
-    const centerX = polygon.points.reduce((sum, p) => sum + p.x, 0) / polygon.points.length;
-    const centerY = polygon.points.reduce((sum, p) => sum + p.y, 0) / polygon.points.length;
-    
-    ctx.fillStyle = isSelected ? '#ef4444' : '#000';
-    ctx.font = isSelected ? 'bold 12px Arial' : '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(polygon.name, centerX, centerY);
-  };
-
-  const drawBeacon = (ctx: CanvasRenderingContext2D, beacon: Beacon) => {
-    const isSelected = selectedItem?.type === 'beacon' && selectedItem?.id === beacon.id;
-    
-    ctx.fillStyle = isSelected ? '#ef4444' : '#fbbf24';
-    ctx.strokeStyle = isSelected ? '#dc2626' : '#f59e0b';
-    ctx.lineWidth = isSelected ? 3 : 2;
-
-    ctx.beginPath();
-    ctx.arc(beacon.x, beacon.y, isSelected ? 10 : 8, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw selection highlight
-    if (isSelected) {
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.arc(beacon.x, beacon.y, 15, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Draw label
-    ctx.fillStyle = isSelected ? '#ef4444' : '#000';
-    ctx.font = isSelected ? 'bold 10px Arial' : '10px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(beacon.name, beacon.x, beacon.y - (isSelected ? 20 : 15));
-  };
-
-  const drawNode = (ctx: CanvasRenderingContext2D, node: RouteNode, selected: boolean) => {
-    const isItemSelected = selectedItem?.type === 'node' && selectedItem?.id === node.id;
-    const isActivelySelected = selected || isItemSelected;
-    
-    ctx.fillStyle = isActivelySelected ? '#ef4444' : '#3b82f6';
-    ctx.strokeStyle = isActivelySelected ? '#dc2626' : '#2563eb';
-    ctx.lineWidth = isActivelySelected ? 3 : 2;
-
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, isActivelySelected ? 10 : 8, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw selection highlight for item selection
-    if (isItemSelected) {
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, 15, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Draw node ID
-    ctx.fillStyle = '#fff';
-    ctx.font = isActivelySelected ? 'bold 10px Arial' : '10px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(node.id, node.x, node.y + 3);
-  };
-
-  const drawEdge = (ctx: CanvasRenderingContext2D, edge: Edge) => {
-    const fromNode = nodes.find(n => n.id === edge.fromNodeId);
-    const toNode = nodes.find(n => n.id === edge.toNodeId);
-    
-    if (!fromNode || !toNode) return;
-
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-    ctx.moveTo(fromNode.x, fromNode.y);
-    ctx.lineTo(toNode.x, toNode.y);
-    ctx.stroke();
-  };
-
-  const drawCurrentDrawing = (ctx: CanvasRenderingContext2D) => {
-    if (currentDrawing.length < 2) return;
-
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-
-    ctx.beginPath();
-    ctx.moveTo(currentDrawing[0].x, currentDrawing[0].y);
-    for (let i = 1; i < currentDrawing.length; i++) {
-      ctx.lineTo(currentDrawing[i].x, currentDrawing[i].y);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Draw points
-    ctx.fillStyle = '#ef4444';
-    currentDrawing.forEach((point, index) => {
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, index === 0 ? 6 : 4, 0, 2 * Math.PI);
-      ctx.fill();
-    });
-
-    // Highlight first point if we have at least 3 points (potential completion)
-    if (currentDrawing.length >= 3) {
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(currentDrawing[0].x, currentDrawing[0].y, 10, 0, 2 * Math.PI);
-      ctx.stroke();
-    }
-  };
-
-  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / zoom - pan.x;
-    const y = (e.clientY - rect.top) / zoom - pan.y;
-    return { x, y };
-  };
-
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool === 'pan') {
-      setIsPanning(true);
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      setLastPanPoint({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
-    }
-  };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool === 'pan' && isPanning && lastPanPoint) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      
-      const currentPoint = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      };
-      
-      const deltaX = (currentPoint.x - lastPanPoint.x) / zoom;
-      const deltaY = (currentPoint.y - lastPanPoint.y) / zoom;
-      
-      setPan(prev => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
-      }));
-      
-      setLastPanPoint(currentPoint);
-    }
-  };
-
-  const handleCanvasMouseUp = () => {
-    setIsPanning(false);
-    setLastPanPoint(null);
-  };
-
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (activeTool === 'pan') return; // Don't handle clicks in pan mode
-    
-    const { x, y } = getCanvasCoordinates(e);
-    logger.userAction('Canvas clicked', { x, y, activeTool });
-
-    switch (activeTool) {
-      case 'poi':
-        handlePoiClick(x, y);
-        break;
-      case 'beacons':
-        handleBeaconClick(x, y);
-        break;
-      case 'nodes':
-        handleNodeClick(x, y);
-        break;
-      case 'select':
-        handleSelectClick(x, y);
-        break;
-    }
-  };
-
-  const handlePoiClick = (x: number, y: number) => {
-    const newDrawing = [...currentDrawing, { x, y }];
-    
-    // Check if we're completing the polygon (clicking near the first point)
-    if (newDrawing.length >= 3) {
-      const firstPoint = newDrawing[0];
-      const distance = Math.sqrt((firstPoint.x - x) ** 2 + (firstPoint.y - y) ** 2);
-      
-      // If within 15 pixels of the first point, complete the polygon
-      if (distance <= 15) {
-        logger.userAction('Polygon completed by clicking near first point', { 
-          pointCount: newDrawing.length - 1, // Don't count the duplicate last point
-          distance 
-        });
-        
-        // Remove the last point (which is duplicate of first) and show dialog
-        const completedPolygon = newDrawing.slice(0, -1);
-        setPendingPolygon(completedPolygon);
-        setCurrentDrawing([]);
-        setPolygonName('');
-        setIsWallMode(false);
-        setShowPolygonDialog(true);
-        return;
-      }
-    }
-    
-    setCurrentDrawing(newDrawing);
-  };
-
-  const handleBeaconClick = (x: number, y: number) => {
-    const newBeacon: Beacon = {
-      id: Date.now().toString(),
-      name: `Beacon ${beacons.length + 1}`,
-      x,
-      y,
-      visible: true
-    };
-    setBeacons(prev => [...prev, newBeacon]);
-  };
-
-  const handleNodeClick = (x: number, y: number) => {
-    // Check if clicking on existing node
-    const clickedNode = nodes.find(node => {
-      const distance = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-      return distance < 15;
-    });
-
-    if (clickedNode) {
-      if (selectedNodeId && selectedNodeId !== clickedNode.id) {
-        // Create edge between selected node and clicked node
-        const newEdge: Edge = {
-          id: Date.now().toString(),
-          fromNodeId: selectedNodeId,
-          toNodeId: clickedNode.id,
-          visible: true
-        };
-        setEdges(prev => [...prev, newEdge]);
-        
-        // Update node connections
-        setNodes(prev => prev.map(node => {
-          if (node.id === selectedNodeId) {
-            return { ...node, connections: [...node.connections, clickedNode.id] };
-          }
-          if (node.id === clickedNode.id) {
-            return { ...node, connections: [...node.connections, selectedNodeId] };
-          }
-          return node;
-        }));
-        
-        setSelectedNodeId(null);
-      } else {
-        setSelectedNodeId(clickedNode.id);
-      }
-    } else {
-      // Create new node only if no nodes exist or a node is selected
-      if (nodes.length === 0 || selectedNodeId) {
-        const newNode: RouteNode = {
-          id: Date.now().toString(),
-          x,
-          y,
-          connections: [],
-          visible: true
-        };
-        
-        if (selectedNodeId) {
-          // Create edge to selected node
-          const newEdge: Edge = {
-            id: Date.now().toString(),
-            fromNodeId: selectedNodeId,
-            toNodeId: newNode.id,
-            visible: true
-          };
-          setEdges(prev => [...prev, newEdge]);
-          
-          // Update connections
-          newNode.connections = [selectedNodeId];
-          setNodes(prev => prev.map(node => {
-            if (node.id === selectedNodeId) {
-              return { ...node, connections: [...node.connections, newNode.id] };
-            }
-            return node;
-          }));
-        }
-        
-        setNodes(prev => [...prev, newNode]);
-        setSelectedNodeId(newNode.id);
-      }
-    }
-  };
-
-  const handleSelectClick = (x: number, y: number) => {
-    // Check for polygon selection (using point-in-polygon algorithm)
-    for (const polygon of polygons) {
-      if (polygon.visible && isPointInPolygon({ x, y }, polygon.points)) {
-        setSelectedItem({ type: 'polygon', id: polygon.id });
-        setSelectedNodeId(null);
-        logger.userAction('Polygon selected', { polygonId: polygon.id, name: polygon.name });
-        return;
-      }
-    }
-
-    // Check for beacon selection
-    for (const beacon of beacons) {
-      if (beacon.visible) {
-        const distance = Math.sqrt((beacon.x - x) ** 2 + (beacon.y - y) ** 2);
-        if (distance <= 15) {
-          setSelectedItem({ type: 'beacon', id: beacon.id });
-          setSelectedNodeId(null);
-          logger.userAction('Beacon selected', { beaconId: beacon.id, name: beacon.name });
-          return;
-        }
-      }
-    }
-
-    // Check for node selection
-    for (const node of nodes) {
-      if (node.visible) {
-        const distance = Math.sqrt((node.x - x) ** 2 + (node.y - y) ** 2);
-        if (distance <= 15) {
-          setSelectedItem({ type: 'node', id: node.id });
-          setSelectedNodeId(null);
-          logger.userAction('Node selected', { nodeId: node.id });
-          return;
-        }
-      }
-    }
-
-    // No item selected - clear selection
-    setSelectedItem(null);
-    setSelectedNodeId(null);
-  };
-
-  // Point-in-polygon algorithm (ray casting)
-  const isPointInPolygon = (point: Point, polygon: Point[]): boolean => {
-    let inside = false;
-    let j = polygon.length - 1;
-    
-    for (let i = 0; i < polygon.length; i++) {
-      const xi = polygon[i].x;
-      const yi = polygon[i].y;
-      const xj = polygon[j].x;
-      const yj = polygon[j].y;
-      
-      if (((yi > point.y) !== (yj > point.y)) && 
-          (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
-        inside = !inside;
-      }
-      j = i;
-    }
-    
-    return inside;
-  };
-
   const handleToolChange = (tool: DrawingTool) => {
     logger.userAction('Tool changed', { tool });
     setActiveTool(tool);
-    setCurrentDrawing([]);
-    setSelectedNodeId(null);
-    if (tool !== 'select') {
-      setSelectedItem(null); // Clear item selection when switching away from select tool
-    }
+    setSelectedItem(null);
   };
 
   const handlePolygonSave = () => {
-    if (pendingPolygon.length >= 3 && polygonName.trim()) {
+    if (pendingPolygonCenter && polygonName.trim()) {
       const newPolygon: Polygon = {
         id: Date.now().toString(),
         name: polygonName.trim(),
-        points: [...pendingPolygon],
+        points: [
+          { x: pendingPolygonCenter.lng - 0.0001, y: pendingPolygonCenter.lat + 0.0001 },
+          { x: pendingPolygonCenter.lng + 0.0001, y: pendingPolygonCenter.lat + 0.0001 },
+          { x: pendingPolygonCenter.lng + 0.0001, y: pendingPolygonCenter.lat - 0.0001 },
+          { x: pendingPolygonCenter.lng - 0.0001, y: pendingPolygonCenter.lat - 0.0001 }
+        ],
         type: isWallMode ? 'wall' : 'poi',
         visible: true,
         color: isWallMode ? '#6b7280' : '#3b82f6'
       };
       setPolygons(prev => [...prev, newPolygon]);
+      
+      // Add polygon to map
+      new Marker({ color: newPolygon.color })
+        .setLngLat([newPolygon.points[0].x, newPolygon.points[0].y])
+        .setPopup(new Popup().setHTML(`<strong>${newPolygon.name}</strong><br>Type: ${newPolygon.type}`))
+        .addTo(map.current!);
+      
       logger.userAction('Polygon saved', { 
         name: polygonName.trim(), 
         isWall: isWallMode,
-        pointCount: pendingPolygon.length 
+        coordinates: pendingPolygonCenter
       });
     }
     handlePolygonCancel();
@@ -751,7 +410,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
   const handlePolygonCancel = () => {
     setShowPolygonDialog(false);
-    setPendingPolygon([]);
+    setPendingPolygonCenter(null);
     setPolygonName('');
     setIsWallMode(false);
     logger.userAction('Polygon dialog cancelled');
@@ -763,13 +422,19 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     setBeacons([]);
     setNodes([]);
     setEdges([]);
-    setCurrentDrawing([]);
-    setSelectedNodeId(null);
+    setSelectedItem(null);
+    
+    // Clear all markers from map (simplified - in a real implementation you'd track markers)
+    if (map.current) {
+      // This is a simplified clear - you'd want to track and remove specific markers
+      map.current.remove();
+      initializeMap();
+    }
   };
 
   const handleLayerItemClick = (type: 'polygon' | 'beacon' | 'node', id: string) => {
     setSelectedItem({ type, id });
-    setActiveTool('select'); // Switch to select tool when selecting from layers
+    setActiveTool('select');
     logger.userAction('Layer item selected', { type, id });
   };
 
@@ -801,24 +466,13 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     logger.info('Save functionality not yet implemented');
   };
 
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev * 1.2, 3));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev / 1.2, 0.5));
-  };
-
-  const handleResetView = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-
   logger.debug('FloorEditor component rendering', { 
     floorId, 
     activeTool, 
     loading,
-    hasFloorData: !!floorData 
+    mapLoading,
+    hasFloorData: !!floorData,
+    coordinates: currentCoordinates
   });
 
   if (loading) {
@@ -875,7 +529,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             <button 
               className={`tool-button ${activeTool === 'pan' ? 'active' : ''}`}
               onClick={() => handleToolChange('pan')}
-              title="Pan/Move Map"
+              title={UI_MESSAGES.FLOOR_EDITOR_PAN_MODE}
             >
               <span className="tool-icon">✋</span>
               Pan
@@ -910,30 +564,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
           </div>
 
           <div className="tool-group">
-            <button 
-              className="tool-button"
-              onClick={handleZoomIn}
-              title={UI_MESSAGES.FLOOR_EDITOR_ZOOM_IN}
-            >
-              <span className="tool-icon">🔍+</span>
-            </button>
-            
-            <button 
-              className="tool-button"
-              onClick={handleZoomOut}
-              title={UI_MESSAGES.FLOOR_EDITOR_ZOOM_OUT}
-            >
-              <span className="tool-icon">🔍-</span>
-            </button>
-            
-            <button 
-              className="tool-button"
-              onClick={handleResetView}
-              title={UI_MESSAGES.FLOOR_EDITOR_RESET_VIEW}
-            >
-              <span className="tool-icon">🎯</span>
-            </button>
-            
             <Button variant="DANGER" onClick={handleClearAll}>
               {UI_MESSAGES.FLOOR_EDITOR_CLEAR_ALL}
             </Button>
@@ -942,19 +572,24 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
         {/* Main Content Area */}
         <div className="editor-main">
-          {/* Map Canvas */}
-          <div ref={containerRef} className="map-container">
-            <canvas
-              ref={canvasRef}
-              width={canvasSize.width}
-              height={canvasSize.height}
-              onClick={handleCanvasClick}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-              className={`map-canvas ${activeTool === 'pan' ? 'pan-mode' : activeTool === 'select' ? 'select-mode' : ''}`}
-            />
+          {/* Map Container */}
+          <div className="map-container">
+            {mapLoading && (
+              <div className="map-loading-overlay">
+                <div className="loading-message">{UI_MESSAGES.FLOOR_EDITOR_MAP_LOADING}</div>
+              </div>
+            )}
+            <div ref={mapContainer} className="map-wrapper" />
+            
+            {/* Coordinates Display */}
+            {currentCoordinates && (
+              <div className="coordinates-display">
+                <span className="coordinates-label">{UI_MESSAGES.FLOOR_EDITOR_COORDINATES_LABEL}</span>
+                <span className="coordinates-value">
+                  {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Layers Panel */}
