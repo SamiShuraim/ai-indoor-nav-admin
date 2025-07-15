@@ -169,6 +169,41 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
+  const getUserLocationAndCenter = (mapInstance: Map) => {
+    if ('geolocation' in navigator) {
+      logger.info('Requesting user location permission');
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          logger.info('User location obtained, centering map', { latitude, longitude });
+          mapInstance.setCenter([longitude, latitude]);
+          mapInstance.setZoom(18);
+          
+          // Add a marker at user's location
+          new Marker({ color: '#ef4444' })
+            .setLngLat([longitude, latitude])
+            .setPopup(new Popup().setHTML('<strong>Your Location</strong>'))
+            .addTo(mapInstance);
+        },
+        (error) => {
+          logger.warn('Geolocation error - using default location', error);
+          logger.info('Geolocation error details', { 
+            code: error.code, 
+            message: error.message 
+          });
+          // Keep default location (Honolulu)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    } else {
+      logger.warn('Geolocation not supported by this browser');
+    }
+  };
+
   const initializeMap = () => {
     if (!mapContainer.current) {
       logger.warn('Map container not available');
@@ -177,11 +212,17 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
     try {
       logger.info('Initializing map', { 
-        apiKey: MAPTILER_API_KEY ? 'SET' : 'NOT_SET'
+        apiKey: MAPTILER_API_KEY ? 'SET' : 'NOT_SET',
+        apiKeyLength: MAPTILER_API_KEY?.length || 0,
+        envApiKey: process.env.REACT_APP_MAPTILER_API_KEY ? 'ENV_SET' : 'ENV_NOT_SET'
       });
 
       // Configure MapTiler SDK
       config.apiKey = MAPTILER_API_KEY;
+      
+      if (!MAPTILER_API_KEY) {
+        throw new Error('MapTiler API key is not set. Please check your .env file and restart the development server.');
+      }
 
       // Initialize map with basic style that should work
       const mapInstance = new Map({
@@ -197,21 +238,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         setMapLoading(false);
         logger.info('Map loaded successfully');
         
-        // Try to get user's location
-        if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const { latitude, longitude } = position.coords;
-              mapInstance.setCenter([longitude, latitude]);
-              mapInstance.setZoom(18);
-              logger.info('User location set', { latitude, longitude });
-            },
-            (error) => {
-              logger.warn('Geolocation error', error);
-              // Keep default location (Honolulu)
-            }
-          );
-        }
+        // Immediately ask for user's location with better handling
+        getUserLocationAndCenter(mapInstance);
       });
 
       mapInstance.on('error', (e) => {
