@@ -1,7 +1,7 @@
 import { Map, Marker, Popup, config } from '@maptiler/sdk';
 import '@maptiler/sdk/dist/maptiler-sdk.css';
 import React, { useEffect, useRef, useState } from 'react';
-import { MAPTILER_API_KEY } from '../constants/api';
+import { MAPTILER_API_KEY, MAPTILER_STYLE_URL } from '../constants/api';
 import { UI_MESSAGES } from '../constants/ui';
 import { Floor, FloorLayoutData, floorLayoutApi, floorsApi } from '../utils/api';
 import { createLogger } from '../utils/logger';
@@ -242,10 +242,10 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         throw new Error('MapTiler API key is not set. Please check your .env file and restart the development server.');
       }
 
-      // Initialize map with basic style that should work
+      // Initialize map with your custom style (same as Android app)
       const mapInstance = new Map({
         container: mapContainer.current,
-        style: 'streets-v2', // Using built-in style
+        style: MAPTILER_STYLE_URL, // Using your custom style URL
         center: [-157.8583, 21.3099], // Honolulu coordinates as default
         zoom: 15
       });
