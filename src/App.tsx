@@ -157,6 +157,14 @@ function AppContent() {
     isAuthenticated: !!token
   });
 
+  // Debug: Log if we're on the floor editor route
+  if (location.pathname.startsWith('/floor-editor/')) {
+    logger.info('Currently on floor editor route', { 
+      pathname: location.pathname,
+      floorId: location.pathname.split('/').pop()
+    });
+  }
+
   return (
     <div className="App">
       <Routes>
