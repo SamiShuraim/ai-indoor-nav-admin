@@ -5,8 +5,13 @@ import { MAPTILER_API_KEY, MAPTILER_STYLE_URL } from '../constants/api';
 import { UI_MESSAGES } from '../constants/ui';
 import { Floor, FloorLayoutData, floorLayoutApi, floorsApi } from '../utils/api';
 import { createLogger } from '../utils/logger';
-import { Button, Container, Header, Input } from './common';
+import { Alert, Button, Container, Header } from './common';
 import './FloorEditor.css';
+import BeaconDialog from './FloorEditor/BeaconDialog';
+import DrawingToolbar, { DrawingTool } from './FloorEditor/DrawingToolbar';
+import LayersPanel from './FloorEditor/LayersPanel';
+import MapContainer from './FloorEditor/MapContainer';
+import PolygonDialog from './FloorEditor/PolygonDialog';
 
 const logger = createLogger('FloorEditor');
 
@@ -43,10 +48,7 @@ interface FloorEditorProps {
   onBack: () => void;
 }
 
-// Drawing tool types
-type DrawingTool = 'select' | 'pan' | 'poi' | 'beacons' | 'nodes' | 'walls';
-
-// Sample data interfaces (keeping your existing structure)
+// Sample data interfaces
 interface Point {
   x: number;
   y: number;
@@ -84,7 +86,7 @@ interface Edge {
   visible: boolean;
 }
 
-// Sample data (keeping your existing data)
+// Sample data
 const SAMPLE_POLYGONS: Polygon[] = [
   {
     id: '1',
@@ -145,9 +147,8 @@ const SAMPLE_EDGES: Edge[] = [
 ];
 
 const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
-  // Immediate log to see if component is being created
-  console.log('FloorEditor component starting - immediate console log', { floorId });
-  logger.info('FloorEditor component render start', { floorId });
+  // Remove the immediate console.log and replace with logger
+  logger.info('FloorEditor component starting', { floorId });
   
   const [floor, setFloor] = useState<Floor | null>(null);
   const [floorData, setFloorData] = useState<FloorLayoutData | null>(null);
@@ -160,13 +161,22 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const [mapLoading, setMapLoading] = useState(true);
   const [currentCoordinates, setCurrentCoordinates] = useState<{ lng: number; lat: number } | null>(null);
   const [mapLoadedSuccessfully, setMapLoadedSuccessfully] = useState(false);
+  const [showMapLoadedAlert, setShowMapLoadedAlert] = useState(false);
   
   // Map markers and layers tracking
   const mapMarkers = useRef<{ [key: string]: any }>({});
   const mapLayers = useRef<{ [key: string]: string }>({});
+  const mapSources = useRef<{ [key: string]: string }>({});
+  
+  // Temporary drawing markers for polygon creation
+  const tempDrawingMarkers = useRef<any[]>([]);
+  const tempDrawingLines = useRef<{ [key: string]: string }>({});
   
   // Timeout reference for cleanup
   const mapLoadTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track if we've loaded initial data
+  const initialDataLoaded = useRef<boolean>(false);
   
   // Throttle coordinate updates to prevent infinite re-renders
   const coordinateUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -179,7 +189,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     });
   }, []);
   
-  // Drawing state (keeping your existing structure)
+  // Drawing state
   const [activeTool, setActiveTool] = useState<DrawingTool>('select');
   const activeToolRef = useRef<DrawingTool>('select');
   const [polygons, setPolygons] = useState<Polygon[]>(() => 
@@ -211,6 +221,16 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const [beaconName, setBeaconName] = useState('');
   const [pendingBeaconLocation, setPendingBeaconLocation] = useState<{ lng: number; lat: number } | null>(null);
 
+  // Polygon drawing state
+  const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
+  const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>([]);
+  const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>([]);
+  const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{ lng: number; lat: number } | null>(null);
+  
+  // Use refs to prevent state loss during re-renders
+  const pendingPolygonPointsRef = useRef<Point[]>([]);
+  const isDrawingPolygonRef = useRef<boolean>(false);
+
   useEffect(() => {
     logger.info('FloorEditor component mounted', { floorId });
     loadFloorData();
@@ -239,44 +259,135 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
   // NOTE: Map initialization useEffect moved to after initializeMap function declaration
 
-  // Load sample data to map once it's ready
-  useEffect(() => {
-    if (!mapLoading && map.current) {
-      console.log('🗺️ Map is ready, loading sample data...');
-      // Add sample data to the map with proper visualization
-      logger.info('Adding all sample data to map with proper visualization');
-      
-      const mapInstance = map.current;
-      
-      // Clear existing markers and layers
-      Object.values(mapMarkers.current).forEach(marker => marker.remove());
-      mapMarkers.current = {};
-      Object.values(mapLayers.current).forEach(layerId => {
-        if (mapInstance.getLayer(layerId)) {
-          mapInstance.removeLayer(layerId);
-        }
-        if (mapInstance.getSource(layerId)) {
-          mapInstance.removeSource(layerId);
-        }
-      });
-      mapLayers.current = {};
-      
-      // Add polygons as filled areas
-      polygons.forEach(polygon => {
-        if (polygon.visible && polygon.points.length >= 3) {
-          const coordinates = polygon.points.map(p => [p.x, p.y]);
-          coordinates.push(coordinates[0]); // Close the polygon
+  // Function to update map with current data (called manually when needed)
+  const updateMapData = useCallback((currentPolygons: Polygon[], currentBeacons: Beacon[], currentNodes: RouteNode[], currentEdges: Edge[]) => {
+    if (!map.current) return;
+    
+    logger.info('Updating map with current data');
+    const mapInstance = map.current;
+    
+    // Clear existing markers and layers
+    Object.values(mapMarkers.current).forEach(marker => marker.remove());
+    mapMarkers.current = {};
+    
+    // Remove layers
+    Object.values(mapLayers.current).forEach(layerId => {
+      if (mapInstance.getLayer(layerId)) {
+        mapInstance.removeLayer(layerId);
+      }
+    });
+    mapLayers.current = {};
+    
+    // Remove sources  
+    Object.values(mapSources.current).forEach(sourceId => {
+      if (mapInstance.getSource(sourceId)) {
+        mapInstance.removeSource(sourceId);
+      }
+    });
+    mapSources.current = {};
+    
+    // Add polygons as filled areas
+    currentPolygons.forEach(polygon => {
+      if (polygon.visible && polygon.points.length >= 3) {
+        const coordinates = polygon.points.map(p => [p.x, p.y]);
+        coordinates.push(coordinates[0]); // Close the polygon
+        
+        const sourceId = `polygon-source-${polygon.id}`;
+        const layerId = `polygon-layer-${polygon.id}`;
+        
+        mapInstance.addSource(sourceId, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [coordinates]
+            },
+            properties: {}
+          }
+        });
+        
+        mapInstance.addLayer({
+          id: layerId,
+          type: 'fill',
+          source: sourceId,
+          paint: {
+            'fill-color': polygon.color,
+            'fill-opacity': 0.6
+          }
+        });
+        
+        // Add border
+        const borderLayerId = `polygon-border-${polygon.id}`;
+        mapInstance.addLayer({
+          id: borderLayerId,
+          type: 'line',
+          source: sourceId,
+          paint: {
+            'line-color': polygon.color,
+            'line-width': 2
+          }
+        });
+        
+        // Track sources and layers
+        mapSources.current[`polygon-${polygon.id}`] = sourceId;
+        mapLayers.current[`polygon-${polygon.id}`] = layerId;
+        mapLayers.current[`polygon-border-${polygon.id}`] = borderLayerId;
+        
+        // Add center marker for interaction
+        const centerX = polygon.points.reduce((sum, p) => sum + p.x, 0) / polygon.points.length;
+        const centerY = polygon.points.reduce((sum, p) => sum + p.y, 0) / polygon.points.length;
+        
+        const marker = new Marker({ color: polygon.color, scale: 0.8 })
+          .setLngLat([centerX, centerY])
+          .setPopup(new Popup().setHTML(`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`))
+          .addTo(mapInstance);
           
-          const sourceId = `polygon-source-${polygon.id}`;
-          const layerId = `polygon-layer-${polygon.id}`;
+        mapMarkers.current[`polygon-${polygon.id}`] = marker;
+      }
+    });
+    
+    // Add beacons
+    currentBeacons.forEach(beacon => {
+      if (beacon.visible) {
+        const marker = new Marker({ color: '#fbbf24' })
+          .setLngLat([beacon.x, beacon.y])
+          .setPopup(new Popup().setHTML(`<strong>${beacon.name}</strong><br>Type: Beacon`))
+          .addTo(mapInstance);
+          
+        mapMarkers.current[`beacon-${beacon.id}`] = marker;
+      }
+    });
+    
+    // Add nodes
+    currentNodes.forEach(node => {
+      if (node.visible) {
+        const marker = new Marker({ color: '#3b82f6' })
+          .setLngLat([node.x, node.y])
+          .setPopup(new Popup().setHTML(`<strong>Node ${node.id}</strong><br>Connections: ${node.connections.length}`))
+          .addTo(mapInstance);
+          
+        mapMarkers.current[`node-${node.id}`] = marker;
+      }
+    });
+    
+    // Add route lines between connected nodes
+    currentEdges.forEach(edge => {
+      if (edge.visible) {
+        const fromNode = currentNodes.find(n => n.id === edge.fromNodeId);
+        const toNode = currentNodes.find(n => n.id === edge.toNodeId);
+        
+        if (fromNode && toNode && fromNode.visible && toNode.visible) {
+          const sourceId = `edge-source-${edge.id}`;
+          const layerId = `edge-layer-${edge.id}`;
           
           mapInstance.addSource(sourceId, {
             type: 'geojson',
             data: {
               type: 'Feature',
               geometry: {
-                type: 'Polygon',
-                coordinates: [coordinates]
+                type: 'LineString',
+                coordinates: [[fromNode.x, fromNode.y], [toNode.x, toNode.y]]
               },
               properties: {}
             }
@@ -284,108 +395,33 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
           
           mapInstance.addLayer({
             id: layerId,
-            type: 'fill',
-            source: sourceId,
-            paint: {
-              'fill-color': polygon.color,
-              'fill-opacity': 0.6
-            }
-          });
-          
-          // Add border
-          const borderLayerId = `polygon-border-${polygon.id}`;
-          mapInstance.addLayer({
-            id: borderLayerId,
             type: 'line',
             source: sourceId,
             paint: {
-              'line-color': polygon.color,
-              'line-width': 2
+              'line-color': '#8b5cf6',
+              'line-width': 3,
+              'line-opacity': 0.8
             }
           });
           
-          mapLayers.current[`polygon-${polygon.id}`] = layerId;
-          mapLayers.current[`polygon-border-${polygon.id}`] = borderLayerId;
-          
-          // Add center marker for interaction
-          const centerX = polygon.points.reduce((sum, p) => sum + p.x, 0) / polygon.points.length;
-          const centerY = polygon.points.reduce((sum, p) => sum + p.y, 0) / polygon.points.length;
-          
-          const marker = new Marker({ color: polygon.color, scale: 0.8 })
-            .setLngLat([centerX, centerY])
-            .setPopup(new Popup().setHTML(`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`))
-            .addTo(mapInstance);
-            
-          mapMarkers.current[`polygon-${polygon.id}`] = marker;
+          // Track sources and layers
+          mapSources.current[`edge-${edge.id}`] = sourceId;
+          mapLayers.current[`edge-${edge.id}`] = layerId;
         }
-      });
-      
-      // Add beacons
-      beacons.forEach(beacon => {
-        if (beacon.visible) {
-          const marker = new Marker({ color: '#fbbf24' })
-            .setLngLat([beacon.x, beacon.y])
-            .setPopup(new Popup().setHTML(`<strong>${beacon.name}</strong><br>Type: Beacon`))
-            .addTo(mapInstance);
-            
-          mapMarkers.current[`beacon-${beacon.id}`] = marker;
-        }
-      });
-      
-      // Add nodes
-      nodes.forEach(node => {
-        if (node.visible) {
-          const marker = new Marker({ color: '#3b82f6' })
-            .setLngLat([node.x, node.y])
-            .setPopup(new Popup().setHTML(`<strong>Node ${node.id}</strong><br>Connections: ${node.connections.length}`))
-            .addTo(mapInstance);
-            
-          mapMarkers.current[`node-${node.id}`] = marker;
-        }
-      });
-      
-      // Add route lines between connected nodes
-      edges.forEach(edge => {
-        if (edge.visible) {
-          const fromNode = nodes.find(n => n.id === edge.fromNodeId);
-          const toNode = nodes.find(n => n.id === edge.toNodeId);
-          
-          if (fromNode && toNode && fromNode.visible && toNode.visible) {
-            const sourceId = `edge-source-${edge.id}`;
-            const layerId = `edge-layer-${edge.id}`;
-            
-            mapInstance.addSource(sourceId, {
-              type: 'geojson',
-              data: {
-                type: 'Feature',
-                geometry: {
-                  type: 'LineString',
-                  coordinates: [[fromNode.x, fromNode.y], [toNode.x, toNode.y]]
-                },
-                properties: {}
-              }
-            });
-            
-            mapInstance.addLayer({
-              id: layerId,
-              type: 'line',
-              source: sourceId,
-              paint: {
-                'line-color': '#8b5cf6',
-                'line-width': 3,
-                'line-opacity': 0.8
-              }
-            });
-            
-            mapLayers.current[`edge-${edge.id}`] = layerId;
-          }
-        }
-      });
-      
-      console.log('✅ Sample data loaded to map successfully');
-      logger.info('All sample data added successfully with proper visualization');
+      }
+    });
+    
+    logger.info('Map data updated successfully');
+  }, []);
+
+  // Load initial sample data to map once it's ready (only runs once)
+  useEffect(() => {
+    if (!mapLoading && map.current && !initialDataLoaded.current) {
+      logger.info('Adding initial sample data to map');
+      initialDataLoaded.current = true;
+      updateMapData(polygons, beacons, nodes, edges);
     }
-  }, [mapLoading, polygons, beacons, nodes, edges]); // Re-run when data changes
+  }, [mapLoading]); // Only depend on mapLoading to avoid infinite re-renders
 
 
 
@@ -396,12 +432,10 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const getUserLocationAndCenter = (mapInstance: Map) => {
     if ('geolocation' in navigator) {
       logger.info('🌍 Requesting user location permission - this should show a browser popup');
-      console.log('🌍 GEOLOCATION: Starting location request...');
       
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          console.log('🎯 GEOLOCATION SUCCESS:', { latitude, longitude });
           logger.info('🎯 User location obtained, centering map NOW!', { latitude, longitude });
           
           // Force center the map
@@ -417,16 +451,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             .setPopup(new Popup().setHTML('<strong>🎯 Your Location</strong>'))
             .addTo(mapInstance);
             
-          console.log('✅ GEOLOCATION: Map centered and marker added');
         },
         (error) => {
-          console.error('❌ GEOLOCATION ERROR:', { 
-            code: error.code, 
-            message: error.message,
-            PERMISSION_DENIED: error.code === 1,
-            POSITION_UNAVAILABLE: error.code === 2,
-            TIMEOUT: error.code === 3
-          });
           logger.warn('Geolocation error - using default location', error);
           logger.info('Geolocation error details', { 
             code: error.code, 
@@ -441,7 +467,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         }
       );
     } else {
-      console.warn('❌ Geolocation not supported by this browser');
       logger.warn('Geolocation not supported by this browser');
     }
   };
@@ -488,10 +513,9 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         setError(null); // Clear any previous errors since map loaded successfully
         logger.info('Map loaded successfully');
         
-
-        
-        // Use fixed coordinates instead of user location
-        logger.info('Using fixed coordinates instead of geolocation', { lat: 26.313387, lng: 50.142335 });
+        // SHOW HUGE ALERT AS REQUESTED
+        setShowMapLoadedAlert(true);
+        setTimeout(() => setShowMapLoadedAlert(false), 5000); // Hide after 5 seconds
       });
 
       mapInstance.on('error', (e) => {
@@ -526,9 +550,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       // });
 
       // Click handlers for different tools
-      console.log('🎯 SETTING UP MAP CLICK HANDLER');
       mapInstance.on('click', (e) => {
-        console.log('🖱️ RAW MAP CLICK DETECTED:', e);
         handleMapClick(e);
       });
 
@@ -559,12 +581,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   }, [loading, initializeMap]); // Depend on loading and initializeMap
 
   const handleMapClick = (e: any) => {
-    console.log('🖱️ MAP CLICK EVENT:', { 
-      hasMap: !!map.current, 
-      activeTool, 
-      coordinates: e.lngLat,
-      eventType: e.type 
-    });
     logger.userAction('Map clicked - DETAILED', { 
       hasMap: !!map.current, 
       activeTool, 
@@ -577,47 +593,35 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     });
 
     if (!map.current) {
-      console.error('❌ MAP CLICK: No map instance available');
       logger.error('Map click failed - no map instance');
       return;
     }
 
     const { lng, lat } = e.lngLat;
     const currentTool = activeToolRef.current; // Use ref to get current tool
-    console.log('🎯 PROCESSING CLICK:', { lng, lat, activeTool, activeToolRef: currentTool });
 
     switch (currentTool) {
       case 'beacons':
-        console.log('📡 BEACON TOOL ACTIVATED - calling addBeacon');
         addBeacon(lng, lat);
         // Keep the tool active for adding multiple beacons
         break;
       case 'nodes':
-        console.log('🔗 NODE TOOL ACTIVATED - calling addNode');
         addNode(lng, lat);
         // Keep the tool active for adding multiple nodes
         break;
       case 'poi':
-        console.log('📍 POI TOOL ACTIVATED - calling createSimplePOI');
-        createSimplePOI(lng, lat);
-        // Switch back to select after creating POI
-        setActiveTool('select');
-        activeToolRef.current = 'select';
+        addPolygonPoint(lng, lat);
         break;
       case 'select':
-        console.log('👆 SELECT TOOL - no action');
         break;
       case 'pan':
-        console.log('✋ PAN TOOL - no action');
         break;
       default:
-        console.log('❓ UNKNOWN TOOL:', activeTool);
         break;
     }
   };
 
     const addBeacon = (lng: number, lat: number) => {
-    console.log('🚀 addBeacon CALLED:', { lng, lat, currentBeaconsCount: beacons.length });
     
     // Show beacon name dialog
     setPendingBeaconLocation({ lng, lat });
@@ -637,39 +641,16 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         visible: true
       };
       
-      console.log('📦 NEW BEACON CREATED:', newBeacon);
-      
       const updatedBeacons = [...beacons, newBeacon];
       setBeacons(updatedBeacons);
       
       // Save to localStorage
       saveToStorage(STORAGE_KEYS.BEACONS, updatedBeacons);
       
-      console.log('🔄 UPDATING BEACONS STATE:', { 
-        previousCount: beacons.length, 
-        newBeacon: newBeacon.id,
-        newCount: beacons.length + 1 
-      });
+      // Update the map with the new beacon data
+      updateMapData(polygons, updatedBeacons, nodes, edges);
       
-      try {
-        // Add marker to map and track it
-        console.log('🗺️ ADDING MARKER TO MAP...');
-        const marker = new Marker({ color: '#fbbf24' })
-          .setLngLat([pendingBeaconLocation.lng, pendingBeaconLocation.lat])
-          .setPopup(new Popup().setHTML(`<strong>${newBeacon.name}</strong><br>Type: Beacon`))
-          .addTo(map.current);
-          
-        mapMarkers.current[`beacon-${newBeacon.id}`] = marker;
-        console.log('✅ MARKER ADDED SUCCESSFULLY:', { 
-          markerId: `beacon-${newBeacon.id}`,
-          markerCount: Object.keys(mapMarkers.current).length 
-        });
-        
-        logger.userAction('Beacon added', { beacon: newBeacon });
-      } catch (error) {
-        console.error('💥 ERROR ADDING MARKER:', error);
-        logger.error('Failed to add beacon marker', error as Error);
-      }
+      logger.userAction('Beacon added', { beacon: newBeacon });
     }
     handleBeaconCancel();
   };
@@ -696,27 +677,231 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     // Save to localStorage
     saveToStorage(STORAGE_KEYS.NODES, updatedNodes);
     
-    // Add marker to map and track it
-    const marker = new Marker({ color: '#3b82f6' })
-      .setLngLat([lng, lat])
-      .setPopup(new Popup().setHTML(`<strong>Node ${newNode.id}</strong><br>Connections: ${newNode.connections.length}`))
-      .addTo(map.current!);
-      
-    mapMarkers.current[`node-${newNode.id}`] = marker;
+    // Update the map with the new node data
+    updateMapData(polygons, beacons, updatedNodes, edges);
       
     logger.userAction('Node added', { node: newNode });
   };
 
-  const createSimplePOI = (lng: number, lat: number) => {
-    // This is a simplified POI creation - in a real implementation you'd want
-    // to collect multiple points to create a polygon
-    setPendingPolygonCenter({ lng, lat });
-    setPolygonName('');
-    setIsWallMode(false);
-    setShowPolygonDialog(true);
+  // Clear all temporary drawing elements from the map
+  const clearTempDrawing = () => {
+    if (!map.current) return;
+    
+    logger.info('Clearing temporary drawing elements');
+    
+    // Remove temporary markers
+    tempDrawingMarkers.current.forEach(marker => marker.remove());
+    tempDrawingMarkers.current = [];
+    
+    // Remove temporary lines
+    Object.entries(tempDrawingLines.current).forEach(([layerId, sourceId]) => {
+      if (map.current!.getLayer(layerId)) {
+        map.current!.removeLayer(layerId);
+      }
+      if (map.current!.getSource(sourceId)) {
+        map.current!.removeSource(sourceId);
+      }
+    });
+    tempDrawingLines.current = {};
   };
 
-  const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{ lng: number; lat: number } | null>(null);
+  // Add a small circle marker at the clicked location
+  const addPolygonPointMarker = (lng: number, lat: number, pointIndex: number) => {
+    if (!map.current) return;
+    
+    const isFirst = pointIndex === 0;
+    const color = isFirst ? '#ff0000' : '#00aa00'; // Red for first point, green for others
+    
+    // Create a simple HTML element for the marker
+    const markerElement = document.createElement('div');
+    markerElement.style.width = '10px';
+    markerElement.style.height = '10px';
+    markerElement.style.borderRadius = '50%';
+    markerElement.style.backgroundColor = color;
+    markerElement.style.border = '2px solid white';
+    markerElement.style.boxShadow = '0 0 4px rgba(0,0,0,0.3)';
+    
+    const marker = new Marker({ element: markerElement })
+      .setLngLat([lng, lat])
+      .addTo(map.current);
+      
+    tempDrawingMarkers.current.push(marker);
+    
+    logger.info('Added polygon point marker', { 
+      point: { lng, lat }, 
+      pointIndex, 
+      isFirst,
+      color
+    });
+  };
+
+  // Add a line between two points
+  const addPolygonLine = (fromPoint: Point, toPoint: Point, lineId: number) => {
+    if (!map.current) {
+      logger.error('Cannot add polygon line - no map instance');
+      return;
+    }
+    
+    const sourceId = `temp-polygon-line-source-${Math.floor(lineId)}`;
+    const layerId = `temp-polygon-line-layer-${Math.floor(lineId)}`;
+    
+    logger.info('ATTEMPTING to add polygon line', { 
+      from: fromPoint, 
+      to: toPoint, 
+      lineId,
+      sourceId,
+      layerId,
+      mapExists: !!map.current
+    });
+    
+    try {
+      // Check if source already exists and remove it
+      if (map.current.getSource(sourceId)) {
+        logger.warn('Source already exists, removing it first', { sourceId });
+        if (map.current.getLayer(layerId)) {
+          map.current.removeLayer(layerId);
+        }
+        map.current.removeSource(sourceId);
+      }
+      
+      map.current.addSource(sourceId, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [[fromPoint.x, fromPoint.y], [toPoint.x, toPoint.y]]
+          },
+          properties: {}
+        }
+      });
+      
+      map.current.addLayer({
+        id: layerId,
+        type: 'line',
+        source: sourceId,
+        paint: {
+          'line-color': '#0066ff',  // Blue lines
+          'line-width': 3
+        }
+      });
+      
+      tempDrawingLines.current[layerId] = sourceId;
+      
+      logger.info('✅ SUCCESS - Added polygon line', { 
+        from: fromPoint, 
+        to: toPoint, 
+        lineId,
+        sourceId,
+        layerId
+      });
+    } catch (error) {
+      logger.error('❌ FAILED to add polygon line', error as Error, {
+        fromPoint,
+        toPoint,
+        lineId,
+        sourceId,
+        layerId,
+        errorMessage: (error as Error).message,
+        mapLoaded: !!map.current
+      });
+    }
+  };
+
+  // Check if the clicked point is close to the first point (to close the polygon)
+  const isCloseToFirstPoint = (lng: number, lat: number, firstPoint: Point): boolean => {
+    const deltaLng = Math.abs(lng - firstPoint.x);
+    const deltaLat = Math.abs(lat - firstPoint.y);
+    const maxDelta = 0.0005; // About 50 meters - much easier to click accurately
+    
+    logger.info('Checking if close to first point', {
+      clickedPoint: { lng, lat },
+      firstPoint,
+      deltaLng,
+      deltaLat,
+      maxDelta,
+      isClose: deltaLng < maxDelta && deltaLat < maxDelta
+    });
+    
+    return deltaLng < maxDelta && deltaLat < maxDelta;
+  };
+
+  // Handle polygon point addition with the new flow
+  const addPolygonPoint = (lng: number, lat: number) => {
+    const newPoint: Point = { x: lng, y: lat };
+    
+    logger.userAction('🎯 Polygon point clicked', { 
+      point: newPoint, 
+      currentPoints: pendingPolygonPointsRef.current.length,
+      pendingPoints: pendingPolygonPointsRef.current,
+      isDrawingPolygon: isDrawingPolygonRef.current,
+      activeTool: activeTool
+    });
+    
+    // If this is not the first point, check if it's close to the first point to close
+    if (pendingPolygonPointsRef.current.length >= 3 && isCloseToFirstPoint(lng, lat, pendingPolygonPointsRef.current[0])) {
+      // Close the polygon and show dialog
+      logger.info('🎉 POLYGON CLOSED by clicking near first point!');
+      
+      // Add closing line back to first point
+      const closingLineId = Math.random() * 1000000;
+      addPolygonLine(pendingPolygonPointsRef.current[pendingPolygonPointsRef.current.length - 1], pendingPolygonPointsRef.current[0], closingLineId);
+      
+      // Store the completed polygon points and show dialog
+      setCurrentPolygonPoints([...pendingPolygonPointsRef.current]); // Don't include the closing point
+      
+      // Calculate center for the dialog
+      const centerX = pendingPolygonPointsRef.current.reduce((sum, p) => sum + p.x, 0) / pendingPolygonPointsRef.current.length;
+      const centerY = pendingPolygonPointsRef.current.reduce((sum, p) => sum + p.y, 0) / pendingPolygonPointsRef.current.length;
+      
+      setPendingPolygonCenter({ lng: centerX, lat: centerY });
+      setPolygonName('');
+      setIsWallMode(false);
+      setShowPolygonDialog(true);
+      
+      logger.info('🎉 Showing polygon dialog', { 
+        center: { lng: centerX, lat: centerY },
+        points: pendingPolygonPointsRef.current.length 
+      });
+      
+      return;
+    }
+    
+    // Add the new point
+    const updatedPoints = [...pendingPolygonPointsRef.current, newPoint];
+    pendingPolygonPointsRef.current = updatedPoints;
+    setPendingPolygonPoints(updatedPoints);
+    
+    // Add visual marker for this point
+    addPolygonPointMarker(lng, lat, updatedPoints.length - 1);
+    
+    // Set drawing state first
+    if (updatedPoints.length === 1) {
+      isDrawingPolygonRef.current = true;
+      setIsDrawingPolygon(true);
+      logger.info('Started drawing polygon');
+    }
+    
+    // Add line from previous point to this point (if not the first point)
+    if (updatedPoints.length > 1) {
+      const previousPoint = updatedPoints[updatedPoints.length - 2];
+      const lineId = Math.random() * 1000000; // Use random number for unique ID
+      logger.info('🔵 ADDING LINE between points', { 
+        from: previousPoint, 
+        to: newPoint, 
+        lineId,
+        totalPoints: updatedPoints.length 
+      });
+      addPolygonLine(previousPoint, newPoint, lineId);
+    }
+    
+    logger.userAction('Polygon point added', { 
+      point: newPoint, 
+      totalPoints: updatedPoints.length 
+    });
+  };
+
+
 
   const loadFloorData = async () => {
     const numericFloorId = parseInt(floorId, 10);
@@ -766,25 +951,44 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   };
 
   const handleToolChange = (tool: DrawingTool) => {
-    console.log('🔧 TOOL CHANGE:', { from: activeTool, to: tool });
-    logger.userAction('Tool changed', { from: activeTool, to: tool });
+    logger.info('Tool change requested', { 
+      from: activeTool, 
+      to: tool, 
+      isDrawingPolygon,
+      pendingPoints: pendingPolygonPoints.length 
+    });
+    
+    // If switching away from POI tool, clear any polygon drawing state
+    if (activeTool === 'poi' && tool !== 'poi' && isDrawingPolygonRef.current) {
+      isDrawingPolygonRef.current = false;
+      pendingPolygonPointsRef.current = [];
+      setIsDrawingPolygon(false);
+      setCurrentPolygonPoints([]);
+      setPendingPolygonPoints([]);
+      clearTempDrawing();
+    }
+    
     setActiveTool(tool);
     activeToolRef.current = tool; // Keep ref in sync
     setSelectedItem(null);
-    console.log('✅ TOOL CHANGED TO:', tool);
   };
 
   const handlePolygonSave = () => {
     if (pendingPolygonCenter && polygonName.trim() && map.current) {
+      // Use drawn points if available, otherwise create a simple rectangle
+      const polygonPoints = currentPolygonPoints.length >= 3 
+        ? currentPolygonPoints 
+        : [
+            { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
+            { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
+            { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat - 0.00005 },
+            { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat - 0.00005 }
+          ];
+      
       const newPolygon: Polygon = {
         id: Date.now().toString(),
         name: polygonName.trim(),
-        points: [
-          { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
-          { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
-          { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat - 0.00005 },
-          { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat - 0.00005 }
-        ],
+        points: polygonPoints,
         type: isWallMode ? 'wall' : 'poi',
         visible: true,
         color: isWallMode ? '#6b7280' : '#3b82f6'
@@ -796,61 +1000,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       // Save to localStorage
       saveToStorage(STORAGE_KEYS.POLYGONS, updatedPolygons);
       
-      // Add polygon to map with proper visualization
-      const mapInstance = map.current;
-      const coordinates = newPolygon.points.map(p => [p.x, p.y]);
-      coordinates.push(coordinates[0]); // Close the polygon
-      
-      const sourceId = `polygon-source-${newPolygon.id}`;
-      const layerId = `polygon-layer-${newPolygon.id}`;
-      
-      mapInstance.addSource(sourceId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: [coordinates]
-          },
-          properties: {}
-        }
-      });
-      
-      mapInstance.addLayer({
-        id: layerId,
-        type: 'fill',
-        source: sourceId,
-        paint: {
-          'fill-color': newPolygon.color,
-          'fill-opacity': 0.6
-        }
-      });
-      
-      // Add border
-      const borderLayerId = `polygon-border-${newPolygon.id}`;
-      mapInstance.addLayer({
-        id: borderLayerId,
-        type: 'line',
-        source: sourceId,
-        paint: {
-          'line-color': newPolygon.color,
-          'line-width': 2
-        }
-      });
-      
-      mapLayers.current[`polygon-${newPolygon.id}`] = layerId;
-      mapLayers.current[`polygon-border-${newPolygon.id}`] = borderLayerId;
-      
-      // Add center marker for interaction
-      const centerX = newPolygon.points.reduce((sum, p) => sum + p.x, 0) / newPolygon.points.length;
-      const centerY = newPolygon.points.reduce((sum, p) => sum + p.y, 0) / newPolygon.points.length;
-      
-      const marker = new Marker({ color: newPolygon.color, scale: 0.8 })
-        .setLngLat([centerX, centerY])
-        .setPopup(new Popup().setHTML(`<strong>${newPolygon.name}</strong><br>Type: ${newPolygon.type}`))
-        .addTo(mapInstance);
-        
-      mapMarkers.current[`polygon-${newPolygon.id}`] = marker;
+      // Update the map with the new polygon data
+      updateMapData(updatedPolygons, beacons, nodes, edges);
       
       logger.userAction('Polygon saved', { 
         name: polygonName.trim(), 
@@ -858,6 +1009,14 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         coordinates: pendingPolygonCenter
       });
     }
+    
+    // Reset polygon drawing state
+    setIsDrawingPolygon(false);
+    setCurrentPolygonPoints([]);
+    setPendingPolygonPoints([]);
+    // Clear temporary drawing visuals
+    clearTempDrawing();
+    
     handlePolygonCancel();
   };
 
@@ -866,6 +1025,14 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     setPendingPolygonCenter(null);
     setPolygonName('');
     setIsWallMode(false);
+    // Reset polygon drawing state
+    isDrawingPolygonRef.current = false;
+    pendingPolygonPointsRef.current = [];
+    setIsDrawingPolygon(false);
+    setCurrentPolygonPoints([]);
+    setPendingPolygonPoints([]);
+    // Clear temporary drawing visuals
+    clearTempDrawing();
     logger.userAction('Polygon dialog cancelled');
   };
 
@@ -1011,16 +1178,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   };
 
   // Add more detailed debugging for re-render tracking
-  console.log('🔍 RENDER DEBUG:', { 
-    floorId, 
-    activeTool, 
-    loading,
-    mapLoading,
-    hasFloorData: !!floorData,
-    coordinates: currentCoordinates,
-    renderTime: new Date().toISOString()
-  });
-  
   logger.debug('FloorEditor component rendering', { 
     floorId, 
     activeTool, 
@@ -1048,6 +1205,15 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
   return (
     <Container variant="PAGE">
+      {/* HUGE ALERT WHEN MAP LOADS */}
+      {showMapLoadedAlert && (
+        <Alert 
+          type="SUCCESS" 
+          message="HEEELLLLLLLLLOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO"
+          className="map-loaded-alert"
+        />
+      )}
+
       <Header 
         title={`${UI_MESSAGES.FLOOR_EDITOR_TITLE} - ${floor?.name || 'Unknown Floor'}`}
         actions={
@@ -1070,280 +1236,67 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
       <div className="floor-editor-layout">
         {/* Drawing Tools Toolbar */}
-        <div className="drawing-toolbar">
-          {/* Tool instruction message */}
-          {activeTool !== 'select' && activeTool !== 'pan' && (
-            <div className="tool-instruction">
-              {activeTool === 'poi' && '📍 Click on the map to add a POI/Room'}
-              {activeTool === 'beacons' && '📡 Click on the map to add beacons'}
-              {activeTool === 'nodes' && '🔗 Click on the map to add route nodes'}
-            </div>
-          )}
-          <div className="tool-group">
-            <button 
-              className={`tool-button ${activeTool === 'select' ? 'active' : ''}`}
-              onClick={() => handleToolChange('select')}
-              title={UI_MESSAGES.FLOOR_EDITOR_SELECT_MODE}
-            >
-              <span className="tool-icon">🖱️</span>
-              Select
-            </button>
-            
-            <button 
-              className={`tool-button ${activeTool === 'pan' ? 'active' : ''}`}
-              onClick={() => handleToolChange('pan')}
-              title={UI_MESSAGES.FLOOR_EDITOR_PAN_MODE}
-            >
-              <span className="tool-icon">✋</span>
-              Pan
-            </button>
-            
-            <button 
-              className={`tool-button ${activeTool === 'poi' ? 'active' : ''}`}
-              onClick={() => handleToolChange('poi')}
-              title={UI_MESSAGES.FLOOR_EDITOR_TOOL_POI}
-            >
-              <span className="tool-icon">📍</span>
-              {UI_MESSAGES.FLOOR_EDITOR_TOOL_POI}
-            </button>
-            
-            <button 
-              className={`tool-button ${activeTool === 'beacons' ? 'active' : ''}`}
-              onClick={() => handleToolChange('beacons')}
-              title={UI_MESSAGES.FLOOR_EDITOR_TOOL_BEACONS}
-            >
-              <span className="tool-icon">📡</span>
-              {UI_MESSAGES.FLOOR_EDITOR_TOOL_BEACONS}
-            </button>
-            
-            <button 
-              className={`tool-button ${activeTool === 'nodes' ? 'active' : ''}`}
-              onClick={() => handleToolChange('nodes')}
-              title={UI_MESSAGES.FLOOR_EDITOR_TOOL_NODES}
-            >
-              <span className="tool-icon">🔗</span>
-              {UI_MESSAGES.FLOOR_EDITOR_TOOL_NODES}
-            </button>
-          </div>
-
-          <div className="tool-group">
-            <Button variant="DANGER" onClick={handleClearAll}>
-              {UI_MESSAGES.FLOOR_EDITOR_CLEAR_ALL}
-            </Button>
-          </div>
-        </div>
+        <DrawingToolbar
+          activeTool={activeTool}
+          onToolChange={handleToolChange}
+          isDrawingPolygon={isDrawingPolygon}
+          pendingPolygonPoints={pendingPolygonPoints.length}
+          onCancelDrawing={() => {
+            isDrawingPolygonRef.current = false;
+            pendingPolygonPointsRef.current = [];
+            setIsDrawingPolygon(false);
+            setCurrentPolygonPoints([]);
+            setPendingPolygonPoints([]);
+            clearTempDrawing();
+            logger.userAction('Polygon drawing cancelled');
+          }}
+          onClearAll={handleClearAll}
+        />
 
         {/* Main Content Area */}
         <div className="editor-main">
           {/* Map Container */}
-          <div className="map-container">
-            {mapLoading && (
-              <div className="map-loading-overlay">
-                <div className="loading-message">{UI_MESSAGES.FLOOR_EDITOR_MAP_LOADING}</div>
-              </div>
-            )}
-            <div ref={mapContainer} className={`map-wrapper tool-${activeTool}`} />
-            
-            {/* Coordinates Display */}
-            {currentCoordinates && (
-              <div className="coordinates-display">
-                <span className="coordinates-label">{UI_MESSAGES.FLOOR_EDITOR_COORDINATES_LABEL}</span>
-                <span className="coordinates-value">
-                  {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
-                </span>
-              </div>
-            )}
-          </div>
+          <MapContainer
+            mapRef={mapContainer}
+            mapLoading={mapLoading}
+            activeTool={activeTool}
+            currentCoordinates={currentCoordinates}
+            error={null}
+          />
 
           {/* Layers Panel */}
-          <div className="layers-panel">
-            <div className="layers-header">
-              <h3>{UI_MESSAGES.FLOOR_EDITOR_LAYERS_TITLE}</h3>
-              
-              {/* Filter buttons */}
-              <div className="layer-filters">
-                <button 
-                  className={`filter-button ${layerFilter === 'polygons' ? 'active' : ''}`}
-                  onClick={() => handleFilterChange('polygons')}
-                >
-                  Polygons
-                </button>
-                <button 
-                  className={`filter-button ${layerFilter === 'beacons' ? 'active' : ''}`}
-                  onClick={() => handleFilterChange('beacons')}
-                >
-                  Beacons
-                </button>
-                <button 
-                  className={`filter-button ${layerFilter === 'nodes' ? 'active' : ''}`}
-                  onClick={() => handleFilterChange('nodes')}
-                >
-                  Route Nodes
-                </button>
-              </div>
-            </div>
-            
-            <div className="layers-content">
-              {(() => {
-                const filteredData = getFilteredData();
-                
-                return (
-                  <>
-                    {/* Polygons */}
-                    {filteredData.polygons.length > 0 && (
-                      <div className="layer-group">
-                        <h4>Polygons ({filteredData.polygons.length})</h4>
-                        {filteredData.polygons.map(polygon => (
-                          <div 
-                            key={polygon.id} 
-                            className={`layer-item ${selectedItem?.type === 'polygon' && selectedItem?.id === polygon.id ? 'selected' : ''}`}
-                            onClick={() => handleLayerItemClick('polygon', polygon.id)}
-                          >
-                            <button
-                              className="visibility-toggle"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleLayerVisibility('polygon', polygon.id);
-                              }}
-                              title={polygon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                            >
-                              {polygon.visible ? '👁️' : '🚫'}
-                            </button>
-                            <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
-                            <span className="layer-name">{polygon.name}</span>
-                            <span className="layer-type">({polygon.type})</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Beacons */}
-                    {filteredData.beacons.length > 0 && (
-                      <div className="layer-group">
-                        <h4>Beacons ({filteredData.beacons.length})</h4>
-                        {filteredData.beacons.map(beacon => (
-                          <div 
-                            key={beacon.id} 
-                            className={`layer-item ${selectedItem?.type === 'beacon' && selectedItem?.id === beacon.id ? 'selected' : ''}`}
-                            onClick={() => handleLayerItemClick('beacon', beacon.id)}
-                          >
-                            <button
-                              className="visibility-toggle"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleLayerVisibility('beacon', beacon.id);
-                              }}
-                              title={beacon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                            >
-                              {beacon.visible ? '👁️' : '🚫'}
-                            </button>
-                            <div className="layer-color beacon-color"></div>
-                            <span className="layer-name">{beacon.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Nodes */}
-                    {filteredData.nodes.length > 0 && (
-                      <div className="layer-group">
-                        <h4>Route Nodes ({filteredData.nodes.length})</h4>
-                        {filteredData.nodes.map(node => (
-                          <div 
-                            key={node.id} 
-                            className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.id ? 'selected' : ''}`}
-                            onClick={() => handleLayerItemClick('node', node.id)}
-                          >
-                            <button
-                              className="visibility-toggle"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleLayerVisibility('node', node.id);
-                              }}
-                              title={node.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                            >
-                              {node.visible ? '👁️' : '🚫'}
-                            </button>
-                            <div className="layer-color node-color"></div>
-                            <span className="layer-name">Node {node.id}</span>
-                            <span className="layer-connections">({node.connections.length} connections)</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {filteredData.polygons.length === 0 && filteredData.beacons.length === 0 && filteredData.nodes.length === 0 && (
-                      <div className="no-layers-message">
-                        {`No ${layerFilter} found`}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
+          <LayersPanel
+            polygons={polygons}
+            beacons={beacons}
+            nodes={nodes}
+            layerFilter={layerFilter}
+            selectedItem={selectedItem}
+            onFilterChange={handleFilterChange}
+            onLayerItemClick={handleLayerItemClick}
+            onToggleVisibility={toggleLayerVisibility}
+          />
         </div>
       </div>
 
       {/* Polygon Dialog */}
-      {showPolygonDialog && (
-        <div className="dialog-overlay">
-          <div className="dialog-content">
-            <h2>{UI_MESSAGES.FLOOR_EDITOR_POLYGON_DIALOG_TITLE}</h2>
-            <Input
-              id="polygon-name"
-              name="polygon-name"
-              label={UI_MESSAGES.FLOOR_EDITOR_POLYGON_NAME_LABEL}
-              value={polygonName}
-              onChange={(e) => setPolygonName(e.target.value)}
-              placeholder={UI_MESSAGES.FLOOR_EDITOR_POLYGON_NAME_PLACEHOLDER}
-            />
-            <div className="dialog-checkbox">
-              <label>
-                <input 
-                  type="checkbox" 
-                  checked={isWallMode}
-                  onChange={(e) => setIsWallMode(e.target.checked)}
-                />
-                {UI_MESSAGES.FLOOR_EDITOR_POLYGON_IS_WALL_LABEL}
-              </label>
-            </div>
-            <div className="dialog-buttons">
-              <Button variant="SECONDARY" onClick={handlePolygonCancel}>
-                {UI_MESSAGES.FLOOR_EDITOR_POLYGON_CANCEL}
-              </Button>
-              <Button variant="PRIMARY" onClick={handlePolygonSave} disabled={!polygonName.trim()}>
-                {UI_MESSAGES.FLOOR_EDITOR_POLYGON_SAVE}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PolygonDialog
+        show={showPolygonDialog}
+        polygonName={polygonName}
+        isWallMode={isWallMode}
+        onNameChange={setPolygonName}
+        onWallModeChange={setIsWallMode}
+        onSave={handlePolygonSave}
+        onCancel={handlePolygonCancel}
+      />
 
       {/* Beacon Dialog */}
-      {showBeaconDialog && (
-        <div className="dialog-overlay">
-          <div className="dialog-content">
-            <h2>Add New Beacon</h2>
-            <Input
-              id="beacon-name"
-              name="beacon-name"
-              label="Beacon Name"
-              value={beaconName}
-              onChange={(e) => setBeaconName(e.target.value)}
-              placeholder="Enter beacon name"
-            />
-            <div className="dialog-buttons">
-              <Button variant="SECONDARY" onClick={handleBeaconCancel}>
-                Cancel
-              </Button>
-              <Button variant="PRIMARY" onClick={handleBeaconSave} disabled={!beaconName.trim()}>
-                Add Beacon
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BeaconDialog
+        show={showBeaconDialog}
+        beaconName={beaconName}
+        onNameChange={setBeaconName}
+        onSave={handleBeaconSave}
+        onCancel={handleBeaconCancel}
+      />
     </Container>
   );
 };
