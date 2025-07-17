@@ -27,6 +27,16 @@
   gap: 16px;
 }
 
+.tool-instruction {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid #93c5fd;
+}
+
 .tool-group {
   display: flex;
   gap: 8px;
@@ -90,6 +100,27 @@
   width: 100%;
   height: 100%;
   position: relative;
+}
+
+/* Map cursor styles for different tools */
+.map-wrapper.tool-select {
+  cursor: default;
+}
+
+.map-wrapper.tool-pan {
+  cursor: grab;
+}
+
+.map-wrapper.tool-poi {
+  cursor: crosshair;
+}
+
+.map-wrapper.tool-beacons {
+  cursor: crosshair;
+}
+
+.map-wrapper.tool-nodes {
+  cursor: crosshair;
 }
 
 .map-loading-overlay {
