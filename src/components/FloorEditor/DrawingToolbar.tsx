@@ -15,6 +15,10 @@ interface DrawingToolbarProps {
   pendingPolygonPoints: number;
   onCancelDrawing: () => void;
   onClearAll: () => void;
+  // Route node state
+  nodesCount: number;
+  selectedNodeForConnection: string | null;
+  lastPlacedNodeId: string | null;
 }
 
 const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
@@ -23,7 +27,10 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   isDrawingPolygon,
   pendingPolygonPoints,
   onCancelDrawing,
-  onClearAll
+  onClearAll,
+  nodesCount,
+  selectedNodeForConnection,
+  lastPlacedNodeId
 }) => {
   logger.debug('DrawingToolbar rendered', { activeTool, isDrawingPolygon, pendingPolygonPoints });
 
@@ -35,7 +42,10 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           {activeTool === 'poi' && !isDrawingPolygon && '📍 Click on the map to start drawing a polygon'}
           {activeTool === 'poi' && isDrawingPolygon && `📍 Drawing polygon (${pendingPolygonPoints} points). Click near start to finish.`}
           {activeTool === 'beacons' && '📡 Click on the map to add beacons'}
-          {activeTool === 'nodes' && '🔗 Click on the map to add route nodes'}
+          {activeTool === 'nodes' && nodesCount === 0 && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_INSTRUCTION_EMPTY}
+          {activeTool === 'nodes' && nodesCount > 0 && !selectedNodeForConnection && !lastPlacedNodeId && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_INSTRUCTION_SELECT}
+          {activeTool === 'nodes' && selectedNodeForConnection && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_SELECTED}
+          {activeTool === 'nodes' && !selectedNodeForConnection && lastPlacedNodeId && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_CHAINING}
         </div>
       )}
       

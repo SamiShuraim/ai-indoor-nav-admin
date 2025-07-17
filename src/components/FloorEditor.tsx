@@ -23,6 +23,15 @@ const STORAGE_KEYS = {
   EDGES: 'floorEditor_edges'
 } as const;
 
+// Helper function to clear all localStorage data for FloorEditor
+const clearStorageData = () => {
+  Object.values(STORAGE_KEYS).forEach(key => {
+    localStorage.removeItem(key);
+    logger.info(`Cleared localStorage key: ${key}`);
+  });
+  logger.userAction('All FloorEditor localStorage data cleared');
+};
+
 // Local storage utilities
 const loadFromStorage = (key: string, defaultValue: any): any => {
   try {
@@ -205,6 +214,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     loadFromStorage(STORAGE_KEYS.EDGES, [...SAMPLE_EDGES])
   );
   
+  // Route node creation state
+  const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<string | null>(null);
+  const selectedNodeForConnectionRef = useRef<string | null>(null);
+  const [lastPlacedNodeId, setLastPlacedNodeId] = useState<string | null>(null);
+  const lastPlacedNodeIdRef = useRef<string | null>(null);
+  
   // Selection state
   const [selectedItem, setSelectedItem] = useState<{type: 'polygon' | 'beacon' | 'node', id: string} | null>(null);
   
@@ -260,10 +275,38 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   // NOTE: Map initialization useEffect moved to after initializeMap function declaration
 
   // Function to update map with current data (called manually when needed)
-  const updateMapData = useCallback((currentPolygons: Polygon[], currentBeacons: Beacon[], currentNodes: RouteNode[], currentEdges: Edge[]) => {
+  const updateMapData = useCallback((currentPolygons: Polygon[], currentBeacons: Beacon[], currentNodes: RouteNode[], originalEdges: Edge[], selectedNodeId?: string | null) => {
     if (!map.current) return;
     
-    logger.info('Updating map with current data');
+    // Clean up orphaned edges before rendering
+    const nodeIds = new Set(currentNodes.map(n => n.id));
+    const validEdges = originalEdges.filter((edge: Edge) => {
+      const isValid = nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
+      if (!isValid) {
+        logger.warn('Skipping orphaned edge during render', { 
+          edgeId: edge.id, 
+          fromNodeId: edge.fromNodeId, 
+          toNodeId: edge.toNodeId 
+        });
+      }
+      return isValid;
+    });
+    
+    // Use validated edges for rendering
+    const renderEdges = validEdges;
+    
+    logger.info('Updating map with current data', {
+      polygonsCount: currentPolygons.length,
+      beaconsCount: currentBeacons.length,
+      nodesCount: currentNodes.length,
+      edgesCount: validEdges.length,
+      originalEdgesCount: originalEdges.length,
+      selectedNodeId,
+      nodeIds: currentNodes.map(n => n.id),
+      edgeIds: renderEdges.map((e: Edge) => e.id),
+      nodeDetails: currentNodes.map(n => ({ id: n.id, x: n.x, y: n.y, visible: n.visible })),
+      edgeDetails: renderEdges.map((e: Edge) => ({ id: e.id, from: e.fromNodeId, to: e.toNodeId, visible: e.visible }))
+    });
     const mapInstance = map.current;
     
     // Clear existing markers and layers
@@ -360,26 +403,72 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     });
     
     // Add nodes
+    logger.info('Processing nodes for rendering', { 
+      totalNodes: currentNodes.length,
+      visibleNodes: currentNodes.filter(n => n.visible).length 
+    });
+    
     currentNodes.forEach(node => {
+      logger.info('Processing node', { 
+        nodeId: node.id, 
+        visible: node.visible, 
+        x: node.x, 
+        y: node.y, 
+        connections: node.connections,
+        isSelected: selectedNodeId === node.id 
+      });
+      
       if (node.visible) {
-        const marker = new Marker({ color: '#3b82f6' })
+        const isSelected = selectedNodeId === node.id;
+        const marker = new Marker({ color: isSelected ? '#ef4444' : '#3b82f6' })
           .setLngLat([node.x, node.y])
-          .setPopup(new Popup().setHTML(`<strong>Node ${node.id}</strong><br>Connections: ${node.connections.length}`))
           .addTo(mapInstance);
           
         mapMarkers.current[`node-${node.id}`] = marker;
+        logger.info('Node marker added to map', { nodeId: node.id, markerKey: `node-${node.id}` });
+      } else {
+        logger.warn('Node not visible, skipping', { nodeId: node.id });
       }
     });
     
     // Add route lines between connected nodes
-    currentEdges.forEach(edge => {
+    logger.info('Processing edges for rendering', { 
+      totalEdges: renderEdges.length,
+      visibleEdges: renderEdges.filter(e => e.visible).length 
+    });
+    
+    renderEdges.forEach(edge => {
+      logger.info('Processing edge', { 
+        edgeId: edge.id, 
+        visible: edge.visible, 
+        fromNodeId: edge.fromNodeId, 
+        toNodeId: edge.toNodeId 
+      });
+      
       if (edge.visible) {
         const fromNode = currentNodes.find(n => n.id === edge.fromNodeId);
         const toNode = currentNodes.find(n => n.id === edge.toNodeId);
         
+        logger.info('Edge node lookup', { 
+          edgeId: edge.id, 
+          lookingForFromNodeId: edge.fromNodeId,
+          lookingForToNodeId: edge.toNodeId,
+          availableNodeIds: currentNodes.map(n => n.id),
+          fromNode: fromNode ? { id: fromNode.id, visible: fromNode.visible } : null,
+          toNode: toNode ? { id: toNode.id, visible: toNode.visible } : null
+        });
+        
         if (fromNode && toNode && fromNode.visible && toNode.visible) {
           const sourceId = `edge-source-${edge.id}`;
           const layerId = `edge-layer-${edge.id}`;
+          
+          logger.info('Adding edge to map', { 
+            edgeId: edge.id, 
+            sourceId, 
+            layerId,
+            fromCoords: [fromNode.x, fromNode.y],
+            toCoords: [toNode.x, toNode.y]
+          });
           
           mapInstance.addSource(sourceId, {
             type: 'geojson',
@@ -398,7 +487,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             type: 'line',
             source: sourceId,
             paint: {
-              'line-color': '#8b5cf6',
+              'line-color': '#3b82f6', // Blue color as requested
               'line-width': 3,
               'line-opacity': 0.8
             }
@@ -407,21 +496,76 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
           // Track sources and layers
           mapSources.current[`edge-${edge.id}`] = sourceId;
           mapLayers.current[`edge-${edge.id}`] = layerId;
+          
+          logger.info('Edge layer added successfully', { 
+            edgeId: edge.id, 
+            sourceId, 
+            layerId 
+          });
+        } else {
+          logger.warn('Edge nodes not found or not visible', { 
+            edgeId: edge.id,
+            fromNodeId: edge.fromNodeId,
+            toNodeId: edge.toNodeId,
+            fromNodeFound: !!fromNode,
+            toNodeFound: !!toNode,
+            fromNodeVisible: fromNode?.visible,
+            toNodeVisible: toNode?.visible,
+            availableNodeIds: currentNodes.map(n => n.id),
+            'fromNodeId in available': currentNodes.some(n => n.id === edge.fromNodeId),
+            'toNodeId in available': currentNodes.some(n => n.id === edge.toNodeId)
+          });
         }
+      } else {
+        logger.warn('Edge not visible, skipping', { edgeId: edge.id });
       }
     });
     
     logger.info('Map data updated successfully');
+  }, []); // Remove selectedNodeForConnection dependency - it's passed as parameter
+
+  // Clean up orphaned edges that reference non-existent nodes
+  const cleanupOrphanedEdges = useCallback(() => {
+    const currentNodes = JSON.parse(localStorage.getItem('floorEditor_nodes') || '[]');
+    const currentEdges = JSON.parse(localStorage.getItem('floorEditor_edges') || '[]');
+    const nodeIds = new Set(currentNodes.map((n: any) => n.id));
+    
+    const validEdges = currentEdges.filter((edge: any) => {
+      const isValid = nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
+      if (!isValid) {
+        logger.warn('Removing orphaned edge', { 
+          edgeId: edge.id, 
+          fromNodeId: edge.fromNodeId, 
+          toNodeId: edge.toNodeId,
+          availableNodeIds: Array.from(nodeIds)
+        });
+      }
+      return isValid;
+    });
+    
+    if (validEdges.length !== currentEdges.length) {
+      localStorage.setItem('floorEditor_edges', JSON.stringify(validEdges));
+      setEdges(validEdges);
+      logger.info('Cleaned up orphaned edges', { 
+        originalCount: currentEdges.length,
+        cleanedCount: validEdges.length,
+        removedCount: currentEdges.length - validEdges.length
+      });
+    }
   }, []);
 
-  // Load initial sample data to map once it's ready (only runs once)
+  // Load initial sample data and update map when data changes
   useEffect(() => {
-    if (!mapLoading && map.current && !initialDataLoaded.current) {
-      logger.info('Adding initial sample data to map');
-      initialDataLoaded.current = true;
-      updateMapData(polygons, beacons, nodes, edges);
+    if (!mapLoading && map.current) {
+      if (!initialDataLoaded.current) {
+        logger.info('Adding initial sample data to map');
+        // Clean up any orphaned edges first
+        cleanupOrphanedEdges();
+        initialDataLoaded.current = true;
+      }
+      updateMapData(polygons, beacons, nodes, edges, selectedNodeForConnection);
     }
-  }, [mapLoading]); // Only depend on mapLoading to avoid infinite re-renders
+  }, [mapLoading, polygons, beacons, nodes, edges, selectedNodeForConnection]);
 
 
 
@@ -606,7 +750,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         // Keep the tool active for adding multiple beacons
         break;
       case 'nodes':
-        addNode(lng, lat);
+        handleNodeClick(lng, lat);
         // Keep the tool active for adding multiple nodes
         break;
       case 'poi':
@@ -648,7 +792,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       saveToStorage(STORAGE_KEYS.BEACONS, updatedBeacons);
       
       // Update the map with the new beacon data
-      updateMapData(polygons, updatedBeacons, nodes, edges);
+      updateMapData(polygons, updatedBeacons, nodes, edges, selectedNodeForConnection);
       
       logger.userAction('Beacon added', { beacon: newBeacon });
     }
@@ -662,25 +806,179 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     logger.userAction('Beacon dialog cancelled');
   };
 
-    const addNode = (lng: number, lat: number) => {
+  const handleNodeClick = (lng: number, lat: number) => {
+    // Check if this click is near an existing node (using Canvas-style distance calculation)
+    const clickedNode = nodes.find(node => {
+      if (!node.visible) return false;
+      // Use proper Euclidean distance like the working Canvas version
+      const distance = Math.sqrt((node.x - lng) ** 2 + (node.y - lat) ** 2);
+      return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
+    });
+    
+    // Use ref values for current state to avoid stale closures
+    const currentSelectedNode = selectedNodeForConnectionRef.current;
+    const currentLastPlacedNode = lastPlacedNodeIdRef.current;
+    
+    // Debug logging to understand what's happening
+    logger.info('Node click detected', { 
+      lng, 
+      lat, 
+      nodesCount: nodes.length,
+      selectedNodeForConnection: currentSelectedNode,
+      lastPlacedNodeId: currentLastPlacedNode,
+      clickedNodeId: clickedNode?.id || 'none'
+    });
+    
+    if (clickedNode) {
+      // Clicked on an existing node
+      if (currentSelectedNode) {
+        if (currentSelectedNode === clickedNode.id) {
+          // Clicking on the same node - deselect it
+          setSelectedNodeForConnection(null);
+          selectedNodeForConnectionRef.current = null;
+          logger.userAction('Node deselected', { nodeId: clickedNode.id });
+        } else {
+          // Can't connect a node to itself or create duplicate connections
+          logger.warn('Cannot connect node to itself or create duplicate connection');
+        }
+      } else {
+        // Select this node for connection
+        setSelectedNodeForConnection(clickedNode.id);
+        selectedNodeForConnectionRef.current = clickedNode.id;
+        logger.userAction('Node selected for connection', { nodeId: clickedNode.id });
+      }
+    } else {
+      // Clicked on empty space
+      logger.info('Clicked on empty space - DETAILED STATE', { 
+        lng, 
+        lat, 
+        nodesLength: nodes.length, 
+        selectedNodeForConnection: currentSelectedNode,
+        lastPlacedNodeId: currentLastPlacedNode,
+        hasSelectedNode: !!currentSelectedNode,
+        hasLastPlaced: !!currentLastPlacedNode,
+        'nodes.length === 0': nodes.length === 0
+      });
+      
+      if (currentSelectedNode) {
+        // Have a selected node - create new node and connect it (first connection after selecting)
+        logger.info('Creating first connected node', { selectedNodeForConnection: currentSelectedNode });
+        const newNodeId = addNewNode(lng, lat, currentSelectedNode);
+        setSelectedNodeForConnection(null);
+        selectedNodeForConnectionRef.current = null;
+        setLastPlacedNodeId(newNodeId);
+        lastPlacedNodeIdRef.current = newNodeId;
+      } else if (currentLastPlacedNode) {
+        // Chain mode - connect to the last placed node
+        logger.info('Creating chained node', { lastPlacedNodeId: currentLastPlacedNode });
+        const newNodeId = addNewNode(lng, lat, currentLastPlacedNode);
+        setLastPlacedNodeId(newNodeId);
+        lastPlacedNodeIdRef.current = newNodeId;
+      } else if (nodes.length === 0) {
+        // No nodes exist - create first isolated node (Canvas logic)
+        logger.info('Creating first isolated node');
+        const newNodeId = addNewNode(lng, lat, null);
+        setLastPlacedNodeId(newNodeId);
+        lastPlacedNodeIdRef.current = newNodeId;
+      } else {
+        // Canvas logic: Can't create node if nodes exist but none selected
+        logger.info('Cannot create node - select existing node first or clear all nodes');
+      }
+    }
+  };
+
+  const addNewNode = (lng: number, lat: number, connectToNodeId: string | null): string => {
     const newNode: RouteNode = {
       id: Date.now().toString(),
       x: lng,
       y: lat,
-      connections: [],
+      connections: connectToNodeId ? [connectToNodeId] : [],
       visible: true
     };
     
-    const updatedNodes = [...nodes, newNode];
-    setNodes(updatedNodes);
+    logger.info('Adding new node - DETAILED', { 
+      newNodeId: newNode.id,
+      newNodeCoords: [lng, lat],
+      connectToNodeId, 
+      currentNodesCount: nodes.length,
+      currentEdgesCount: edges.length,
+      currentNodeIds: nodes.map(n => n.id),
+      currentEdgeIds: edges.map(e => e.id),
+      lastPlacedNodeIdRef: lastPlacedNodeIdRef.current,
+      willCreateEdge: !!connectToNodeId
+    });
     
-    // Save to localStorage
-    saveToStorage(STORAGE_KEYS.NODES, updatedNodes);
+    // CRITICAL FIX: Update state atomically to prevent race conditions
+    // Use functional updates to ensure we're working with the latest state
+    setNodes(prevNodes => {
+      const finalNodes = [...prevNodes, newNode];
+      if (connectToNodeId) {
+        const updatedNodes = finalNodes.map(node => 
+          node.id === connectToNodeId 
+            ? { ...node, connections: [...node.connections, newNode.id] }
+            : node
+        );
+        
+        // Save to localStorage with the updated nodes
+        saveToStorage(STORAGE_KEYS.NODES, updatedNodes);
+        
+        logger.info('Updated node connections', {
+          connectToNodeId,
+          newNodeId: newNode.id,
+          totalNodes: updatedNodes.length
+        });
+        
+        return updatedNodes;
+      } else {
+        // Save isolated node to localStorage
+        saveToStorage(STORAGE_KEYS.NODES, finalNodes);
+        logger.userAction('Isolated node added', { newNode });
+        return finalNodes;
+      }
+    });
     
-    // Update the map with the new node data
-    updateMapData(polygons, beacons, updatedNodes, edges);
-      
-    logger.userAction('Node added', { node: newNode });
+    if (connectToNodeId) {
+      setEdges(prevEdges => {
+        const newEdge: Edge = {
+          id: `edge_${connectToNodeId}_to_${newNode.id}_${Date.now()}`,
+          fromNodeId: connectToNodeId,
+          toNodeId: newNode.id,
+          visible: true
+        };
+        const finalEdges = [...prevEdges, newEdge];
+        
+        // Save to localStorage with the final state
+        saveToStorage(STORAGE_KEYS.EDGES, finalEdges);
+        
+        logger.info('Edge created and saved', { 
+          newEdge, 
+          totalEdges: finalEdges.length,
+          edgeDetails: {
+            from: connectToNodeId,
+            to: newNode.id,
+            id: newEdge.id
+          }
+        });
+        
+        logger.userAction('Connected node added', { 
+          newNode, 
+          connectedToNodeId: connectToNodeId,
+          newEdge 
+        });
+        
+        return finalEdges;
+      });
+    }
+    
+    logger.info('Node creation completed', { 
+      newNodeId: newNode.id,
+      wasConnected: !!connectToNodeId,
+      connectToNodeId
+    });
+    
+    // DON'T call updateMapData here - let the useEffect handle it when state updates
+    
+    return newNode.id;
   };
 
   // Clear all temporary drawing elements from the map
@@ -968,6 +1266,13 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       clearTempDrawing();
     }
     
+    // If switching away from nodes tool, clear node selection state
+    if (activeTool === 'nodes' && tool !== 'nodes') {
+      setSelectedNodeForConnection(null);
+      setLastPlacedNodeId(null);
+      lastPlacedNodeIdRef.current = null;
+    }
+    
     setActiveTool(tool);
     activeToolRef.current = tool; // Keep ref in sync
     setSelectedItem(null);
@@ -1001,7 +1306,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       saveToStorage(STORAGE_KEYS.POLYGONS, updatedPolygons);
       
       // Update the map with the new polygon data
-      updateMapData(updatedPolygons, beacons, nodes, edges);
+              updateMapData(updatedPolygons, beacons, nodes, edges, selectedNodeForConnection);
       
       logger.userAction('Polygon saved', { 
         name: polygonName.trim(), 
@@ -1043,6 +1348,9 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     setNodes([]);
     setEdges([]);
     setSelectedItem(null);
+    setSelectedNodeForConnection(null);
+    setLastPlacedNodeId(null);
+    lastPlacedNodeIdRef.current = null;
     
     // Clear all markers from map (simplified - in a real implementation you'd track markers)
     if (map.current) {
@@ -1248,9 +1556,15 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             setCurrentPolygonPoints([]);
             setPendingPolygonPoints([]);
             clearTempDrawing();
+            setSelectedNodeForConnection(null);
+            setLastPlacedNodeId(null);
+            lastPlacedNodeIdRef.current = null;
             logger.userAction('Polygon drawing cancelled');
           }}
           onClearAll={handleClearAll}
+          nodesCount={nodes.length}
+          selectedNodeForConnection={selectedNodeForConnection}
+          lastPlacedNodeId={lastPlacedNodeId}
         />
 
         {/* Main Content Area */}
@@ -1276,6 +1590,28 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             onToggleVisibility={toggleLayerVisibility}
           />
         </div>
+      </div>
+
+      {/* TEMPORARY: Clear localStorage data button */}
+      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 1000 }}>
+        <button 
+          onClick={() => {
+            clearStorageData();
+            // Reload page to reset state
+            window.location.reload();
+          }}
+          style={{ 
+            padding: '10px 15px', 
+            backgroundColor: '#ef4444', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontWeight: 'bold'
+          }}
+        >
+          🗑️ Clear Data
+        </button>
       </div>
 
       {/* Polygon Dialog */}
