@@ -5,7 +5,7 @@ import { MAPTILER_API_KEY, MAPTILER_STYLE_URL } from '../constants/api';
 import { UI_MESSAGES } from '../constants/ui';
 import { Floor, FloorLayoutData, floorLayoutApi, floorsApi } from '../utils/api';
 import { createLogger } from '../utils/logger';
-import { Alert, Button, Container, Header } from './common';
+import { Button, Container, Header } from './common';
 import './FloorEditor.css';
 import BeaconDialog from './FloorEditor/BeaconDialog';
 import DrawingToolbar, { DrawingTool } from './FloorEditor/DrawingToolbar';
@@ -23,14 +23,6 @@ const STORAGE_KEYS = {
   EDGES: 'floorEditor_edges'
 } as const;
 
-// Helper function to clear all localStorage data for FloorEditor
-const clearStorageData = () => {
-  Object.values(STORAGE_KEYS).forEach(key => {
-    localStorage.removeItem(key);
-    logger.info(`Cleared localStorage key: ${key}`);
-  });
-  logger.userAction('All FloorEditor localStorage data cleared');
-};
 
 // Local storage utilities
 const loadFromStorage = (key: string, defaultValue: any): any => {
@@ -170,7 +162,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const [mapLoading, setMapLoading] = useState(true);
   const [currentCoordinates, setCurrentCoordinates] = useState<{ lng: number; lat: number } | null>(null);
   const [mapLoadedSuccessfully, setMapLoadedSuccessfully] = useState(false);
-  const [showMapLoadedAlert, setShowMapLoadedAlert] = useState(false);
+
   
   // Map markers and layers tracking
   const mapMarkers = useRef<{ [key: string]: any }>({});
@@ -657,9 +649,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         setError(null); // Clear any previous errors since map loaded successfully
         logger.info('Map loaded successfully');
         
-        // SHOW HUGE ALERT AS REQUESTED
-        setShowMapLoadedAlert(true);
-        setTimeout(() => setShowMapLoadedAlert(false), 5000); // Hide after 5 seconds
+
       });
 
       mapInstance.on('error', (e) => {
@@ -1513,14 +1503,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
   return (
     <Container variant="PAGE">
-      {/* HUGE ALERT WHEN MAP LOADS */}
-      {showMapLoadedAlert && (
-        <Alert 
-          type="SUCCESS" 
-          message="HEEELLLLLLLLLOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO"
-          className="map-loaded-alert"
-        />
-      )}
+
 
       <Header 
         title={`${UI_MESSAGES.FLOOR_EDITOR_TITLE} - ${floor?.name || 'Unknown Floor'}`}
@@ -1592,27 +1575,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         </div>
       </div>
 
-      {/* TEMPORARY: Clear localStorage data button */}
-      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 1000 }}>
-        <button 
-          onClick={() => {
-            clearStorageData();
-            // Reload page to reset state
-            window.location.reload();
-          }}
-          style={{ 
-            padding: '10px 15px', 
-            backgroundColor: '#ef4444', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          🗑️ Clear Data
-        </button>
-      </div>
+
 
       {/* Polygon Dialog */}
       <PolygonDialog
