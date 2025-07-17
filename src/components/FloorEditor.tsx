@@ -62,10 +62,10 @@ const SAMPLE_POLYGONS: Polygon[] = [
     id: '1',
     name: 'Classroom A',
     points: [
-      { x: 100, y: 100 },
-      { x: 200, y: 100 },
-      { x: 200, y: 180 },
-      { x: 100, y: 180 }
+      { x: 50.142200, y: 26.313300 },
+      { x: 50.142400, y: 26.313300 },
+      { x: 50.142400, y: 26.313400 },
+      { x: 50.142200, y: 26.313400 }
     ],
     type: 'poi',
     visible: true,
@@ -75,10 +75,10 @@ const SAMPLE_POLYGONS: Polygon[] = [
     id: '2',
     name: 'Classroom B',
     points: [
-      { x: 250, y: 100 },
-      { x: 350, y: 100 },
-      { x: 350, y: 180 },
-      { x: 250, y: 180 }
+      { x: 50.142500, y: 26.313300 },
+      { x: 50.142700, y: 26.313300 },
+      { x: 50.142700, y: 26.313400 },
+      { x: 50.142500, y: 26.313400 }
     ],
     type: 'poi',
     visible: true,
@@ -88,10 +88,10 @@ const SAMPLE_POLYGONS: Polygon[] = [
     id: '3',
     name: 'Hallway Wall',
     points: [
-      { x: 80, y: 200 },
-      { x: 370, y: 200 },
-      { x: 370, y: 210 },
-      { x: 80, y: 210 }
+      { x: 50.142150, y: 26.313450 },
+      { x: 50.142750, y: 26.313450 },
+      { x: 50.142750, y: 26.313470 },
+      { x: 50.142150, y: 26.313470 }
     ],
     type: 'wall',
     visible: true,
@@ -100,15 +100,15 @@ const SAMPLE_POLYGONS: Polygon[] = [
 ];
 
 const SAMPLE_BEACONS: Beacon[] = [
-  { id: '1', name: 'Beacon 1', x: 150, y: 140, visible: true },
-  { id: '2', name: 'Beacon 2', x: 300, y: 140, visible: true },
-  { id: '3', name: 'Beacon 3', x: 225, y: 250, visible: true }
+  { id: '1', name: 'Beacon 1', x: 50.142300, y: 26.313350, visible: true },
+  { id: '2', name: 'Beacon 2', x: 50.142600, y: 26.313350, visible: true },
+  { id: '3', name: 'Beacon 3', x: 50.142450, y: 26.313500, visible: true }
 ];
 
 const SAMPLE_NODES: RouteNode[] = [
-  { id: '1', x: 150, y: 220, connections: ['2'], visible: true },
-  { id: '2', x: 300, y: 220, connections: ['1', '3'], visible: true },
-  { id: '3', x: 225, y: 300, connections: ['2'], visible: true }
+  { id: '1', x: 50.142300, y: 26.313480, connections: ['2'], visible: true },
+  { id: '2', x: 50.142600, y: 26.313480, connections: ['1', '3'], visible: true },
+  { id: '3', x: 50.142450, y: 26.313550, connections: ['2'], visible: true }
 ];
 
 const SAMPLE_EDGES: Edge[] = [
@@ -131,6 +131,14 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const map = useRef<Map | null>(null);
   const [mapLoading, setMapLoading] = useState(true);
   const [currentCoordinates, setCurrentCoordinates] = useState<{ lng: number; lat: number } | null>(null);
+  const [mapLoadedSuccessfully, setMapLoadedSuccessfully] = useState(false);
+  
+  // Map markers and layers tracking
+  const mapMarkers = useRef<{ [key: string]: any }>({});
+  const mapLayers = useRef<{ [key: string]: string }>({});
+  
+  // Timeout reference for cleanup
+  const mapLoadTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // Drawing state (keeping your existing structure)
   const [activeTool, setActiveTool] = useState<DrawingTool>('select');
@@ -141,6 +149,9 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   
   // Selection state
   const [selectedItem, setSelectedItem] = useState<{type: 'polygon' | 'beacon' | 'node', id: string} | null>(null);
+  
+  // Layer filter state
+  const [layerFilter, setLayerFilter] = useState<'polygons' | 'beacons' | 'nodes'>('polygons');
   
   // Polygon dialog state
   const [showPolygonDialog, setShowPolygonDialog] = useState(false);
@@ -153,6 +164,14 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     
     return () => {
       logger.info('FloorEditor component unmounted');
+      
+      // Clean up timeout
+      if (mapLoadTimeout.current) {
+        clearTimeout(mapLoadTimeout.current);
+        mapLoadTimeout.current = null;
+      }
+      
+      // Clean up map
       if (map.current) {
         map.current.remove();
       }
@@ -168,6 +187,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+
+
+
+
+
+
 
   const getUserLocationAndCenter = (mapInstance: Map) => {
     if ('geolocation' in navigator) {
@@ -246,24 +271,183 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       const mapInstance = new Map({
         container: mapContainer.current,
         style: MAPTILER_STYLE_URL, // Using your custom style URL
-        center: [-157.8583, 21.3099], // Honolulu coordinates as default
-        zoom: 15
+        center: [50.142335, 26.313387], // User's actual coordinates in Bahrain
+        zoom: 18
       });
 
       map.current = mapInstance;
 
       mapInstance.on('load', () => {
+        // Clear the timeout since map loaded successfully
+        if (mapLoadTimeout.current) {
+          clearTimeout(mapLoadTimeout.current);
+          mapLoadTimeout.current = null;
+        }
+        
         setMapLoading(false);
+        setMapLoadedSuccessfully(true);
+        setError(null); // Clear any previous errors since map loaded successfully
         logger.info('Map loaded successfully');
         
-        // Immediately ask for user's location with better handling
-        getUserLocationAndCenter(mapInstance);
+        // Add sample data to the map with proper visualization
+        logger.info('Adding all sample data to map with proper visualization');
+        
+        // Clear existing markers and layers
+        Object.values(mapMarkers.current).forEach(marker => marker.remove());
+        mapMarkers.current = {};
+        Object.values(mapLayers.current).forEach(layerId => {
+          if (mapInstance.getLayer(layerId)) {
+            mapInstance.removeLayer(layerId);
+          }
+          if (mapInstance.getSource(layerId)) {
+            mapInstance.removeSource(layerId);
+          }
+        });
+        mapLayers.current = {};
+        
+        // Add polygons as filled areas
+        polygons.forEach(polygon => {
+          if (polygon.visible && polygon.points.length >= 3) {
+            const coordinates = polygon.points.map(p => [p.x, p.y]);
+            coordinates.push(coordinates[0]); // Close the polygon
+            
+            const sourceId = `polygon-source-${polygon.id}`;
+            const layerId = `polygon-layer-${polygon.id}`;
+            
+            mapInstance.addSource(sourceId, {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                geometry: {
+                  type: 'Polygon',
+                  coordinates: [coordinates]
+                },
+                properties: {}
+              }
+            });
+            
+            mapInstance.addLayer({
+              id: layerId,
+              type: 'fill',
+              source: sourceId,
+              paint: {
+                'fill-color': polygon.color,
+                'fill-opacity': 0.6
+              }
+            });
+            
+            // Add border
+            const borderLayerId = `polygon-border-${polygon.id}`;
+            mapInstance.addLayer({
+              id: borderLayerId,
+              type: 'line',
+              source: sourceId,
+              paint: {
+                'line-color': polygon.color,
+                'line-width': 2
+              }
+            });
+            
+            mapLayers.current[`polygon-${polygon.id}`] = layerId;
+            mapLayers.current[`polygon-border-${polygon.id}`] = borderLayerId;
+            
+            // Add center marker for interaction
+            const centerX = polygon.points.reduce((sum, p) => sum + p.x, 0) / polygon.points.length;
+            const centerY = polygon.points.reduce((sum, p) => sum + p.y, 0) / polygon.points.length;
+            
+            const marker = new Marker({ color: polygon.color, scale: 0.8 })
+              .setLngLat([centerX, centerY])
+              .setPopup(new Popup().setHTML(`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`))
+              .addTo(mapInstance);
+              
+            mapMarkers.current[`polygon-${polygon.id}`] = marker;
+          }
+        });
+        
+        // Add beacons
+        beacons.forEach(beacon => {
+          if (beacon.visible) {
+            const marker = new Marker({ color: '#fbbf24' })
+              .setLngLat([beacon.x, beacon.y])
+              .setPopup(new Popup().setHTML(`<strong>${beacon.name}</strong><br>Type: Beacon`))
+              .addTo(mapInstance);
+              
+            mapMarkers.current[`beacon-${beacon.id}`] = marker;
+          }
+        });
+        
+        // Add nodes
+        nodes.forEach(node => {
+          if (node.visible) {
+            const marker = new Marker({ color: '#3b82f6' })
+              .setLngLat([node.x, node.y])
+              .setPopup(new Popup().setHTML(`<strong>Node ${node.id}</strong><br>Connections: ${node.connections.length}`))
+              .addTo(mapInstance);
+              
+            mapMarkers.current[`node-${node.id}`] = marker;
+          }
+        });
+        
+        // Add route lines between connected nodes
+        edges.forEach(edge => {
+          if (edge.visible) {
+            const fromNode = nodes.find(n => n.id === edge.fromNodeId);
+            const toNode = nodes.find(n => n.id === edge.toNodeId);
+            
+            if (fromNode && toNode && fromNode.visible && toNode.visible) {
+              const sourceId = `edge-source-${edge.id}`;
+              const layerId = `edge-layer-${edge.id}`;
+              
+              mapInstance.addSource(sourceId, {
+                type: 'geojson',
+                data: {
+                  type: 'Feature',
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: [[fromNode.x, fromNode.y], [toNode.x, toNode.y]]
+                  },
+                  properties: {}
+                }
+              });
+              
+              mapInstance.addLayer({
+                id: layerId,
+                type: 'line',
+                source: sourceId,
+                paint: {
+                  'line-color': '#8b5cf6',
+                  'line-width': 3,
+                  'line-opacity': 0.8
+                }
+              });
+              
+              mapLayers.current[`edge-${edge.id}`] = layerId;
+            }
+          }
+        });
+        
+        logger.info('All sample data added successfully with proper visualization');
+        
+        // Use fixed coordinates instead of user location
+        logger.info('Using fixed coordinates instead of geolocation', { lat: 26.313387, lng: 50.142335 });
       });
 
       mapInstance.on('error', (e) => {
-        logger.error('Map error event', new Error(e.error?.message || 'Map error occurred'));
-        setError('Map failed to load. Please check your API key.');
-        setMapLoading(false);
+        // Only show error if map hasn't loaded successfully yet
+        if (!mapLoadedSuccessfully) {
+          // Clear the timeout since we got an error (not a timeout)
+          if (mapLoadTimeout.current) {
+            clearTimeout(mapLoadTimeout.current);
+            mapLoadTimeout.current = null;
+          }
+          
+          logger.error('Map error event during initial load', new Error(e.error?.message || 'Map error occurred'));
+          setError('Map failed to load. Please check your API key.');
+          setMapLoading(false);
+        } else {
+          // Map already loaded successfully, just log the error but don't show to user
+          logger.warn('Map error after successful load (ignoring)', new Error(e.error?.message || 'Map error occurred'));
+        }
       });
 
       // Mouse move event to track coordinates
@@ -280,12 +464,14 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       });
 
       // Set a timeout to catch cases where the map never loads
-      setTimeout(() => {
+      mapLoadTimeout.current = setTimeout(() => {
+        // Only show timeout error if map is still loading (not if it already loaded)
         if (mapLoading) {
           logger.error('Map loading timeout - map failed to load within 30 seconds');
           setError('Map loading timeout. Please check your internet connection and API key.');
           setMapLoading(false);
         }
+        mapLoadTimeout.current = null;
       }, 30000);
 
     } catch (error) {
@@ -428,10 +614,10 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         id: Date.now().toString(),
         name: polygonName.trim(),
         points: [
-          { x: pendingPolygonCenter.lng - 0.0001, y: pendingPolygonCenter.lat + 0.0001 },
-          { x: pendingPolygonCenter.lng + 0.0001, y: pendingPolygonCenter.lat + 0.0001 },
-          { x: pendingPolygonCenter.lng + 0.0001, y: pendingPolygonCenter.lat - 0.0001 },
-          { x: pendingPolygonCenter.lng - 0.0001, y: pendingPolygonCenter.lat - 0.0001 }
+          { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
+          { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat + 0.00005 },
+          { x: pendingPolygonCenter.lng + 0.00005, y: pendingPolygonCenter.lat - 0.00005 },
+          { x: pendingPolygonCenter.lng - 0.00005, y: pendingPolygonCenter.lat - 0.00005 }
         ],
         type: isWallMode ? 'wall' : 'poi',
         visible: true,
@@ -484,24 +670,115 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     logger.userAction('Layer item selected', { type, id });
   };
 
+  const handleFilterChange = (filter: 'polygons' | 'beacons' | 'nodes') => {
+    setLayerFilter(filter);
+    logger.userAction('Layer filter changed', { filter });
+  };
+
+  const getFilteredData = () => {
+    switch (layerFilter) {
+      case 'polygons':
+        return { polygons, beacons: [], nodes: [] };
+      case 'beacons':
+        return { polygons: [], beacons, nodes: [] };
+      case 'nodes':
+        return { polygons: [], beacons: [], nodes };
+    }
+  };
+
   const toggleLayerVisibility = (type: 'polygon' | 'beacon' | 'node', id: string) => {
     logger.userAction('Layer visibility toggled', { type, id });
     
+    if (!map.current) return;
+    
+    const mapInstance = map.current;
+    
     switch (type) {
       case 'polygon':
-        setPolygons(prev => prev.map(p => 
-          p.id === id ? { ...p, visible: !p.visible } : p
-        ));
+        setPolygons(prev => prev.map(p => {
+          if (p.id === id) {
+            const newVisible = !p.visible;
+            
+            // Update map visibility
+            const marker = mapMarkers.current[`polygon-${id}`];
+            const layerId = mapLayers.current[`polygon-${id}`];
+            const borderLayerId = mapLayers.current[`polygon-border-${id}`];
+            
+            if (marker) {
+              if (newVisible) {
+                marker.addTo(mapInstance);
+              } else {
+                marker.remove();
+              }
+            }
+            
+            if (layerId && mapInstance.getLayer(layerId)) {
+              mapInstance.setLayoutProperty(layerId, 'visibility', newVisible ? 'visible' : 'none');
+            }
+            
+            if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
+              mapInstance.setLayoutProperty(borderLayerId, 'visibility', newVisible ? 'visible' : 'none');
+            }
+            
+            return { ...p, visible: newVisible };
+          }
+          return p;
+        }));
         break;
+        
       case 'beacon':
-        setBeacons(prev => prev.map(b => 
-          b.id === id ? { ...b, visible: !b.visible } : b
-        ));
+        setBeacons(prev => prev.map(b => {
+          if (b.id === id) {
+            const newVisible = !b.visible;
+            
+            // Update map visibility
+            const marker = mapMarkers.current[`beacon-${id}`];
+            if (marker) {
+              if (newVisible) {
+                marker.addTo(mapInstance);
+              } else {
+                marker.remove();
+              }
+            }
+            
+            return { ...b, visible: newVisible };
+          }
+          return b;
+        }));
         break;
+        
       case 'node':
-        setNodes(prev => prev.map(n => 
-          n.id === id ? { ...n, visible: !n.visible } : n
-        ));
+        setNodes(prev => prev.map(n => {
+          if (n.id === id) {
+            const newVisible = !n.visible;
+            
+            // Update map visibility
+            const marker = mapMarkers.current[`node-${id}`];
+            if (marker) {
+              if (newVisible) {
+                marker.addTo(mapInstance);
+              } else {
+                marker.remove();
+              }
+            }
+            
+            // Also update any edges connected to this node
+            edges.forEach(edge => {
+              if (edge.fromNodeId === id || edge.toNodeId === id) {
+                const layerId = mapLayers.current[`edge-${edge.id}`];
+                if (layerId && mapInstance.getLayer(layerId)) {
+                  const fromNode = nodes.find(node => node.id === edge.fromNodeId);
+                  const toNode = nodes.find(node => node.id === edge.toNodeId);
+                  const shouldShowEdge = fromNode?.visible && toNode?.visible && edge.visible;
+                  mapInstance.setLayoutProperty(layerId, 'visibility', shouldShowEdge ? 'visible' : 'none');
+                }
+              }
+            });
+            
+            return { ...n, visible: newVisible };
+          }
+          return n;
+        }));
         break;
     }
   };
@@ -642,97 +919,127 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
           <div className="layers-panel">
             <div className="layers-header">
               <h3>{UI_MESSAGES.FLOOR_EDITOR_LAYERS_TITLE}</h3>
+              
+              {/* Filter buttons */}
+              <div className="layer-filters">
+                <button 
+                  className={`filter-button ${layerFilter === 'polygons' ? 'active' : ''}`}
+                  onClick={() => handleFilterChange('polygons')}
+                >
+                  Polygons
+                </button>
+                <button 
+                  className={`filter-button ${layerFilter === 'beacons' ? 'active' : ''}`}
+                  onClick={() => handleFilterChange('beacons')}
+                >
+                  Beacons
+                </button>
+                <button 
+                  className={`filter-button ${layerFilter === 'nodes' ? 'active' : ''}`}
+                  onClick={() => handleFilterChange('nodes')}
+                >
+                  Route Nodes
+                </button>
+              </div>
             </div>
             
             <div className="layers-content">
-              {/* Polygons */}
-              {polygons.length > 0 && (
-                <div className="layer-group">
-                  <h4>Polygons ({polygons.length})</h4>
-                  {polygons.map(polygon => (
-                    <div 
-                      key={polygon.id} 
-                      className={`layer-item ${selectedItem?.type === 'polygon' && selectedItem?.id === polygon.id ? 'selected' : ''}`}
-                      onClick={() => handleLayerItemClick('polygon', polygon.id)}
-                    >
-                      <button
-                        className="visibility-toggle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleLayerVisibility('polygon', polygon.id);
-                        }}
-                        title={polygon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                      >
-                        {polygon.visible ? '👁️' : '🚫'}
-                      </button>
-                      <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
-                      <span className="layer-name">{polygon.name}</span>
-                      <span className="layer-type">({polygon.type})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const filteredData = getFilteredData();
+                
+                return (
+                  <>
+                    {/* Polygons */}
+                    {filteredData.polygons.length > 0 && (
+                      <div className="layer-group">
+                        <h4>Polygons ({filteredData.polygons.length})</h4>
+                        {filteredData.polygons.map(polygon => (
+                          <div 
+                            key={polygon.id} 
+                            className={`layer-item ${selectedItem?.type === 'polygon' && selectedItem?.id === polygon.id ? 'selected' : ''}`}
+                            onClick={() => handleLayerItemClick('polygon', polygon.id)}
+                          >
+                            <button
+                              className="visibility-toggle"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLayerVisibility('polygon', polygon.id);
+                              }}
+                              title={polygon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                            >
+                              {polygon.visible ? '👁️' : '🚫'}
+                            </button>
+                            <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
+                            <span className="layer-name">{polygon.name}</span>
+                            <span className="layer-type">({polygon.type})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-              {/* Beacons */}
-              {beacons.length > 0 && (
-                <div className="layer-group">
-                  <h4>Beacons ({beacons.length})</h4>
-                  {beacons.map(beacon => (
-                    <div 
-                      key={beacon.id} 
-                      className={`layer-item ${selectedItem?.type === 'beacon' && selectedItem?.id === beacon.id ? 'selected' : ''}`}
-                      onClick={() => handleLayerItemClick('beacon', beacon.id)}
-                    >
-                      <button
-                        className="visibility-toggle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleLayerVisibility('beacon', beacon.id);
-                        }}
-                        title={beacon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                      >
-                        {beacon.visible ? '👁️' : '🚫'}
-                      </button>
-                      <div className="layer-color beacon-color"></div>
-                      <span className="layer-name">{beacon.name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    {/* Beacons */}
+                    {filteredData.beacons.length > 0 && (
+                      <div className="layer-group">
+                        <h4>Beacons ({filteredData.beacons.length})</h4>
+                        {filteredData.beacons.map(beacon => (
+                          <div 
+                            key={beacon.id} 
+                            className={`layer-item ${selectedItem?.type === 'beacon' && selectedItem?.id === beacon.id ? 'selected' : ''}`}
+                            onClick={() => handleLayerItemClick('beacon', beacon.id)}
+                          >
+                            <button
+                              className="visibility-toggle"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLayerVisibility('beacon', beacon.id);
+                              }}
+                              title={beacon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                            >
+                              {beacon.visible ? '👁️' : '🚫'}
+                            </button>
+                            <div className="layer-color beacon-color"></div>
+                            <span className="layer-name">{beacon.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-              {/* Nodes */}
-              {nodes.length > 0 && (
-                <div className="layer-group">
-                  <h4>Route Nodes ({nodes.length})</h4>
-                  {nodes.map(node => (
-                    <div 
-                      key={node.id} 
-                      className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.id ? 'selected' : ''}`}
-                      onClick={() => handleLayerItemClick('node', node.id)}
-                    >
-                      <button
-                        className="visibility-toggle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleLayerVisibility('node', node.id);
-                        }}
-                        title={node.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
-                      >
-                        {node.visible ? '👁️' : '🚫'}
-                      </button>
-                      <div className="layer-color node-color"></div>
-                      <span className="layer-name">Node {node.id}</span>
-                      <span className="layer-connections">({node.connections.length} connections)</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    {/* Nodes */}
+                    {filteredData.nodes.length > 0 && (
+                      <div className="layer-group">
+                        <h4>Route Nodes ({filteredData.nodes.length})</h4>
+                        {filteredData.nodes.map(node => (
+                          <div 
+                            key={node.id} 
+                            className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.id ? 'selected' : ''}`}
+                            onClick={() => handleLayerItemClick('node', node.id)}
+                          >
+                            <button
+                              className="visibility-toggle"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLayerVisibility('node', node.id);
+                              }}
+                              title={node.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                            >
+                              {node.visible ? '👁️' : '🚫'}
+                            </button>
+                            <div className="layer-color node-color"></div>
+                            <span className="layer-name">Node {node.id}</span>
+                            <span className="layer-connections">({node.connections.length} connections)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-              {polygons.length === 0 && beacons.length === 0 && nodes.length === 0 && (
-                <div className="no-layers-message">
-                  {UI_MESSAGES.FLOOR_EDITOR_NO_LAYERS}
-                </div>
-              )}
+                    {filteredData.polygons.length === 0 && filteredData.beacons.length === 0 && filteredData.nodes.length === 0 && (
+                      <div className="no-layers-message">
+                        {`No ${layerFilter} found`}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
