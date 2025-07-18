@@ -9,6 +9,7 @@ interface PolygonDialogProps {
   show: boolean;
   polygonName: string;
   isWallMode: boolean;
+  isEditing?: boolean;
   onNameChange: (value: string) => void;
   onWallModeChange: (isWall: boolean) => void;
   onSave: () => void;
@@ -19,6 +20,7 @@ const PolygonDialog: React.FC<PolygonDialogProps> = ({
   show,
   polygonName,
   isWallMode,
+  isEditing = false,
   onNameChange,
   onWallModeChange,
   onSave,
@@ -31,7 +33,7 @@ const PolygonDialog: React.FC<PolygonDialogProps> = ({
   return (
     <div className="dialog-overlay">
       <div className="dialog-content">
-        <h2>{UI_MESSAGES.FLOOR_EDITOR_POLYGON_DIALOG_TITLE}</h2>
+        <h2>{isEditing ? UI_MESSAGES.FLOOR_EDITOR_POLYGON_EDIT_TITLE : UI_MESSAGES.FLOOR_EDITOR_POLYGON_DIALOG_TITLE}</h2>
         <Input
           id="polygon-name"
           name="polygon-name"

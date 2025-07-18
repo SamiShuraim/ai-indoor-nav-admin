@@ -43,6 +43,8 @@ interface LayersPanelProps {
   onFilterChange: (filter: 'polygons' | 'beacons' | 'nodes') => void;
   onLayerItemClick: (type: 'polygon' | 'beacon' | 'node', id: string) => void;
   onToggleVisibility: (type: 'polygon' | 'beacon' | 'node', id: string) => void;
+  onEditItem: (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onDeleteItem: (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const LayersPanel: React.FC<LayersPanelProps> = ({
@@ -53,7 +55,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
   selectedItem,
   onFilterChange,
   onLayerItemClick,
-  onToggleVisibility
+  onToggleVisibility,
+  onEditItem,
+  onDeleteItem
 }) => {
   logger.debug('LayersPanel rendered', { 
     layerFilter, 
@@ -127,6 +131,22 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
                 <span className="layer-name">{polygon.name}</span>
                 <span className="layer-type">({polygon.type})</span>
+                <div className="layer-actions">
+                  <button
+                    className="layer-action-button edit-button"
+                    onClick={(e) => onEditItem('polygon', polygon.id, e)}
+                    title="Edit polygon"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="layer-action-button delete-button"
+                    onClick={(e) => onDeleteItem('polygon', polygon.id, e)}
+                    title="Delete polygon"
+                  >
+                    ❌
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -154,6 +174,22 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 </button>
                 <div className="layer-color beacon-color"></div>
                 <span className="layer-name">{beacon.name}</span>
+                <div className="layer-actions">
+                  <button
+                    className="layer-action-button edit-button"
+                    onClick={(e) => onEditItem('beacon', beacon.id, e)}
+                    title="Edit beacon"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="layer-action-button delete-button"
+                    onClick={(e) => onDeleteItem('beacon', beacon.id, e)}
+                    title="Delete beacon"
+                  >
+                    ❌
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -182,6 +218,22 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 <div className="layer-color node-color"></div>
                 <span className="layer-name">Node {node.id}</span>
                 <span className="layer-connections">({node.connections.length} connections)</span>
+                <div className="layer-actions">
+                  <button
+                    className="layer-action-button edit-button"
+                    onClick={(e) => onEditItem('node', node.id, e)}
+                    title="Edit node"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="layer-action-button delete-button"
+                    onClick={(e) => onDeleteItem('node', node.id, e)}
+                    title="Delete node"
+                  >
+                    ❌
+                  </button>
+                </div>
               </div>
             ))}
           </div>

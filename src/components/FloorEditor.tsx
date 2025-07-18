@@ -1374,7 +1374,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     }
   };
 
-  const handleEditItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent) => {
+  const handleEditItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     logger.userAction('Edit item clicked', { type, id });
     
@@ -1401,7 +1401,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     }
   };
 
-  const handleDeleteItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent) => {
+  const handleDeleteItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     logger.userAction('Delete item clicked', { type, id });
     
@@ -1626,6 +1626,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
             onFilterChange={handleFilterChange}
             onLayerItemClick={handleLayerItemClick}
             onToggleVisibility={toggleLayerVisibility}
+            onEditItem={handleEditItem}
+            onDeleteItem={handleDeleteItem}
           />
         </div>
       </div>
@@ -1637,6 +1639,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         show={showPolygonDialog}
         polygonName={polygonName}
         isWallMode={isWallMode}
+        isEditing={!!editingPolygonId}
         onNameChange={setPolygonName}
         onWallModeChange={setIsWallMode}
         onSave={handlePolygonSave}
