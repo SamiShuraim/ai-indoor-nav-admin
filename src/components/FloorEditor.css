@@ -27,6 +27,16 @@
   gap: 16px;
 }
 
+.tool-instruction {
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid #93c5fd;
+}
+
 .tool-group {
   display: flex;
   gap: 8px;
@@ -92,6 +102,27 @@
   position: relative;
 }
 
+/* Map cursor styles for different tools */
+.map-wrapper.tool-select {
+  cursor: default;
+}
+
+.map-wrapper.tool-pan {
+  cursor: grab;
+}
+
+.map-wrapper.tool-poi {
+  cursor: crosshair;
+}
+
+.map-wrapper.tool-beacons {
+  cursor: crosshair;
+}
+
+.map-wrapper.tool-nodes {
+  cursor: crosshair;
+}
+
 .map-loading-overlay {
   position: absolute;
   top: 0;
@@ -148,6 +179,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 500px; /* Match map container min-height */
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 .layers-header {
@@ -157,10 +190,44 @@
 }
 
 .layers-header h3 {
-  margin: 0;
+  margin: 0 0 12px 0;
   font-size: 16px;
   font-weight: 600;
   color: #1e293b;
+}
+
+/* Filter buttons */
+.layer-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-button {
+  padding: 6px 12px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.filter-button:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.filter-button.active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.filter-button.active:hover {
+  background-color: #2563eb;
 }
 
 .layers-content {
