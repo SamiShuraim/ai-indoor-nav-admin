@@ -146,6 +146,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   const [showPolygonDialog, setShowPolygonDialog] = useState(false);
   const [polygonName, setPolygonName] = useState('');
   const [isWallMode, setIsWallMode] = useState(false);
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
 
   useEffect(() => {
     logger.info('FloorEditor component mounted', { floorId });
@@ -423,7 +424,28 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
   };
 
   const handlePolygonSave = () => {
-    if (pendingPolygonCenter && polygonName.trim()) {
+    if (!polygonName.trim()) return;
+
+    if (editingPolygonId) {
+      // Editing existing polygon
+      setPolygons(prev => prev.map(p => 
+        p.id === editingPolygonId 
+          ? { 
+              ...p, 
+              name: polygonName.trim(),
+              type: isWallMode ? 'wall' : 'poi',
+              color: isWallMode ? '#6b7280' : '#3b82f6'
+            }
+          : p
+      ));
+      
+      logger.userAction('Polygon edited', { 
+        id: editingPolygonId,
+        name: polygonName.trim(), 
+        isWall: isWallMode
+      });
+    } else if (pendingPolygonCenter) {
+      // Creating new polygon
       const newPolygon: Polygon = {
         id: Date.now().toString(),
         name: polygonName.trim(),
@@ -445,12 +467,13 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
         .setPopup(new Popup().setHTML(`<strong>${newPolygon.name}</strong><br>Type: ${newPolygon.type}`))
         .addTo(map.current!);
       
-      logger.userAction('Polygon saved', { 
+      logger.userAction('Polygon created', { 
         name: polygonName.trim(), 
         isWall: isWallMode,
         coordinates: pendingPolygonCenter
       });
     }
+    
     handlePolygonCancel();
   };
 
@@ -459,6 +482,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     setPendingPolygonCenter(null);
     setPolygonName('');
     setIsWallMode(false);
+    setEditingPolygonId(null);
     logger.userAction('Polygon dialog cancelled');
   };
 
@@ -482,6 +506,59 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
     setSelectedItem({ type, id });
     setActiveTool('select');
     logger.userAction('Layer item selected', { type, id });
+  };
+
+  const handleEditItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    logger.userAction('Edit item clicked', { type, id });
+    
+    switch (type) {
+      case 'polygon':
+        const polygon = polygons.find(p => p.id === id);
+        if (polygon) {
+          setPolygonName(polygon.name);
+          setIsWallMode(polygon.type === 'wall');
+          setEditingPolygonId(id);
+          setPendingPolygonCenter(null); // Clear this to indicate we're editing, not creating
+          setShowPolygonDialog(true);
+          setSelectedItem({ type, id });
+        }
+        break;
+      case 'beacon':
+        // TODO: Implement beacon editing dialog
+        logger.info('Beacon editing not yet implemented', { id });
+        break;
+      case 'node':
+        // TODO: Implement node editing dialog
+        logger.info('Node editing not yet implemented', { id });
+        break;
+    }
+  };
+
+  const handleDeleteItem = (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    logger.userAction('Delete item clicked', { type, id });
+    
+    switch (type) {
+      case 'polygon':
+        setPolygons(prev => prev.filter(p => p.id !== id));
+        break;
+      case 'beacon':
+        setBeacons(prev => prev.filter(b => b.id !== id));
+        break;
+      case 'node':
+        setNodes(prev => prev.filter(n => n.id !== id));
+        // Also remove any edges connected to this node
+        setEdges(prev => prev.filter(e => e.fromNodeId !== id && e.toNodeId !== id));
+        break;
+    }
+    
+    // Clear selection if the deleted item was selected
+    if (selectedItem?.type === type && selectedItem?.id === id) {
+      setSelectedItem(null);
+    }
+    
+    // TODO: Remove marker from map when backend integration is complete
   };
 
   const toggleLayerVisibility = (type: 'polygon' | 'beacon' | 'node', id: string) => {
@@ -668,6 +745,22 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
                       <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
                       <span className="layer-name">{polygon.name}</span>
                       <span className="layer-type">({polygon.type})</span>
+                      <div className="layer-actions">
+                        <button
+                          className="layer-action-button edit-button"
+                          onClick={(e) => handleEditItem('polygon', polygon.id, e)}
+                          title="Edit polygon"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="layer-action-button delete-button"
+                          onClick={(e) => handleDeleteItem('polygon', polygon.id, e)}
+                          title="Delete polygon"
+                        >
+                          ❌
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -695,6 +788,22 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
                       </button>
                       <div className="layer-color beacon-color"></div>
                       <span className="layer-name">{beacon.name}</span>
+                      <div className="layer-actions">
+                        <button
+                          className="layer-action-button edit-button"
+                          onClick={(e) => handleEditItem('beacon', beacon.id, e)}
+                          title="Edit beacon"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="layer-action-button delete-button"
+                          onClick={(e) => handleDeleteItem('beacon', beacon.id, e)}
+                          title="Delete beacon"
+                        >
+                          ❌
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -723,6 +832,22 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
                       <div className="layer-color node-color"></div>
                       <span className="layer-name">Node {node.id}</span>
                       <span className="layer-connections">({node.connections.length} connections)</span>
+                      <div className="layer-actions">
+                        <button
+                          className="layer-action-button edit-button"
+                          onClick={(e) => handleEditItem('node', node.id, e)}
+                          title="Edit node"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="layer-action-button delete-button"
+                          onClick={(e) => handleDeleteItem('node', node.id, e)}
+                          title="Delete node"
+                        >
+                          ❌
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -742,7 +867,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
       {showPolygonDialog && (
         <div className="dialog-overlay">
           <div className="dialog-content">
-            <h2>{UI_MESSAGES.FLOOR_EDITOR_POLYGON_DIALOG_TITLE}</h2>
+            <h2>{editingPolygonId ? UI_MESSAGES.FLOOR_EDITOR_POLYGON_EDIT_TITLE : UI_MESSAGES.FLOOR_EDITOR_POLYGON_DIALOG_TITLE}</h2>
             <Input
               id="polygon-name"
               name="polygon-name"

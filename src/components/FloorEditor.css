@@ -257,6 +257,42 @@
   padding: 32px 16px;
 }
 
+/* Layer Action Buttons */
+.layer-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  align-items: center;
+}
+
+.layer-action-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+}
+
+.layer-action-button:hover {
+  background-color: #e2e8f0;
+  transform: scale(1.1);
+}
+
+.layer-action-button.edit-button:hover {
+  background-color: #dbeafe;
+}
+
+.layer-action-button.delete-button:hover {
+  background-color: #fee2e2;
+}
+
 /* Dialog Styles */
 .dialog-overlay {
   position: fixed;
