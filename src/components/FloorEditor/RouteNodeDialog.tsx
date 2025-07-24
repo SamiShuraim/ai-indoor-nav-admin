@@ -3,47 +3,47 @@ import { UI_MESSAGES } from '../../constants/ui';
 import { createLogger } from '../../utils/logger';
 import { Button, Input } from '../common';
 
-const logger = createLogger('BeaconDialog');
+const logger = createLogger('RouteNodeDialog');
 
-interface BeaconDialogProps {
+interface RouteNodeDialogProps {
   show: boolean;
-  beaconName: string;
+  nodeName: string;
   isEditing?: boolean;
   onNameChange: (value: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
-const BeaconDialog: React.FC<BeaconDialogProps> = ({
+const RouteNodeDialog: React.FC<RouteNodeDialogProps> = ({
   show,
-  beaconName,
+  nodeName,
   isEditing = false,
   onNameChange,
   onSave,
   onCancel
 }) => {
-  logger.debug('BeaconDialog rendered', { show, beaconName, isEditing });
+  logger.debug('RouteNodeDialog rendered', { show, nodeName, isEditing });
 
   if (!show) return null;
 
   return (
     <div className="dialog-overlay">
       <div className="dialog-content">
-        <h2>{isEditing ? UI_MESSAGES.FLOOR_EDITOR_EDIT_BEACON_TITLE : 'Add New Beacon'}</h2>
+        <h2>{isEditing ? UI_MESSAGES.FLOOR_EDITOR_EDIT_NODE_TITLE : 'Add New Route Node'}</h2>
         <Input
-          id="beacon-name"
-          name="beacon-name"
-          label="Beacon Name"
-          value={beaconName}
+          id="node-name"
+          name="node-name"
+          label="Node Name"
+          value={nodeName}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder="Enter beacon name"
+          placeholder="Enter node name"
         />
         <div className="dialog-buttons">
           <Button variant="SECONDARY" onClick={onCancel}>
             {UI_MESSAGES.FLOOR_EDITOR_EDIT_CANCEL}
           </Button>
-          <Button variant="PRIMARY" onClick={onSave} disabled={!beaconName.trim()}>
-            {isEditing ? UI_MESSAGES.FLOOR_EDITOR_EDIT_SAVE : 'Add Beacon'}
+          <Button variant="PRIMARY" onClick={onSave} disabled={!nodeName.trim()}>
+            {isEditing ? UI_MESSAGES.FLOOR_EDITOR_EDIT_SAVE : 'Add Node'}
           </Button>
         </div>
       </div>
@@ -51,4 +51,4 @@ const BeaconDialog: React.FC<BeaconDialogProps> = ({
   );
 };
 
-export default BeaconDialog; 
+export default RouteNodeDialog; 

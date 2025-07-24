@@ -22,16 +22,125 @@ export interface Floor {
   pois?: POI[];
 }
 
+// Beacon Types
+export interface BeaconType {
+  id: number;
+  name: string;
+  description?: string;
+  transmissionPower?: number;
+  batteryLife?: number;
+  rangeMeters?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Beacons
+export interface Beacon {
+  id: number;
+  floorId: number;
+  beaconTypeId?: number;
+  beaconType?: BeaconType;
+  name: string;
+  uuid?: string;
+  majorId?: number;
+  minorId?: number;
+  x: number;
+  y: number;
+  z?: number;
+  isActive: boolean;
+  isVisible: boolean;
+  batteryLevel?: number;
+  lastSeen?: string;
+  installationDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POI Categories
+export interface PoiCategory {
+  id: number;
+  name: string;
+  color?: string;
+  icon?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// POIs
 export interface POI {
   id: number;
   floorId: number;
+  categoryId?: number;
+  category?: PoiCategory;
   name: string;
-  x: number;
-  y: number;
-  type: string;
   description?: string;
+  poiType?: string;
+  color?: string;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
+// POI Points
+export interface PoiPoint {
+  id: number;
+  poiId: number;
+  x: number;
+  y: number;
+  pointOrder: number;
+  createdAt: string;
+}
+
+// Route Nodes
+export interface RouteNode {
+  id: number;
+  floorId: number;
+  x: number;
+  y: number;
+  nodeType?: string;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Route Edges
+export interface RouteEdge {
+  id: number;
+  floorId: number;
+  fromNodeId: number;
+  toNodeId: number;
+  weight?: number;
+  edgeType?: string;
+  isBidirectional?: boolean;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Walls
+export interface Wall {
+  id: number;
+  floorId: number;
+  name?: string;
+  wallType?: string;
+  height?: number;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Wall Points
+export interface WallPoint {
+  id: number;
+  wallId: number;
+  x: number;
+  y: number;
+  pointOrder: number;
+  createdAt: string;
+}
+
+// Legacy interfaces for backward compatibility
 export interface NavigationNode {
   id: number;
   floorId: number;
@@ -227,6 +336,158 @@ export const floorsApi = {
   },
 };
 
+// Beacon Type API functions
+export const beaconTypesApi = {
+  getAll: (): Promise<BeaconType[]> => {
+    logger.info('Fetching all beacon types');
+    return apiRequest<BeaconType[]>(API_ENDPOINTS.BEACON_TYPES);
+  },
+
+  getById: (id: string | number): Promise<BeaconType> => {
+    logger.info('Fetching beacon type by ID', { beaconTypeId: id });
+    return apiRequest<BeaconType>(API_ENDPOINTS.BEACON_TYPE_BY_ID(id));
+  },
+
+  getByName: (name: string): Promise<BeaconType> => {
+    logger.info('Fetching beacon type by name', { name });
+    return apiRequest<BeaconType>(API_ENDPOINTS.BEACON_TYPE_BY_NAME(name));
+  },
+
+  create: (beaconType: Omit<BeaconType, 'id' | 'createdAt' | 'updatedAt'>): Promise<BeaconType> => {
+    logger.info('Creating new beacon type', { beaconType });
+    return apiRequest<BeaconType>(API_ENDPOINTS.BEACON_TYPES, {
+      method: 'POST',
+      body: JSON.stringify(beaconType),
+    });
+  },
+
+  update: (id: string | number, beaconType: Partial<Omit<BeaconType, 'id' | 'createdAt' | 'updatedAt'>>): Promise<BeaconType> => {
+    logger.info('Updating beacon type', { beaconTypeId: id, updates: beaconType });
+    return apiRequest<BeaconType>(API_ENDPOINTS.BEACON_TYPE_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(beaconType),
+    });
+  },
+
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting beacon type', { beaconTypeId: id });
+    return apiRequest<void>(API_ENDPOINTS.BEACON_TYPE_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Beacon API functions
+export const beaconsApi = {
+  getAll: (): Promise<Beacon[]> => {
+    logger.info('Fetching all beacons');
+    return apiRequest<Beacon[]>(API_ENDPOINTS.BEACONS);
+  },
+
+  getById: (id: string | number): Promise<Beacon> => {
+    logger.info('Fetching beacon by ID', { beaconId: id });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACON_BY_ID(id));
+  },
+
+  getByFloor: (floorId: string | number): Promise<Beacon[]> => {
+    logger.info('Fetching beacons for floor', { floorId });
+    return apiRequest<Beacon[]>(API_ENDPOINTS.BEACONS_BY_FLOOR(floorId));
+  },
+
+  getByUuid: (uuid: string): Promise<Beacon> => {
+    logger.info('Fetching beacon by UUID', { uuid });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACON_BY_UUID(uuid));
+  },
+
+  getActive: (): Promise<Beacon[]> => {
+    logger.info('Fetching active beacons');
+    return apiRequest<Beacon[]>(API_ENDPOINTS.BEACONS_ACTIVE);
+  },
+
+  getLowBattery: (threshold: number): Promise<Beacon[]> => {
+    logger.info('Fetching beacons with low battery', { threshold });
+    return apiRequest<Beacon[]>(API_ENDPOINTS.BEACONS_LOW_BATTERY(threshold));
+  },
+
+  create: (beacon: Omit<Beacon, 'id' | 'createdAt' | 'updatedAt'>): Promise<Beacon> => {
+    logger.info('Creating new beacon', { beacon });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACONS, {
+      method: 'POST',
+      body: JSON.stringify(beacon),
+    });
+  },
+
+  update: (id: string | number, beacon: Partial<Omit<Beacon, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Beacon> => {
+    logger.info('Updating beacon', { beaconId: id, updates: beacon });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACON_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(beacon),
+    });
+  },
+
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting beacon', { beaconId: id });
+    return apiRequest<void>(API_ENDPOINTS.BEACON_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+
+  updateBattery: (id: string | number, level: number): Promise<Beacon> => {
+    logger.info('Updating beacon battery level', { beaconId: id, level });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACON_BATTERY(id, level), {
+      method: 'PUT',
+    });
+  },
+
+  heartbeat: (id: string | number): Promise<Beacon> => {
+    logger.info('Sending beacon heartbeat', { beaconId: id });
+    return apiRequest<Beacon>(API_ENDPOINTS.BEACON_HEARTBEAT(id), {
+      method: 'PUT',
+    });
+  },
+};
+
+// POI Category API functions
+export const poiCategoriesApi = {
+  getAll: (): Promise<PoiCategory[]> => {
+    logger.info('Fetching all POI categories');
+    return apiRequest<PoiCategory[]>(API_ENDPOINTS.POI_CATEGORIES);
+  },
+
+  getById: (id: string | number): Promise<PoiCategory> => {
+    logger.info('Fetching POI category by ID', { categoryId: id });
+    return apiRequest<PoiCategory>(API_ENDPOINTS.POI_CATEGORY_BY_ID(id));
+  },
+
+  getByName: (name: string): Promise<PoiCategory> => {
+    logger.info('Fetching POI category by name', { name });
+    return apiRequest<PoiCategory>(API_ENDPOINTS.POI_CATEGORY_BY_NAME(name));
+  },
+
+  create: (category: Omit<PoiCategory, 'id' | 'createdAt' | 'updatedAt'>): Promise<PoiCategory> => {
+    logger.info('Creating new POI category', { category });
+    return apiRequest<PoiCategory>(API_ENDPOINTS.POI_CATEGORIES, {
+      method: 'POST',
+      body: JSON.stringify(category),
+    });
+  },
+
+  update: (id: string | number, category: Partial<Omit<PoiCategory, 'id' | 'createdAt' | 'updatedAt'>>): Promise<PoiCategory> => {
+    logger.info('Updating POI category', { categoryId: id, updates: category });
+    return apiRequest<PoiCategory>(API_ENDPOINTS.POI_CATEGORY_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(category),
+    });
+  },
+
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting POI category', { categoryId: id });
+    return apiRequest<void>(API_ENDPOINTS.POI_CATEGORY_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+};
+
 // POI API functions
 export const poisApi = {
   getAll: (): Promise<POI[]> => {
@@ -234,21 +495,17 @@ export const poisApi = {
     return apiRequest<POI[]>(API_ENDPOINTS.POIS);
   },
 
-  getByFloor: async (floorId: string | number): Promise<POI[]> => {
-    const numericFloorId = typeof floorId === 'string' ? parseInt(floorId, 10) : floorId;
-    logger.info('Fetching POIs for floor', { floorId, numericFloorId });
-    const allPOIs = await apiRequest<POI[]>(API_ENDPOINTS.POIS);
-    const floorPOIs = allPOIs.filter(poi => poi.floorId === numericFloorId);
-    logger.info('Filtered POIs for floor', { floorId: numericFloorId, count: floorPOIs.length });
-    return floorPOIs;
-  },
-
-  getById: (id: string): Promise<POI> => {
+  getById: (id: string | number): Promise<POI> => {
     logger.info('Fetching POI by ID', { poiId: id });
     return apiRequest<POI>(API_ENDPOINTS.POI_BY_ID(id));
   },
 
-  create: (poi: Omit<POI, 'id'>): Promise<POI> => {
+  getByFloor: (floorId: string | number): Promise<POI[]> => {
+    logger.info('Fetching POIs for floor', { floorId });
+    return apiRequest<POI[]>(API_ENDPOINTS.POIS_BY_FLOOR(floorId));
+  },
+
+  create: (poi: Omit<POI, 'id' | 'createdAt' | 'updatedAt'>): Promise<POI> => {
     logger.info('Creating new POI', { poi });
     return apiRequest<POI>(API_ENDPOINTS.POIS, {
       method: 'POST',
@@ -256,7 +513,7 @@ export const poisApi = {
     });
   },
 
-  update: (id: string, poi: Partial<Omit<POI, 'id'>>): Promise<POI> => {
+  update: (id: string | number, poi: Partial<Omit<POI, 'id' | 'createdAt' | 'updatedAt'>>): Promise<POI> => {
     logger.info('Updating POI', { poiId: id, updates: poi });
     return apiRequest<POI>(API_ENDPOINTS.POI_BY_ID(id), {
       method: 'PUT',
@@ -264,7 +521,7 @@ export const poisApi = {
     });
   },
 
-  delete: (id: string): Promise<void> => {
+  delete: (id: string | number): Promise<void> => {
     logger.info('Deleting POI', { poiId: id });
     return apiRequest<void>(API_ENDPOINTS.POI_BY_ID(id), {
       method: 'DELETE',
@@ -272,128 +529,272 @@ export const poisApi = {
   },
 };
 
-// Node API functions
-export const nodesApi = {
-  getAll: (): Promise<NavigationNode[]> => {
-    logger.info('Fetching all navigation nodes');
-    return apiRequest<NavigationNode[]>(API_ENDPOINTS.NODES);
+// POI Point API functions
+export const poiPointsApi = {
+  getAll: (): Promise<PoiPoint[]> => {
+    logger.info('Fetching all POI points');
+    return apiRequest<PoiPoint[]>(API_ENDPOINTS.POI_POINTS);
   },
 
-  getByFloor: async (floorId: string | number): Promise<NavigationNode[]> => {
-    const numericFloorId = typeof floorId === 'string' ? parseInt(floorId, 10) : floorId;
-    logger.info('Fetching navigation nodes for floor', { floorId, numericFloorId });
-    const allNodes = await apiRequest<NavigationNode[]>(API_ENDPOINTS.NODES);
-    const floorNodes = allNodes.filter(node => node.floorId === numericFloorId);
-    logger.info('Filtered navigation nodes for floor', { floorId: numericFloorId, count: floorNodes.length });
-    return floorNodes;
+  getById: (id: string | number): Promise<PoiPoint> => {
+    logger.info('Fetching POI point by ID', { pointId: id });
+    return apiRequest<PoiPoint>(API_ENDPOINTS.POI_POINT_BY_ID(id));
   },
 
-  getById: (id: string): Promise<NavigationNode> => {
-    logger.info('Fetching navigation node by ID', { nodeId: id });
-    return apiRequest<NavigationNode>(API_ENDPOINTS.NODE_BY_ID(id));
+  getByPoi: (poiId: string | number): Promise<PoiPoint[]> => {
+    logger.info('Fetching POI points for POI', { poiId });
+    return apiRequest<PoiPoint[]>(API_ENDPOINTS.POI_POINTS_BY_POI(poiId));
   },
 
-  create: (node: Omit<NavigationNode, 'id'>): Promise<NavigationNode> => {
-    logger.info('Creating new navigation node', { node });
-    return apiRequest<NavigationNode>(API_ENDPOINTS.NODES, {
+  create: (point: Omit<PoiPoint, 'id' | 'createdAt'>): Promise<PoiPoint> => {
+    logger.info('Creating new POI point', { point });
+    return apiRequest<PoiPoint>(API_ENDPOINTS.POI_POINTS, {
       method: 'POST',
-      body: JSON.stringify(node),
+      body: JSON.stringify(point),
     });
   },
 
-  update: (id: string, node: Partial<Omit<NavigationNode, 'id'>>): Promise<NavigationNode> => {
-    logger.info('Updating navigation node', { nodeId: id, updates: node });
-    return apiRequest<NavigationNode>(API_ENDPOINTS.NODE_BY_ID(id), {
+  createBulk: (points: Omit<PoiPoint, 'id' | 'createdAt'>[]): Promise<PoiPoint[]> => {
+    logger.info('Creating POI points in bulk', { count: points.length });
+    return apiRequest<PoiPoint[]>(API_ENDPOINTS.POI_POINTS_BULK, {
+      method: 'POST',
+      body: JSON.stringify(points),
+    });
+  },
+
+  update: (id: string | number, point: Partial<Omit<PoiPoint, 'id' | 'createdAt'>>): Promise<PoiPoint> => {
+    logger.info('Updating POI point', { pointId: id, updates: point });
+    return apiRequest<PoiPoint>(API_ENDPOINTS.POI_POINT_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(node),
+      body: JSON.stringify(point),
     });
   },
 
-  delete: (id: string): Promise<void> => {
-    logger.info('Deleting navigation node', { nodeId: id });
-    return apiRequest<void>(API_ENDPOINTS.NODE_BY_ID(id), {
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting POI point', { pointId: id });
+    return apiRequest<void>(API_ENDPOINTS.POI_POINT_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+
+  deleteByPoi: (poiId: string | number): Promise<void> => {
+    logger.info('Deleting all POI points for POI', { poiId });
+    return apiRequest<void>(API_ENDPOINTS.POI_POINTS_BY_POI(poiId), {
       method: 'DELETE',
     });
   },
 };
 
-// Edge API functions
-export const edgesApi = {
-  getAll: (): Promise<NavigationEdge[]> => {
-    logger.info('Fetching all navigation edges');
-    return apiRequest<NavigationEdge[]>(API_ENDPOINTS.EDGES);
+// Route Node API functions
+export const routeNodesApi = {
+  getAll: (): Promise<RouteNode[]> => {
+    logger.info('Fetching all route nodes');
+    return apiRequest<RouteNode[]>(API_ENDPOINTS.ROUTE_NODES);
   },
 
-  getByFloor: async (floorId: string | number): Promise<NavigationEdge[]> => {
-    const numericFloorId = typeof floorId === 'string' ? parseInt(floorId, 10) : floorId;
-    logger.info('Fetching navigation edges for floor', { floorId, numericFloorId });
-    const allEdges = await apiRequest<NavigationEdge[]>(API_ENDPOINTS.EDGES);
-    const floorEdges = allEdges.filter(edge => edge.floorId === numericFloorId);
-    logger.info('Filtered navigation edges for floor', { floorId: numericFloorId, count: floorEdges.length });
-    return floorEdges;
+  getById: (id: string | number): Promise<RouteNode> => {
+    logger.info('Fetching route node by ID', { nodeId: id });
+    return apiRequest<RouteNode>(API_ENDPOINTS.ROUTE_NODE_BY_ID(id));
   },
 
-  getById: (id: string): Promise<NavigationEdge> => {
-    logger.info('Fetching navigation edge by ID', { edgeId: id });
-    return apiRequest<NavigationEdge>(API_ENDPOINTS.EDGE_BY_ID(id));
+  getByFloor: (floorId: string | number): Promise<RouteNode[]> => {
+    logger.info('Fetching route nodes for floor', { floorId });
+    return apiRequest<RouteNode[]>(API_ENDPOINTS.ROUTE_NODES_BY_FLOOR(floorId));
   },
 
-  create: (edge: Omit<NavigationEdge, 'id'>): Promise<NavigationEdge> => {
-    logger.info('Creating new navigation edge', { edge });
-    return apiRequest<NavigationEdge>(API_ENDPOINTS.EDGES, {
+  getByType: (nodeType: string): Promise<RouteNode[]> => {
+    logger.info('Fetching route nodes by type', { nodeType });
+    return apiRequest<RouteNode[]>(API_ENDPOINTS.ROUTE_NODES_BY_TYPE(nodeType));
+  },
+
+  create: (node: Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>): Promise<RouteNode> => {
+    logger.info('Creating new route node', { node });
+    return apiRequest<RouteNode>(API_ENDPOINTS.ROUTE_NODES, {
       method: 'POST',
-      body: JSON.stringify(edge),
+      body: JSON.stringify(node),
     });
   },
 
-  update: (id: string, edge: Partial<Omit<NavigationEdge, 'id'>>): Promise<NavigationEdge> => {
-    logger.info('Updating navigation edge', { edgeId: id, updates: edge });
-    return apiRequest<NavigationEdge>(API_ENDPOINTS.EDGE_BY_ID(id), {
+  update: (id: string | number, node: Partial<Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>>): Promise<RouteNode> => {
+    logger.info('Updating route node', { nodeId: id, updates: node });
+    return apiRequest<RouteNode>(API_ENDPOINTS.ROUTE_NODE_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(edge),
+      body: JSON.stringify(node),
     });
   },
 
-  delete: (id: string): Promise<void> => {
-    logger.info('Deleting navigation edge', { edgeId: id });
-    return apiRequest<void>(API_ENDPOINTS.EDGE_BY_ID(id), {
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting route node', { nodeId: id });
+    return apiRequest<void>(API_ENDPOINTS.ROUTE_NODE_BY_ID(id), {
       method: 'DELETE',
     });
   },
 };
 
-// Floor layout data API functions
-export const floorLayoutApi = {
-  getFloorData: async (floorId: string | number): Promise<FloorLayoutData> => {
-    const numericFloorId = typeof floorId === 'string' ? parseInt(floorId, 10) : floorId;
-    logger.info('Fetching complete floor layout data', { 
-      originalFloorId: floorId,
-      numericFloorId,
-      isValidNumber: !isNaN(numericFloorId)
+// Route Edge API functions
+export const routeEdgesApi = {
+  getAll: (): Promise<RouteEdge[]> => {
+    logger.info('Fetching all route edges');
+    return apiRequest<RouteEdge[]>(API_ENDPOINTS.ROUTE_EDGES);
+  },
+
+  getById: (id: string | number): Promise<RouteEdge> => {
+    logger.info('Fetching route edge by ID', { edgeId: id });
+    return apiRequest<RouteEdge>(API_ENDPOINTS.ROUTE_EDGE_BY_ID(id));
+  },
+
+  getByFloor: (floorId: string | number): Promise<RouteEdge[]> => {
+    logger.info('Fetching route edges for floor', { floorId });
+    return apiRequest<RouteEdge[]>(API_ENDPOINTS.ROUTE_EDGES_BY_FLOOR(floorId));
+  },
+
+  getByType: (edgeType: string): Promise<RouteEdge[]> => {
+    logger.info('Fetching route edges by type', { edgeType });
+    return apiRequest<RouteEdge[]>(API_ENDPOINTS.ROUTE_EDGES_BY_TYPE(edgeType));
+  },
+
+  getByNode: (nodeId: string | number): Promise<RouteEdge[]> => {
+    logger.info('Fetching route edges for node', { nodeId });
+    return apiRequest<RouteEdge[]>(API_ENDPOINTS.ROUTE_EDGES_BY_NODE(nodeId));
+  },
+
+  create: (edge: Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>): Promise<RouteEdge> => {
+    logger.info('Creating new route edge', { edge });
+    return apiRequest<RouteEdge>(API_ENDPOINTS.ROUTE_EDGES, {
+      method: 'POST',
+      body: JSON.stringify(edge),
     });
-    
-    if (isNaN(numericFloorId)) {
-      throw new Error(`Invalid floor ID: ${floorId} cannot be converted to a number`);
-    }
-    
-    const [pois, nodes, edges] = await Promise.all([
-      poisApi.getByFloor(numericFloorId),
-      nodesApi.getByFloor(numericFloorId),
-      edgesApi.getByFloor(numericFloorId),
-    ]);
-
-    return { pois, nodes, edges };
   },
 
-  getPOIs: (floorId: string | number): Promise<POI[]> => {
-    return poisApi.getByFloor(floorId);
+  update: (id: string | number, edge: Partial<Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>>): Promise<RouteEdge> => {
+    logger.info('Updating route edge', { edgeId: id, updates: edge });
+    return apiRequest<RouteEdge>(API_ENDPOINTS.ROUTE_EDGE_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(edge),
+    });
   },
 
-  getNodes: (floorId: string | number): Promise<NavigationNode[]> => {
-    return nodesApi.getByFloor(floorId);
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting route edge', { edgeId: id });
+    return apiRequest<void>(API_ENDPOINTS.ROUTE_EDGE_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Wall API functions
+export const wallsApi = {
+  getAll: (): Promise<Wall[]> => {
+    logger.info('Fetching all walls');
+    return apiRequest<Wall[]>(API_ENDPOINTS.WALLS);
   },
 
-  getEdges: (floorId: string | number): Promise<NavigationEdge[]> => {
-    return edgesApi.getByFloor(floorId);
+  getById: (id: string | number): Promise<Wall> => {
+    logger.info('Fetching wall by ID', { wallId: id });
+    return apiRequest<Wall>(API_ENDPOINTS.WALL_BY_ID(id));
   },
+
+  getByFloor: (floorId: string | number): Promise<Wall[]> => {
+    logger.info('Fetching walls for floor', { floorId });
+    return apiRequest<Wall[]>(API_ENDPOINTS.WALLS_BY_FLOOR(floorId));
+  },
+
+  getByType: (wallType: string): Promise<Wall[]> => {
+    logger.info('Fetching walls by type', { wallType });
+    return apiRequest<Wall[]>(API_ENDPOINTS.WALLS_BY_TYPE(wallType));
+  },
+
+  create: (wall: Omit<Wall, 'id' | 'createdAt' | 'updatedAt'>): Promise<Wall> => {
+    logger.info('Creating new wall', { wall });
+    return apiRequest<Wall>(API_ENDPOINTS.WALLS, {
+      method: 'POST',
+      body: JSON.stringify(wall),
+    });
+  },
+
+  update: (id: string | number, wall: Partial<Omit<Wall, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Wall> => {
+    logger.info('Updating wall', { wallId: id, updates: wall });
+    return apiRequest<Wall>(API_ENDPOINTS.WALL_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(wall),
+    });
+  },
+
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting wall', { wallId: id });
+    return apiRequest<void>(API_ENDPOINTS.WALL_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Wall Point API functions
+export const wallPointsApi = {
+  getAll: (): Promise<WallPoint[]> => {
+    logger.info('Fetching all wall points');
+    return apiRequest<WallPoint[]>(API_ENDPOINTS.WALL_POINTS);
+  },
+
+  getById: (id: string | number): Promise<WallPoint> => {
+    logger.info('Fetching wall point by ID', { pointId: id });
+    return apiRequest<WallPoint>(API_ENDPOINTS.WALL_POINT_BY_ID(id));
+  },
+
+  getByWall: (wallId: string | number): Promise<WallPoint[]> => {
+    logger.info('Fetching wall points for wall', { wallId });
+    return apiRequest<WallPoint[]>(API_ENDPOINTS.WALL_POINTS_BY_WALL(wallId));
+  },
+
+  create: (point: Omit<WallPoint, 'id' | 'createdAt'>): Promise<WallPoint> => {
+    logger.info('Creating new wall point', { point });
+    return apiRequest<WallPoint>(API_ENDPOINTS.WALL_POINTS, {
+      method: 'POST',
+      body: JSON.stringify(point),
+    });
+  },
+
+  createBulk: (points: Omit<WallPoint, 'id' | 'createdAt'>[]): Promise<WallPoint[]> => {
+    logger.info('Creating wall points in bulk', { count: points.length });
+    return apiRequest<WallPoint[]>(API_ENDPOINTS.WALL_POINTS_BULK, {
+      method: 'POST',
+      body: JSON.stringify(points),
+    });
+  },
+
+  update: (id: string | number, point: Partial<Omit<WallPoint, 'id' | 'createdAt'>>): Promise<WallPoint> => {
+    logger.info('Updating wall point', { pointId: id, updates: point });
+    return apiRequest<WallPoint>(API_ENDPOINTS.WALL_POINT_BY_ID(id), {
+      method: 'PUT',
+      body: JSON.stringify(point),
+    });
+  },
+
+  delete: (id: string | number): Promise<void> => {
+    logger.info('Deleting wall point', { pointId: id });
+    return apiRequest<void>(API_ENDPOINTS.WALL_POINT_BY_ID(id), {
+      method: 'DELETE',
+    });
+  },
+
+  deleteByWall: (wallId: string | number): Promise<void> => {
+    logger.info('Deleting all wall points for wall', { wallId });
+    return apiRequest<void>(API_ENDPOINTS.WALL_POINTS_BY_WALL(wallId), {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Export all API functions
+export const api = {
+  buildings: buildingsApi,
+  floors: floorsApi,
+  beaconTypes: beaconTypesApi,
+  beacons: beaconsApi,
+  poiCategories: poiCategoriesApi,
+  pois: poisApi,
+  poiPoints: poiPointsApi,
+  routeNodes: routeNodesApi,
+  routeEdges: routeEdgesApi,
+  walls: wallsApi,
+  wallPoints: wallPointsApi,
 }; 

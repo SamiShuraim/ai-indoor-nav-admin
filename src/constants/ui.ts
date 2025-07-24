@@ -105,9 +105,21 @@ export const UI_MESSAGES = {
   FLOOR_EDITOR_COORDINATES_LABEL: 'Coordinates:',
   FLOOR_EDITOR_MAP_LOADING: 'Loading map...',
   FLOOR_EDITOR_GEOLOCATION_ERROR: 'Error getting location',
+  // Floor Editor - Batch/Queue
+  FLOOR_EDITOR_UNSAVED_CHANGES: 'You have unsaved changes.',
+  FLOOR_EDITOR_SAVE_SUCCESS: 'All changes saved successfully.',
+  FLOOR_EDITOR_SAVE_ERROR: 'Some changes could not be saved. Please try again.',
+  FLOOR_EDITOR_SAVE_IN_PROGRESS: 'Saving changes...',
+  FLOOR_EDITOR_QUEUE_RETRY: 'Retry failed changes',
+  FLOOR_EDITOR_SAMPLE_DATA_INFO: 'Sample data objects will be created as new items in the database.',
+  FLOOR_EDITOR_BACKEND_ERROR: 'Backend server error. Please check if the server is running.',
+  FLOOR_EDITOR_EDIT_BEACON_TITLE: 'Edit Beacon',
+  FLOOR_EDITOR_EDIT_NODE_TITLE: 'Edit Route Node',
+  FLOOR_EDITOR_EDIT_SAVE: 'Save',
+  FLOOR_EDITOR_EDIT_CANCEL: 'Cancel',
 } as const;
 
 // External URLs
 export const EXTERNAL_URLS = {
-  PROJECT_MANAGEMENT: 'https://www.notion.so/Project-Management-1f8e9bdaf5538098874ceb5f481d3f47',
+  PROJECT_MANAGEMENT: 'https://github.com/users/SamiShuraim/projects/2',
 } as const; 
