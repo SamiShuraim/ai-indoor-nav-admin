@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import {
     Beacon,
     beaconsApi,
@@ -13,7 +13,7 @@ import {
     RouteNode,
     routeNodesApi
 } from '../utils/api';
-import { createLogger } from '../utils/logger';
+import {createLogger} from '../utils/logger';
 import Alert from './common/Alert';
 import Button from './common/Button';
 import Card from './common/Card';
@@ -21,7 +21,7 @@ import Container from './common/Container';
 import Header from './common/Header';
 import Input from './common/Input';
 import './FloorManagement.css';
-import { BeaconForm, POIForm, RouteNodeForm } from './forms';
+import {BeaconForm, POIForm, RouteNodeForm} from './forms';
 
 const logger = createLogger('FloorManagement');
 
@@ -316,16 +316,20 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
 
   const handleUpdatePOI = async (id: number, poiData: Partial<Omit<POI, 'id' | 'createdAt' | 'updatedAt'>>) => {
     try {
-      const updatedPOI = await poisApi.update(id, poiData);
-      setState(prev => ({
-        ...prev,
-        entities: { 
-          ...prev.entities, 
-          pois: prev.entities.pois.map(poi => poi.id === id ? updatedPOI : poi)
-        },
-        editing: { ...prev.editing, poi: null }
-      }));
-      addAlert(ALERT_TYPES.SUCCESS, 'POI updated successfully');
+        await poisApi.update(id, poiData);
+
+        setState(prev => ({
+            ...prev,
+            entities: {
+                ...prev.entities,
+                pois: prev.entities.pois.map(poi =>
+                    poi.id === id ? {...poi, ...poiData} : poi
+                )
+            },
+            editing: {...prev.editing, poi: null}
+        }));
+
+        addAlert(ALERT_TYPES.SUCCESS, 'POI updated successfully');
       logger.info('POI updated successfully', { poiId: id });
     } catch (error) {
       logger.error('Failed to update POI', error as Error);
@@ -370,15 +374,17 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
 
   const handleUpdateBeacon = async (id: number, beaconData: Partial<Omit<Beacon, 'id' | 'createdAt' | 'updatedAt'>>) => {
     try {
-      const updatedBeacon = await beaconsApi.update(id, beaconData);
-      setState(prev => ({
-        ...prev,
-        entities: { 
-          ...prev.entities, 
-          beacons: prev.entities.beacons.map(beacon => beacon.id === id ? updatedBeacon : beacon)
-        },
-        editing: { ...prev.editing, beacon: null }
-      }));
+        await beaconsApi.update(id, beaconData);
+        setState(prev => ({
+            ...prev,
+            entities: {
+                ...prev.entities,
+                beacons: prev.entities.beacons.map(beacon =>
+                    beacon.id === id ? {...beacon, ...beaconData} : beacon
+                ),
+            },
+            editing: {...prev.editing, beacon: null},
+        }));
       addAlert(ALERT_TYPES.SUCCESS, 'Beacon updated successfully');
       logger.info('Beacon updated successfully', { beaconId: id });
     } catch (error) {
@@ -424,12 +430,12 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
 
   const handleUpdateRouteNode = async (id: number, nodeData: Partial<Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>>) => {
     try {
-      const updatedNode = await routeNodesApi.update(id, nodeData);
+        await routeNodesApi.update(id, nodeData);
       setState(prev => ({
         ...prev,
-        entities: { 
-          ...prev.entities, 
-          routeNodes: prev.entities.routeNodes.map(node => node.id === id ? updatedNode : node)
+          entities: {
+              ...prev.entities,
+              routeNodes: prev.entities.routeNodes.map(node => node.id === id ? {...node, ...nodeData} : node)
         },
         editing: { ...prev.editing, routeNode: null }
       }));
@@ -478,12 +484,12 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
 
   const handleUpdateRouteEdge = async (id: number, edgeData: Partial<Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>>) => {
     try {
-      const updatedEdge = await routeEdgesApi.update(id, edgeData);
+        await routeEdgesApi.update(id, edgeData);
       setState(prev => ({
         ...prev,
-        entities: { 
-          ...prev.entities, 
-          routeEdges: prev.entities.routeEdges.map(edge => edge.id === id ? updatedEdge : edge)
+          entities: {
+              ...prev.entities,
+              routeEdges: prev.entities.routeEdges.map(edge => edge.id === id ? {...edge, ...edgeData} : edge)
         },
         editing: { ...prev.editing, routeEdge: null }
       }));
