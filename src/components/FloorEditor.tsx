@@ -1,22 +1,14 @@
-import { Map, Marker, Popup, config } from "@maptiler/sdk";
+import {config, Map, Marker, Popup} from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { MAPTILER_API_KEY, MAPTILER_STYLE_URL } from "../constants/api";
-import { UI_MESSAGES } from "../constants/ui";
-import {
-  Floor,
-  FloorLayoutData,
-  beaconsApi,
-  floorsApi,
-  poisApi,
-  routeEdgesApi,
-  routeNodesApi,
-} from "../utils/api";
-import { createLogger } from "../utils/logger";
-import { Button, Container, Header } from "./common";
+import React, {useCallback, useEffect, useRef, useState} from "react";
+import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
+import {UI_MESSAGES} from "../constants/ui";
+import {beaconsApi, Floor, FloorLayoutData, floorsApi, poisApi, routeEdgesApi, routeNodesApi,} from "../utils/api";
+import {createLogger} from "../utils/logger";
+import {Button, Container, Header} from "./common";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
-import DrawingToolbar, { DrawingTool } from "./FloorEditor/DrawingToolbar";
+import DrawingToolbar, {DrawingTool} from "./FloorEditor/DrawingToolbar";
 import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
@@ -1945,7 +1937,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 							parseInt(id).toString() === id.toString()
 						) {
 							await poisApi.update(parseInt(id), {
-								id: parseInt(id),
 								name: change.data.name,
 								poiType: change.data.type,
 								isVisible: change.data.visible,
