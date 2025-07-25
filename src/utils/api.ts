@@ -267,11 +267,17 @@ export const buildingsApi = {
     });
   },
 
-  update: (id: string | number, building: Partial<Omit<Building, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Building> => {
+  update: (id: string | number, building: Partial<Omit<Building, 'createdAt' | 'updatedAt'>>): Promise<Building> => {
     logger.info('Updating building', { buildingId: id, updates: building });
+
+    const payload = {
+      ...building,
+      id: parseInt(id.toString()), // safely convert and add
+    };
+
     return apiRequest<Building>(API_ENDPOINTS.BUILDING_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(building),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -320,11 +326,17 @@ export const floorsApi = {
     });
   },
 
-  update: (id: string | number, floor: Partial<Omit<Floor, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Floor> => {
+  update: (id: string | number, floor: Partial<Omit<Floor,  'createdAt' | 'updatedAt'>>): Promise<Floor> => {
     logger.info('Updating floor', { floorId: id, updates: floor });
+
+    const payload = {
+      ...floor,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<Floor>(API_ENDPOINTS.FLOOR_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(floor),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -361,11 +373,17 @@ export const beaconTypesApi = {
     });
   },
 
-  update: (id: string | number, beaconType: Partial<Omit<BeaconType, 'id' | 'createdAt' | 'updatedAt'>>): Promise<BeaconType> => {
+  update: (id: string | number, beaconType: Partial<Omit<BeaconType, 'createdAt' | 'updatedAt'>>): Promise<BeaconType> => {
     logger.info('Updating beacon type', { beaconTypeId: id, updates: beaconType });
+
+    const payload = {
+      ...beaconType,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<BeaconType>(API_ENDPOINTS.BEACON_TYPE_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(beaconType),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -417,11 +435,17 @@ export const beaconsApi = {
     });
   },
 
-  update: (id: string | number, beacon: Partial<Omit<Beacon, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Beacon> => {
+  update: (id: string | number, beacon: Partial<Omit<Beacon, 'createdAt' | 'updatedAt'>>): Promise<Beacon> => {
     logger.info('Updating beacon', { beaconId: id, updates: beacon });
+
+    const payload = {
+      ...beacon,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<Beacon>(API_ENDPOINTS.BEACON_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(beacon),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -472,11 +496,17 @@ export const poiCategoriesApi = {
     });
   },
 
-  update: (id: string | number, category: Partial<Omit<PoiCategory, 'id' | 'createdAt' | 'updatedAt'>>): Promise<PoiCategory> => {
+  update: (id: string | number, category: Partial<Omit<PoiCategory, 'createdAt' | 'updatedAt'>>): Promise<PoiCategory> => {
     logger.info('Updating POI category', { categoryId: id, updates: category });
+
+    const payload = {
+      ...category,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<PoiCategory>(API_ENDPOINTS.POI_CATEGORY_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(category),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -513,11 +543,17 @@ export const poisApi = {
     });
   },
 
-  update: (id: string | number, poi: Partial<Omit<POI, 'id' | 'createdAt' | 'updatedAt'>>): Promise<POI> => {
+  update: (id: string | number, poi: Partial<Omit<POI, 'createdAt' | 'updatedAt'>>): Promise<POI> => {
     logger.info('Updating POI', { poiId: id, updates: poi });
+
+    const payload = {
+      ...poi,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<POI>(API_ENDPOINTS.POI_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(poi),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -562,11 +598,17 @@ export const poiPointsApi = {
     });
   },
 
-  update: (id: string | number, point: Partial<Omit<PoiPoint, 'id' | 'createdAt'>>): Promise<PoiPoint> => {
+  update: (id: string | number, point: Partial<Omit<PoiPoint, 'createdAt'>>): Promise<PoiPoint> => {
     logger.info('Updating POI point', { pointId: id, updates: point });
+
+    const payload = {
+      ...point,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<PoiPoint>(API_ENDPOINTS.POI_POINT_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(point),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -615,11 +657,17 @@ export const routeNodesApi = {
     });
   },
 
-  update: (id: string | number, node: Partial<Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>>): Promise<RouteNode> => {
+  update: (id: string | number, node: Partial<Omit<RouteNode, 'createdAt' | 'updatedAt'>>): Promise<RouteNode> => {
     logger.info('Updating route node', { nodeId: id, updates: node });
+
+    const payload = {
+      ...node,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<RouteNode>(API_ENDPOINTS.ROUTE_NODE_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(node),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -666,11 +714,17 @@ export const routeEdgesApi = {
     });
   },
 
-  update: (id: string | number, edge: Partial<Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>>): Promise<RouteEdge> => {
+  update: (id: string | number, edge: Partial<Omit<RouteEdge, 'createdAt' | 'updatedAt'>>): Promise<RouteEdge> => {
     logger.info('Updating route edge', { edgeId: id, updates: edge });
+
+    const payload = {
+      ...edge,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<RouteEdge>(API_ENDPOINTS.ROUTE_EDGE_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(edge),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -712,11 +766,17 @@ export const wallsApi = {
     });
   },
 
-  update: (id: string | number, wall: Partial<Omit<Wall, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Wall> => {
+  update: (id: string | number, wall: Partial<Omit<Wall, 'createdAt' | 'updatedAt'>>): Promise<Wall> => {
     logger.info('Updating wall', { wallId: id, updates: wall });
+
+    const payload = {
+      ...wall,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<Wall>(API_ENDPOINTS.WALL_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(wall),
+      body: JSON.stringify(payload),
     });
   },
 
@@ -761,11 +821,17 @@ export const wallPointsApi = {
     });
   },
 
-  update: (id: string | number, point: Partial<Omit<WallPoint, 'id' | 'createdAt'>>): Promise<WallPoint> => {
+  update: (id: string | number, point: Partial<Omit<WallPoint, 'createdAt'>>): Promise<WallPoint> => {
     logger.info('Updating wall point', { pointId: id, updates: point });
+
+    const payload = {
+      ...point,
+      id: parseInt(id.toString()),
+    }
+
     return apiRequest<WallPoint>(API_ENDPOINTS.WALL_POINT_BY_ID(id), {
       method: 'PUT',
-      body: JSON.stringify(point),
+      body: JSON.stringify(payload),
     });
   },
 
