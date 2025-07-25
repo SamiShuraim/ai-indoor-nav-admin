@@ -15,7 +15,8 @@ import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
 import {Floor} from "../utils/api_helpers/api_interfaces/floor";
 import {FloorLayoutData} from "../utils/api_helpers/api_interfaces/floorLayoutData";
 import {BaseApi} from "../utils/abstract_classes/baseApi";
-import {useQuery} from "@tanstack/react-query";
+import {useQuery, useQueryClient} from "@tanstack/react-query";
+import {Button, Container, Header} from "./common";
 
 const logger = createLogger("FloorEditor");
 
@@ -26,6 +27,15 @@ const STORAGE_KEYS = {
 	NODES: "floorEditor_nodes",
 	EDGES: "floorEditor_edges",
 	CHANGE_QUEUE: "floorEditor_changeQueue",
+} as const;
+
+// API URL keys
+const API_URL_KEYS = {
+	POI: poisApi,
+	WALL: wallsApi,
+	BEACONS: beaconsApi,
+	NODES: routeNodesApi,
+	EDGES: routeEdgesApi,
 } as const;
 
 // Change queue types
@@ -84,6 +94,18 @@ const loadFromStorage = (key: string, defaultValue: any): any => {
 			error as Error
 		);
 		return defaultValue;
+	}
+};
+
+const loadFromApi = async (API: BaseApi<any>): Promise<any[]> => {
+	try {
+		return await API.getAll();
+	} catch (error) {
+		logger.warn(
+			`Failed to load from API: ${API.constructor.name}`,
+			error as Error
+		);
+		return [];
 	}
 };
 
@@ -211,6 +233,7 @@ interface Edge {
 const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", { floorId });
+	const queryClient = useQueryClient();
 
 	const [floor, setFloor] = useState<Floor | null>(null);
 	const [floorData, setFloorData] = useState<FloorLayoutData | null>(null);
@@ -765,17 +788,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
 	// Clean up orphaned edges that reference non-existent nodes
 	const cleanupOrphanedEdges = useCallback(() => {
-		const currentNodes = JSON.parse(
-			localStorage.getItem("floorEditor_nodes") || "[]"
-		);
-		const currentEdges = JSON.parse(
-			localStorage.getItem("floorEditor_edges") || "[]"
-		);
+		const currentNodes = JSON.parse(localStorage.getItem("floorEditor_nodes") || "[]");
+		const currentEdges = JSON.parse(localStorage.getItem("floorEditor_edges") || "[]");
 		const nodeIds = new Set(currentNodes.map((n: any) => n.id));
 
 		const validEdges = currentEdges.filter((edge: any) => {
-			const isValid =
-				nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
+			const isValid = nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
 			if (!isValid) {
 				logger.warn("Removing orphaned edge", {
 					edgeId: edge.id,
@@ -788,18 +806,19 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 		});
 
 		if (validEdges.length !== currentEdges.length) {
-			localStorage.setItem(
-				"floorEditor_edges",
-				JSON.stringify(validEdges)
-			);
-			setEdges(validEdges);
+			localStorage.setItem("floorEditor_edges", JSON.stringify(validEdges));
+
+			// ✅ Update React Query cache
+			queryClient.setQueryData(['edges'], validEdges);
+
 			logger.info("Cleaned up orphaned edges", {
 				originalCount: currentEdges.length,
 				cleanedCount: validEdges.length,
 				removedCount: currentEdges.length - validEdges.length,
 			});
 		}
-	}, []);
+	}, [queryClient]);
+
 
 	// Load initial sample data and update map when data changes
 	useEffect(() => {
@@ -1172,69 +1191,69 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
 		// CRITICAL FIX: Update state atomically to prevent race conditions
 		// Use functional updates to ensure we're working with the latest state
-		setNodes((prevNodes) => {
-			const finalNodes = [...prevNodes, newNode];
-			if (connectToNodeId) {
-				const updatedNodes = finalNodes.map((node) =>
-					node.id === connectToNodeId
-						? {
-								...node,
-								connections: [...node.connections, newNode.id],
-						  }
-						: node
-				);
+		const updatedNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+		const finalNodes = [...updatedNodes, newNode];
 
-				// Save to localStorage with the updated nodes
-				saveToStorage(STORAGE_KEYS.NODES, updatedNodes);
-
-				logger.info("Updated node connections", {
-					connectToNodeId,
-					newNodeId: newNode.id,
-					totalNodes: updatedNodes.length,
-				});
-
-				return updatedNodes;
-			} else {
-				// Save isolated node to localStorage
-				saveToStorage(STORAGE_KEYS.NODES, finalNodes);
-				logger.userAction("Isolated node added", { newNode });
-				return finalNodes;
-			}
-		});
+		let newNodes: RouteNode[];
 
 		if (connectToNodeId) {
-			setEdges((prevEdges) => {
-				const newEdge: Edge = {
-					id: `edge_${connectToNodeId}_to_${
-						newNode.id
-					}_${Date.now()}`,
-					fromNodeId: connectToNodeId,
-					toNodeId: newNode.id,
-					visible: true,
-				};
-				const finalEdges = [...prevEdges, newEdge];
+			newNodes = finalNodes.map((node) =>
+				node.id === connectToNodeId
+					? {
+						...node,
+						connections: [...node.connections, newNode.id],
+					}
+					: node
+			);
 
-				// Save to localStorage with the final state
-				saveToStorage(STORAGE_KEYS.EDGES, finalEdges);
+			saveToStorage(STORAGE_KEYS.NODES, newNodes);
 
-				logger.info("Edge created and saved", {
-					newEdge,
-					totalEdges: finalEdges.length,
-					edgeDetails: {
-						from: connectToNodeId,
-						to: newNode.id,
-						id: newEdge.id,
-					},
-				});
-
-				logger.userAction("Connected node added", {
-					newNode,
-					connectedToNodeId: connectToNodeId,
-					newEdge,
-				});
-
-				return finalEdges;
+			logger.info("Updated node connections", {
+				connectToNodeId,
+				newNodeId: newNode.id,
+				totalNodes: newNodes.length,
 			});
+		} else {
+			newNodes = finalNodes;
+			saveToStorage(STORAGE_KEYS.NODES, newNodes);
+			logger.userAction("Isolated node added", {newNode});
+		}
+
+		queryClient.setQueryData(['nodes'], newNodes);
+
+		if (connectToNodeId) {
+			const existingEdges = queryClient.getQueryData<Edge[]>(['edges']) || [];
+
+			const newEdge: Edge = {
+				id: `edge_${connectToNodeId}_to_${newNode.id}_${Date.now()}`,
+				fromNodeId: connectToNodeId,
+				toNodeId: newNode.id,
+				visible: true,
+			};
+
+			const finalEdges = [...existingEdges, newEdge];
+
+			// Save to localStorage if needed (you'll probably remove this soon)
+			saveToStorage(STORAGE_KEYS.EDGES, finalEdges);
+
+			// Logging
+			logger.info("Edge created and saved", {
+				newEdge,
+				totalEdges: finalEdges.length,
+				edgeDetails: {
+					from: connectToNodeId,
+					to: newNode.id,
+					id: newEdge.id,
+				},
+			});
+			logger.userAction("Connected node added", {
+				newNode,
+				connectedToNodeId: connectToNodeId,
+				newEdge,
+			});
+
+			// Update cache
+			queryClient.setQueryData(['edges'], finalEdges);
 		}
 
 		logger.info("Node creation completed", {
@@ -1540,12 +1559,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				type: node.nodeType || "waypoint",
 			}));
 
-			const edges = routeEdges.map((edge) => ({
+			const edges = routeEdges.map(edge => ({
 				id: edge.id,
 				floorId: edge.floorId,
 				fromNodeId: edge.fromNodeId,
 				toNodeId: edge.toNodeId,
-				weight: edge.weight,
+				weight: edge.weight ?? 1,
 			}));
 
 			const layoutData: FloorLayoutData = {
@@ -1636,8 +1655,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 					name: polygonName,
 					type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
 				};
-				setPolygons((prev) =>
-					prev.map((p) => (p.id === editingPolygonId ? updated : p))
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+					old.map(p => (p.id === editingPolygonId ? updated : p))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1658,7 +1677,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				visible: true,
 				color: "#3b82f6",
 			};
-			setPolygons((prev) => [...prev, newPolygon]);
+			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, newPolygon]);
 			queueChange({
 				type: CHANGE_TYPES.ADD,
 				objectType: OBJECT_TYPES.POLYGON,
@@ -1679,8 +1698,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 			const beacon = beacons.find((b) => b.id === editingBeaconId);
 			if (beacon) {
 				const updated = { ...beacon, name: beaconName };
-				setBeacons((prev) =>
-					prev.map((b) => (b.id === editingBeaconId ? updated : b))
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.map(b => (b.id === editingBeaconId ? updated : b))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1701,7 +1720,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 					y: pendingBeaconLocation.lat,
 					visible: true,
 				};
-				setBeacons((prev) => [...prev, newBeacon]);
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
 				queueChange({
 					type: CHANGE_TYPES.ADD,
 					objectType: OBJECT_TYPES.BEACON,
@@ -1722,8 +1741,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 			const node = nodes.find((n) => n.id === editingNodeId);
 			if (node) {
 				const updated = { ...node, name: nodeName };
-				setNodes((prev) =>
-					prev.map((n) => (n.id === editingNodeId ? updated : n))
+				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
+					old.map(n => (n.id === editingNodeId ? updated : n))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1750,7 +1769,9 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 		logger.userAction("Delete item clicked", { type, id });
 		switch (type) {
 			case "polygon":
-				setPolygons((prev) => prev.filter((p) => p.id !== id));
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+					old.filter(p => p.id !== id)
+				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.POLYGON,
@@ -1758,7 +1779,9 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				});
 				break;
 			case "beacon":
-				setBeacons((prev) => prev.filter((b) => b.id !== id));
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.filter(b => b.id !== id)
+				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.BEACON,
@@ -1766,9 +1789,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				});
 				break;
 			case "node":
-				setNodes((prev) => prev.filter((n) => n.id !== id));
-				setEdges((prev) =>
-					prev.filter((e) => e.fromNodeId !== id && e.toNodeId !== id)
+				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
+					old.filter(n => n.id !== id)
+				);
+
+				queryClient.setQueryData<Edge[]>(['edges'], (old = []) =>
+					old.filter(e => e.fromNodeId !== id && e.toNodeId !== id)
 				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
@@ -1797,16 +1823,15 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
 		switch (type) {
 			case "polygon":
-				setPolygons((prev) =>
-					prev.map((p) => {
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+					old.map(p => {
 						if (p.id === id) {
 							const newVisible = !p.visible;
 
 							// Update map visibility
 							const marker = mapMarkers.current[`polygon-${id}`];
 							const layerId = mapLayers.current[`polygon-${id}`];
-							const borderLayerId =
-								mapLayers.current[`polygon-border-${id}`];
+							const borderLayerId = mapLayers.current[`polygon-border-${id}`];
 
 							if (marker) {
 								if (newVisible) {
@@ -1824,10 +1849,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 								);
 							}
 
-							if (
-								borderLayerId &&
-								mapInstance.getLayer(borderLayerId)
-							) {
+							if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
 								mapInstance.setLayoutProperty(
 									borderLayerId,
 									"visibility",
@@ -1843,8 +1865,8 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				break;
 
 			case "beacon":
-				setBeacons((prev) =>
-					prev.map((b) => {
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.map(b => {
 						if (b.id === id) {
 							const newVisible = !b.visible;
 
@@ -1866,12 +1888,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				break;
 
 			case "node":
-				setNodes((prev) =>
-					prev.map((n) => {
+				queryClient.setQueryData<RouteNode[]>(['nodes'], (oldNodes = []) =>
+					oldNodes.map(n => {
 						if (n.id === id) {
 							const newVisible = !n.visible;
 
-							// Update map visibility
+							// Update map visibility for the node
 							const marker = mapMarkers.current[`node-${id}`];
 							if (marker) {
 								if (newVisible) {
@@ -1881,29 +1903,16 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 								}
 							}
 
-							// Also update any edges connected to this node
-							edges.forEach((edge) => {
-								if (
-									edge.fromNodeId === id ||
-									edge.toNodeId === id
-								) {
-									const layerId =
-										mapLayers.current[`edge-${edge.id}`];
-									if (
-										layerId &&
-										mapInstance.getLayer(layerId)
-									) {
-										const fromNode = nodes.find(
-											(node) =>
-												node.id === edge.fromNodeId
-										);
-										const toNode = nodes.find(
-											(node) => node.id === edge.toNodeId
-										);
+							// Update edges connected to this node
+							edges.forEach(edge => {
+								if (edge.fromNodeId === id || edge.toNodeId === id) {
+									const layerId = mapLayers.current[`edge-${edge.id}`];
+									if (layerId && mapInstance.getLayer(layerId)) {
+										// Find nodes from the *updated* cache, fallback to oldNodes
+										const fromNode = oldNodes.find(node => node.id === edge.fromNodeId);
+										const toNode = oldNodes.find(node => node.id === edge.toNodeId);
 										const shouldShowEdge =
-											fromNode?.visible &&
-											toNode?.visible &&
-											edge.visible;
+											fromNode?.visible && toNode?.visible && edge.visible;
 										mapInstance.setLayoutProperty(
 											layerId,
 											"visibility",
@@ -2278,10 +2287,10 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 					}}
 					onClearAll={() => {
 						logger.userAction("Clear all button clicked");
-						setPolygons([]);
-						setBeacons([]);
-						setNodes([]);
-						setEdges([]);
+						queryClient.setQueryData<Polygon[]>(['polygons'], []);
+						queryClient.setQueryData<Beacon[]>(['beacons'], []);
+						queryClient.setQueryData<RouteNode[]>(['nodes'], []);
+						queryClient.setQueryData<Edge[]>(['edges'], []);
 						queueChange({
 							type: CHANGE_TYPES.DELETE,
 							objectType: OBJECT_TYPES.POLYGON,

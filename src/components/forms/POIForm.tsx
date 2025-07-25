@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { POI, PoiCategory, poiCategoriesApi } from '../../utils/api';
-import { createLogger } from '../../utils/logger';
+import React, {useEffect, useState} from 'react';
+import {poiCategoriesApi} from '../../utils/api';
+import {createLogger} from '../../utils/logger';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './POIForm.css';
+import {PoiCategory} from "../../utils/api_helpers/api_interfaces/poiCategory";
+import {POI} from "../../utils/api_helpers/api_interfaces/POI";
 
 const logger = createLogger('POIForm');
 

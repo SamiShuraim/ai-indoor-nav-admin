@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { RouteNode } from '../../utils/api';
-import { createLogger } from '../../utils/logger';
+import React, {useEffect, useState} from 'react';
+import {createLogger} from '../../utils/logger';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './RouteNodeForm.css';
+import {RouteNode} from "../../utils/api_helpers/api_interfaces/routeNode";
 
 const logger = createLogger('RouteNodeForm');
 

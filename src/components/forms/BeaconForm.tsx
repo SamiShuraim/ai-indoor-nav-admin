@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { Beacon, BeaconType, beaconTypesApi } from '../../utils/api';
-import { createLogger } from '../../utils/logger';
+import React, {useEffect, useState} from 'react';
+import {beaconTypesApi} from '../../utils/api';
+import {createLogger} from '../../utils/logger';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './BeaconForm.css';
+import {BeaconType} from "../../utils/api_helpers/api_interfaces/beaconType";
+import {Beacon} from "../../utils/api_helpers/api_interfaces/beacon";
 
 const logger = createLogger('BeaconForm');
 

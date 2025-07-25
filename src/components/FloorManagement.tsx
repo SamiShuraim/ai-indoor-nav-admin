@@ -1,18 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {
-    Beacon,
-    beaconsApi,
-    BeaconType,
-    beaconTypesApi,
-    POI,
-    poiCategoriesApi,
-    PoiCategory,
-    poisApi,
-    RouteEdge,
-    routeEdgesApi,
-    RouteNode,
-    routeNodesApi
-} from '../utils/api';
+import {beaconsApi, beaconTypesApi, poiCategoriesApi, poisApi, routeEdgesApi, routeNodesApi} from '../utils/api';
 import {createLogger} from '../utils/logger';
 import Alert from './common/Alert';
 import Button from './common/Button';
@@ -22,6 +9,12 @@ import Header from './common/Header';
 import Input from './common/Input';
 import './FloorManagement.css';
 import {BeaconForm, POIForm, RouteNodeForm} from './forms';
+import {BeaconType} from "../utils/api_helpers/api_interfaces/beaconType";
+import {Beacon} from "../utils/api_helpers/api_interfaces/beacon";
+import {PoiCategory} from "../utils/api_helpers/api_interfaces/poiCategory";
+import {POI} from "../utils/api_helpers/api_interfaces/POI";
+import {RouteNode} from "../utils/api_helpers/api_interfaces/routeNode";
+import {RouteEdge} from "../utils/api_helpers/api_interfaces/routeEdge";
 
 const logger = createLogger('FloorManagement');
 
