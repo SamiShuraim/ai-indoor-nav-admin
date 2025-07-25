@@ -1945,6 +1945,7 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 							parseInt(id).toString() === id.toString()
 						) {
 							await poisApi.update(parseInt(id), {
+								id: parseInt(id),
 								name: change.data.name,
 								poiType: change.data.type,
 								isVisible: change.data.visible,
