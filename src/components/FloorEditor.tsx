@@ -139,71 +139,71 @@ interface Edge {
 	visible: boolean;
 }
 
-// Sample data
-const SAMPLE_POLYGONS: Polygon[] = [
-	{
-		id: "1",
-		name: "Classroom A",
-		points: [
-			{ x: 50.1422, y: 26.3133 },
-			{ x: 50.1424, y: 26.3133 },
-			{ x: 50.1424, y: 26.3134 },
-			{ x: 50.1422, y: 26.3134 },
-		],
-		type: "poi",
-		visible: true,
-		color: "#3b82f6",
-	},
-	{
-		id: "2",
-		name: "Classroom B",
-		points: [
-			{ x: 50.1425, y: 26.3133 },
-			{ x: 50.1427, y: 26.3133 },
-			{ x: 50.1427, y: 26.3134 },
-			{ x: 50.1425, y: 26.3134 },
-		],
-		type: "poi",
-		visible: true,
-		color: "#10b981",
-	},
-	{
-		id: "3",
-		name: "Hallway Wall",
-		points: [
-			{ x: 50.14215, y: 26.31345 },
-			{ x: 50.14275, y: 26.31345 },
-			{ x: 50.14275, y: 26.31347 },
-			{ x: 50.14215, y: 26.31347 },
-		],
-		type: "wall",
-		visible: true,
-		color: "#6b7280",
-	},
-];
+// // Sample data
+// const SAMPLE_POLYGONS: Polygon[] = [
+// 	{
+// 		id: "1",
+// 		name: "Classroom A",
+// 		points: [
+// 			{ x: 50.1422, y: 26.3133 },
+// 			{ x: 50.1424, y: 26.3133 },
+// 			{ x: 50.1424, y: 26.3134 },
+// 			{ x: 50.1422, y: 26.3134 },
+// 		],
+// 		type: "poi",
+// 		visible: true,
+// 		color: "#3b82f6",
+// 	},
+// 	{
+// 		id: "2",
+// 		name: "Classroom B",
+// 		points: [
+// 			{ x: 50.1425, y: 26.3133 },
+// 			{ x: 50.1427, y: 26.3133 },
+// 			{ x: 50.1427, y: 26.3134 },
+// 			{ x: 50.1425, y: 26.3134 },
+// 		],
+// 		type: "poi",
+// 		visible: true,
+// 		color: "#10b981",
+// 	},
+// 	{
+// 		id: "3",
+// 		name: "Hallway Wall",
+// 		points: [
+// 			{ x: 50.14215, y: 26.31345 },
+// 			{ x: 50.14275, y: 26.31345 },
+// 			{ x: 50.14275, y: 26.31347 },
+// 			{ x: 50.14215, y: 26.31347 },
+// 		],
+// 		type: "wall",
+// 		visible: true,
+// 		color: "#6b7280",
+// 	},
+// ];
+//
+// const SAMPLE_BEACONS: Beacon[] = [
+// 	{ id: "1", name: "Beacon 1", x: 50.1423, y: 26.31335, visible: true },
+// 	{ id: "2", name: "Beacon 2", x: 50.1426, y: 26.31335, visible: true },
+// 	{ id: "3", name: "Beacon 3", x: 50.14245, y: 26.3135, visible: true },
+// ];
+//
+// const SAMPLE_NODES: RouteNode[] = [
+// 	{ id: "1", x: 50.1423, y: 26.31348, connections: ["2"], visible: true },
+// 	{
+// 		id: "2",
+// 		x: 50.1426,
+// 		y: 26.31348,
+// 		connections: ["1", "3"],
+// 		visible: true,
+// 	},
+// 	{ id: "3", x: 50.14245, y: 26.31355, connections: ["2"], visible: true },
+// ];
 
-const SAMPLE_BEACONS: Beacon[] = [
-	{ id: "1", name: "Beacon 1", x: 50.1423, y: 26.31335, visible: true },
-	{ id: "2", name: "Beacon 2", x: 50.1426, y: 26.31335, visible: true },
-	{ id: "3", name: "Beacon 3", x: 50.14245, y: 26.3135, visible: true },
-];
-
-const SAMPLE_NODES: RouteNode[] = [
-	{ id: "1", x: 50.1423, y: 26.31348, connections: ["2"], visible: true },
-	{
-		id: "2",
-		x: 50.1426,
-		y: 26.31348,
-		connections: ["1", "3"],
-		visible: true,
-	},
-	{ id: "3", x: 50.14245, y: 26.31355, connections: ["2"], visible: true },
-];
-
-const SAMPLE_EDGES: Edge[] = [
-	{ id: "1", fromNodeId: "1", toNodeId: "2", visible: true },
-	{ id: "2", fromNodeId: "2", toNodeId: "3", visible: true },
-];
+// const SAMPLE_EDGES: Edge[] = [
+// 	{ id: "1", fromNodeId: "1", toNodeId: "2", visible: true },
+// 	{ id: "2", fromNodeId: "2", toNodeId: "3", visible: true },
+// ];
 
 const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 	// Remove the immediate console.log and replace with logger
