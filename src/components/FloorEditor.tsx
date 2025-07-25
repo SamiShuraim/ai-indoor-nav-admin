@@ -3,9 +3,8 @@ import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
 import {UI_MESSAGES} from "../constants/ui";
-import {beaconsApi, Floor, FloorLayoutData, floorsApi, poisApi, routeEdgesApi, routeNodesApi,} from "../utils/api";
+import {beaconsApi, floorsApi, poisApi, routeEdgesApi, routeNodesApi, wallsApi,} from "../utils/api";
 import {createLogger} from "../utils/logger";
-import {Button, Container, Header} from "./common";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
 import DrawingToolbar, {DrawingTool} from "./FloorEditor/DrawingToolbar";
@@ -13,6 +12,10 @@ import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
+import {Floor} from "../utils/api_helpers/api_interfaces/floor";
+import {FloorLayoutData} from "../utils/api_helpers/api_interfaces/floorLayoutData";
+import {BaseApi} from "../utils/abstract_classes/baseApi";
+import {useQuery} from "@tanstack/react-query";
 
 const logger = createLogger("FloorEditor");
 
@@ -253,18 +256,26 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 	// Drawing state
 	const [activeTool, setActiveTool] = useState<DrawingTool>("select");
 	const activeToolRef = useRef<DrawingTool>("select");
-	const [polygons, setPolygons] = useState<Polygon[]>(() =>
-		loadFromStorage(STORAGE_KEYS.POLYGONS, [...SAMPLE_POLYGONS])
-	);
-	const [beacons, setBeacons] = useState<Beacon[]>(() =>
-		loadFromStorage(STORAGE_KEYS.BEACONS, [...SAMPLE_BEACONS])
-	);
-	const [nodes, setNodes] = useState<RouteNode[]>(() =>
-		loadFromStorage(STORAGE_KEYS.NODES, [...SAMPLE_NODES])
-	);
-	const [edges, setEdges] = useState<Edge[]>(() =>
-		loadFromStorage(STORAGE_KEYS.EDGES, [...SAMPLE_EDGES])
-	);
+	const {data: polygons = [], isLoading: loadingPolygons, isError: errorPolygons} = useQuery({
+		queryKey: ['pois'],
+		queryFn: () => loadFromApi(API_URL_KEYS.POI),
+	});
+
+	const {data: beacons = [], isLoading: loadingBeacons, isError: errorBeacons} = useQuery({
+		queryKey: ['beacons'],
+		queryFn: () => loadFromApi(API_URL_KEYS.BEACONS),
+	});
+
+	const {data: nodes = [], isLoading: loadingNodes, isError: errorNodes} = useQuery({
+		queryKey: ['nodes'],
+		queryFn: () => loadFromApi(API_URL_KEYS.NODES),
+	});
+
+	const {data: edges = [], isLoading: loadingEdges, isError: errorEdges} = useQuery({
+		queryKey: ['edges'],
+		queryFn: () => loadFromApi(API_URL_KEYS.EDGES),
+	});
+
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<

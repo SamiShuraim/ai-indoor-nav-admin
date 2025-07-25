@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Navigate, Route, BrowserRouter as Router, Routes, useLocation, useNavigate } from 'react-router-dom';
+import {useEffect, useState} from 'react';
+import {BrowserRouter as Router, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom';
 import './App.css';
 import AdminLogin from './components/AdminLogin';
 import BuildingsManagement from './components/BuildingsManagement';
 import Dashboard from './components/Dashboard';
 import FloorEditor from './components/FloorEditor';
-import { getStoredToken, removeStoredToken, validateToken } from './utils/auth';
-import { createLogger } from './utils/logger';
+import {getStoredToken, removeStoredToken, validateToken} from './utils/auth';
+import {createLogger} from './utils/logger';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 
+const queryClient = new QueryClient();
 const logger = createLogger('App');
 
 // Route Constants
@@ -239,9 +241,11 @@ function App() {
   logger.debug('App wrapper component rendering');
 
   return (
-    <Router>
-      <AppContent />
-    </Router>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <AppContent/>
+        </Router>
+      </QueryClientProvider>
   );
 }
 
