@@ -13,10 +13,10 @@ import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
 import {Floor} from "../utils/api_helpers/api_interfaces/floor";
-import {FloorLayoutData} from "../utils/api_helpers/api_interfaces/floorLayoutData";
 import {BaseApi} from "../utils/abstract_classes/baseApi";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
+import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 
 const logger = createLogger("FloorEditor");
 
@@ -164,81 +164,19 @@ interface Edge {
 	visible: boolean;
 }
 
-// // Sample data
-// const SAMPLE_POLYGONS: Polygon[] = [
-// 	{
-// 		id: "1",
-// 		name: "Classroom A",
-// 		points: [
-// 			{ x: 50.1422, y: 26.3133 },
-// 			{ x: 50.1424, y: 26.3133 },
-// 			{ x: 50.1424, y: 26.3134 },
-// 			{ x: 50.1422, y: 26.3134 },
-// 		],
-// 		type: "poi",
-// 		visible: true,
-// 		color: "#3b82f6",
-// 	},
-// 	{
-// 		id: "2",
-// 		name: "Classroom B",
-// 		points: [
-// 			{ x: 50.1425, y: 26.3133 },
-// 			{ x: 50.1427, y: 26.3133 },
-// 			{ x: 50.1427, y: 26.3134 },
-// 			{ x: 50.1425, y: 26.3134 },
-// 		],
-// 		type: "poi",
-// 		visible: true,
-// 		color: "#10b981",
-// 	},
-// 	{
-// 		id: "3",
-// 		name: "Hallway Wall",
-// 		points: [
-// 			{ x: 50.14215, y: 26.31345 },
-// 			{ x: 50.14275, y: 26.31345 },
-// 			{ x: 50.14275, y: 26.31347 },
-// 			{ x: 50.14215, y: 26.31347 },
-// 		],
-// 		type: "wall",
-// 		visible: true,
-// 		color: "#6b7280",
-// 	},
-// ];
-//
-// const SAMPLE_BEACONS: Beacon[] = [
-// 	{ id: "1", name: "Beacon 1", x: 50.1423, y: 26.31335, visible: true },
-// 	{ id: "2", name: "Beacon 2", x: 50.1426, y: 26.31335, visible: true },
-// 	{ id: "3", name: "Beacon 3", x: 50.14245, y: 26.3135, visible: true },
-// ];
-//
-// const SAMPLE_NODES: RouteNode[] = [
-// 	{ id: "1", x: 50.1423, y: 26.31348, connections: ["2"], visible: true },
-// 	{
-// 		id: "2",
-// 		x: 50.1426,
-// 		y: 26.31348,
-// 		connections: ["1", "3"],
-// 		visible: true,
-// 	},
-// 	{ id: "3", x: 50.14245, y: 26.31355, connections: ["2"], visible: true },
-// ];
-
-// const SAMPLE_EDGES: Edge[] = [
-// 	{ id: "1", fromNodeId: "1", toNodeId: "2", visible: true },
-// 	{ id: "2", fromNodeId: "2", toNodeId: "3", visible: true },
-// ];
-
-const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
+export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", { floorId });
 	const queryClient = useQueryClient();
 
-	const [floor, setFloor] = useState<Floor | null>(null);
-	const [floorData, setFloorData] = useState<FloorLayoutData | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	const numericFloorId = parseInt(floorId);
+
+	const {data: floor, isLoading: loading, isError: error} = useQuery<Floor>({
+		queryKey: ['floor', numericFloorId],
+		queryFn: () => floorsApi.getById(numericFloorId),
+	});
+
+	const {data: floorData, isLoading, isError} = useFloorLayoutData(numericFloorId, !!floor);
 
 	// Map state
 	const mapContainer = useRef<HTMLDivElement>(null);
@@ -370,7 +308,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
 	useEffect(() => {
 		logger.info("FloorEditor component mounted", { floorId });
-		loadFloorData();
 
 		return () => {
 			logger.info("FloorEditor component unmounted");
@@ -391,7 +328,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 				map.current.remove();
 			}
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [floorId]);
 
 	// NOTE: Map initialization useEffect moved to after initializeMap function declaration
@@ -942,7 +878,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 
 				setMapLoading(false);
 				setMapLoadedSuccessfully(true);
-				setError(null); // Clear any previous errors since map loaded successfully
 				logger.info("Map loaded successfully");
 			});
 
@@ -959,7 +894,6 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 						"Map error event during initial load",
 						new Error(e.error?.message || "Map error occurred")
 					);
-					setError("Map failed to load. Please check your API key.");
 					setMapLoading(false);
 				} else {
 					// Map already loaded successfully, just log the error but don't show to user
@@ -995,18 +929,12 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 					logger.error(
 						"Map loading timeout - map failed to load within 30 seconds"
 					);
-					setError(
-						"Map loading timeout. Please check your internet connection and API key."
-					);
 					setMapLoading(false);
 				}
 				mapLoadTimeout.current = null;
 			}, 30000);
 		} catch (error) {
 			logger.error("Failed to initialize map", error as Error);
-			setError(
-				"Failed to initialize map. Please check the MapTiler configuration."
-			);
 			setMapLoading(false);
 		}
 	}, [updateCoordinates]);
@@ -1521,79 +1449,79 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 		});
 	};
 
-	const loadFloorData = async () => {
-		const numericFloorId = parseInt(floorId, 10);
-		logger.userAction("Loading floor data", {
-			originalFloorId: floorId,
-			originalType: typeof floorId,
-			numericFloorId,
-			isValidNumber: !isNaN(numericFloorId),
-		});
-		setLoading(true);
-		setError(null);
-
-		if (isNaN(numericFloorId)) {
-			const errorMsg = `Invalid floor ID: ${floorId} cannot be converted to a number`;
-			logger.error(errorMsg, new Error(errorMsg));
-			setError(errorMsg);
-			setLoading(false);
-			return;
-		}
-
-		try {
-			const [floorInfo, pois, routeNodes, routeEdges] = await Promise.all(
-				[
-					floorsApi.getById(numericFloorId),
-					poisApi.getByFloor(numericFloorId.toString()),
-					routeNodesApi.getByFloor(numericFloorId.toString()),
-					routeEdgesApi.getByFloor(numericFloorId.toString()),
-				]
-			);
-
-			// Convert to legacy NavigationNode and NavigationEdge format for compatibility
-			const nodes = routeNodes.map((node) => ({
-				id: node.id,
-				floorId: node.floorId,
-				x: node.x,
-				y: node.y,
-				type: node.nodeType || "waypoint",
-			}));
-
-			const edges = routeEdges.map(edge => ({
-				id: edge.id,
-				floorId: edge.floorId,
-				fromNodeId: edge.fromNodeId,
-				toNodeId: edge.toNodeId,
-				weight: edge.weight ?? 1,
-			}));
-
-			const layoutData: FloorLayoutData = {
-				pois,
-				nodes,
-				edges,
-			};
-
-			setFloor(floorInfo);
-			setFloorData(layoutData);
-			logger.info("Floor data loaded successfully", {
-				floorId: numericFloorId,
-				floorName: floorInfo.name,
-				poisCount: layoutData.pois.length,
-				nodesCount: layoutData.nodes.length,
-				edgesCount: layoutData.edges.length,
-			});
-		} catch (error) {
-			logger.error("Failed to load floor data", error as Error, {
-				floorId: numericFloorId,
-				originalFloorId: floorId,
-				errorType: (error as Error).constructor.name,
-				errorMessage: (error as Error).message,
-			});
-			setError(UI_MESSAGES.ERROR_GENERIC);
-		} finally {
-			setLoading(false);
-		}
-	};
+	// const loadFloorData = async () => {
+	// 	const numericFloorId = parseInt(floorId, 10);
+	// 	logger.userAction("Loading floor data", {
+	// 		originalFloorId: floorId,
+	// 		originalType: typeof floorId,
+	// 		numericFloorId,
+	// 		isValidNumber: !isNaN(numericFloorId),
+	// 	});
+	// 	setLoading(true);
+	// 	setError(null);
+	//
+	// 	if (isNaN(numericFloorId)) {
+	// 		const errorMsg = `Invalid floor ID: ${floorId} cannot be converted to a number`;
+	// 		logger.error(errorMsg, new Error(errorMsg));
+	// 		setError(errorMsg);
+	// 		setLoading(false);
+	// 		return;
+	// 	}
+	//
+	// 	try {
+	// 		const [floorInfo, pois, routeNodes, routeEdges] = await Promise.all(
+	// 			[
+	// 				floorsApi.getById(numericFloorId),
+	// 				poisApi.getByFloor(numericFloorId.toString()),
+	// 				routeNodesApi.getByFloor(numericFloorId.toString()),
+	// 				routeEdgesApi.getByFloor(numericFloorId.toString()),
+	// 			]
+	// 		);
+	//
+	// 		// Convert to legacy NavigationNode and NavigationEdge format for compatibility
+	// 		const nodes = routeNodes.map((node) => ({
+	// 			id: node.id,
+	// 			floorId: node.floorId,
+	// 			x: node.x,
+	// 			y: node.y,
+	// 			type: node.nodeType || "waypoint",
+	// 		}));
+	//
+	// 		const edges = routeEdges.map(edge => ({
+	// 			id: edge.id,
+	// 			floorId: edge.floorId,
+	// 			fromNodeId: edge.fromNodeId,
+	// 			toNodeId: edge.toNodeId,
+	// 			weight: edge.weight ?? 1,
+	// 		}));
+	//
+	// 		const layoutData: FloorLayoutData = {
+	// 			pois,
+	// 			nodes,
+	// 			edges,
+	// 		};
+	//
+	// 		setFloor(floorInfo);
+	// 		setFloorData(layoutData);
+	// 		logger.info("Floor data loaded successfully", {
+	// 			floorId: numericFloorId,
+	// 			floorName: floorInfo.name,
+	// 			poisCount: layoutData.pois.length,
+	// 			nodesCount: layoutData.nodes.length,
+	// 			edgesCount: layoutData.edges.length,
+	// 		});
+	// 	} catch (error) {
+	// 		logger.error("Failed to load floor data", error as Error, {
+	// 			floorId: numericFloorId,
+	// 			originalFloorId: floorId,
+	// 			errorType: (error as Error).constructor.name,
+	// 			errorMessage: (error as Error).message,
+	// 		});
+	// 		setError(UI_MESSAGES.ERROR_GENERIC);
+	// 	} finally {
+	// 		setLoading(false);
+	// 	}
+	// };
 
 	const handleToolChange = (tool: DrawingTool) => {
 		logger.info("Tool change requested", {
@@ -2374,5 +2302,3 @@ const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
 		</Container>
 	);
 };
-
-export default FloorEditor;

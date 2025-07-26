@@ -4,7 +4,7 @@ import './App.css';
 import AdminLogin from './components/AdminLogin';
 import BuildingsManagement from './components/BuildingsManagement';
 import Dashboard from './components/Dashboard';
-import FloorEditor from './components/FloorEditor';
+import {FloorEditor} from './components/FloorEditor';
 import {getStoredToken, removeStoredToken, validateToken} from './utils/auth';
 import {createLogger} from './utils/logger';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
