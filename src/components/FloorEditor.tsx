@@ -1596,16 +1596,28 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	) => {
 		logger.userAction("Layer visibility toggled", {type, id});
 
-		if (!map.current) return;
+		if (!map.current) {
+			logger.userAction("Map instance not available, aborting toggle", {type, id});
+			return;
+		}
 
 		const mapInstance = map.current;
+		logger.userAction("Map instance found, proceeding", {type, id});
 
 		switch (type) {
 			case "polygon":
-				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.map(p => {
+				logger.userAction("Handling polygon visibility toggle", {id});
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => {
+					logger.userAction("Current polygons fetched from cache", {count: old.length});
+
+					const newPolygons = old.map(p => {
 						if (p.id === id) {
 							const newVisible = !p.visible;
+							logger.userAction("Found matching polygon, toggling visibility", {
+								id,
+								oldVisible: p.visible,
+								newVisible
+							});
 
 							// Update map visibility
 							const marker = mapMarkers.current[`polygon-${id}`];
@@ -1613,11 +1625,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							const borderLayerId = mapLayers.current[`polygon-border-${id}`];
 
 							if (marker) {
+								logger.userAction("Marker found for polygon", {id});
 								if (newVisible) {
 									marker.addTo(mapInstance);
+									logger.userAction("Marker added to map", {id});
 								} else {
 									marker.remove();
+									logger.userAction("Marker removed from map", {id});
 								}
+							} else {
+								logger.userAction("No marker found for polygon", {id});
 							}
 
 							if (layerId && mapInstance.getLayer(layerId)) {
@@ -1626,6 +1643,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 									"visibility",
 									newVisible ? "visible" : "none"
 								);
+								logger.userAction("Layer visibility set", {layerId, visible: newVisible});
+							} else {
+								logger.userAction("Layer ID not found or layer missing in map instance", {layerId, id});
 							}
 
 							if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
@@ -1634,13 +1654,22 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 									"visibility",
 									newVisible ? "visible" : "none"
 								);
+								logger.userAction("Border layer visibility set", {borderLayerId, visible: newVisible});
+							} else {
+								logger.userAction("Border layer ID not found or layer missing in map instance", {
+									borderLayerId,
+									id
+								});
 							}
 
 							return {...p, visible: newVisible};
 						}
 						return p;
-					})
-				);
+					});
+
+					logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
+					return newPolygons;
+				});
 				break;
 
 			case "beacon":
