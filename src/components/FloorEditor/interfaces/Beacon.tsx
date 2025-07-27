@@ -1,5 +1,5 @@
 export interface Beacon {
-    id: string;
+    id: number;
     floorId: number;
     name: string;
     x: number;

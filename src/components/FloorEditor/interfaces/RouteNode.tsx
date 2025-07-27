@@ -1,8 +1,8 @@
 export interface RouteNode {
-    id: string;
+    id: number;
     floorId: number;
     x: number;
     y: number;
-    connections: string[];
+    connections: number[];
     visible: boolean;
 }

@@ -1,7 +1,7 @@
 export interface Edge {
-    id: string;
+    id: number;
     floorId: number;
-    fromNodeId: string;
-    toNodeId: string;
+    fromNodeId: number;
+    toNodeId: number;
     visible: boolean;
 }

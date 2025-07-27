@@ -1,7 +1,7 @@
 import {Point} from "./Point";
 
 export interface Polygon {
-    id: string;
+    id: number;
     floorId: number;
     name: string;
     points: Point[];

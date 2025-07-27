@@ -1,4 +1,4 @@
 export interface FloorEditorProps {
-    floorId: string;
+    floorId: number;
     onBack: () => void;
 }

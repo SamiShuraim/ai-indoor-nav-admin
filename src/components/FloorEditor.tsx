@@ -101,13 +101,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const queryClient = useQueryClient();
 
-	const numericFloorId = parseInt(floorId);
-
 	const {data: floor, isLoading: loading, isError: error} = useQuery<Floor>({
-		queryKey: ['floor', numericFloorId],
-		queryFn: () => floorsApi.getById(numericFloorId),
+		queryKey: ['floor', floorId],
+		queryFn: () => floorsApi.getById(floorId),
 	});
-	const {data: floorData} = useFloorLayoutData(numericFloorId, !!floor);
+	const {data: floorData} = useFloorLayoutData(floorId, !!floor);
 
 	// Map state
 	const mapContainer = useRef<HTMLDivElement>(null);
@@ -168,18 +166,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
-		string | null
+		number | null
 	>(null);
-	const selectedNodeForConnectionRef = useRef<string | null>(null);
-	const [lastPlacedNodeId, setLastPlacedNodeId] = useState<string | null>(
-		null
+	const selectedNodeForConnectionRef = useRef<number | null>(0);
+	const [lastPlacedNodeId, setLastPlacedNodeId] = useState<number | null>(
+		0
 	);
-	const lastPlacedNodeIdRef = useRef<string | null>(null);
+	const lastPlacedNodeIdRef = useRef<number | null>(null);
 
 	// Selection state
 	const [selectedItem, setSelectedItem] = useState<{
 		type: "polygon" | "beacon" | "node";
-		id: string;
+		id: number;
 	} | null>(null);
 
 	// Layer filter state
@@ -216,15 +214,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Use refs to prevent state loss during re-renders
 	const pendingPolygonPointsRef = useRef<Point[]>([]);
 	const isDrawingPolygonRef = useRef<boolean>(false);
-	const [editingPolygonId, setEditingPolygonId] = useState<string | null>(
+	const [editingPolygonId, setEditingPolygonId] = useState<number | null>(
 		null
 	);
 
 	// Add missing state
-	const [editingBeaconId, setEditingBeaconId] = useState<string | null>(null);
+	const [editingBeaconId, setEditingBeaconId] = useState<number | null>(null);
 	const [showNodeDialog, setShowNodeDialog] = useState(false);
 	const [nodeName, setNodeName] = useState("");
-	const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+	const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
 
 	// Change queue state
 	const [changeQueue, setChangeQueue] = useState<ChangeQueueItem[]>(() =>
@@ -276,7 +274,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			currentBeacons: Beacon[],
 			currentNodes: RouteNode[],
 			originalEdges: Edge[],
-			selectedNodeId?: string | null
+			selectedNodeId?: number | null
 		) => {
 			if (!map.current) return;
 
@@ -1024,11 +1022,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const addNewNode = (
 		lng: number,
 		lat: number,
-		connectToNodeId: string | null
-	): string => {
+		connectToNodeId: number | null
+	): number => {
 		const newNode: RouteNode = {
-			id: Date.now().toString(),
-			floorId: parseInt(floorId),
+			id: Date.now(),
+			floorId: floorId,
 			x: lng,
 			y: lat,
 			connections: connectToNodeId ? [connectToNodeId] : [],
@@ -1083,8 +1081,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			const existingEdges = queryClient.getQueryData<Edge[]>(['edges']) || [];
 
 			const newEdge: Edge = {
-				id: `edge_${connectToNodeId}_to_${newNode.id}_${Date.now()}`,
-				floorId: parseInt(floorId),
+				id: Date.now(), // generates a unique number based on timestamp
+				floorId: floorId,
 				fromNodeId: connectToNodeId,
 				toNodeId: newNode.id,
 				visible: true,
@@ -1420,9 +1418,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			...prev,
 			{
 				...change,
-				id: `${change.type}_${
-					change.objectType
-				}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+				id: Date.now(),
 			},
 		]);
 	};
@@ -1451,12 +1447,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			}
 		} else {
 			// Add
-			const newId = `${Date.now()}_${Math.random()
-				.toString(36)
-				.substr(2, 5)}`;
+			const newId = Date.now();
 			const newPolygon = {
 				id: newId,
-				floorId: parseInt(floorId),
+				floorId: floorId,
 				name: polygonName,
 				points: pendingPolygonPoints,
 				type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
@@ -1496,12 +1490,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		} else {
 			// Add
 			if (pendingBeaconLocation) {
-				const newId = `${Date.now()}_${Math.random()
-					.toString(36)
-					.substr(2, 5)}`;
+				const newId = Date.now();
 				const newBeacon = {
 					id: newId,
-					floorId: parseInt(floorId),
+					floorId: floorId,
 					name: beaconName,
 					x: pendingBeaconLocation.lng,
 					y: pendingBeaconLocation.lat,
@@ -1549,7 +1541,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Delete handler
 	const handleDeleteItem = (
 		type: "polygon" | "beacon" | "node",
-		id: string,
+		id: number,
 		e: React.MouseEvent<HTMLButtonElement>
 	) => {
 		e.stopPropagation();
@@ -1600,7 +1592,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const toggleLayerVisibility = (
 		type: "polygon" | "beacon" | "node",
-		id: string
+		id: number
 	) => {
 		logger.userAction("Layer visibility toggled", {type, id});
 
@@ -1727,7 +1719,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		const mutationMap = {
 			[OBJECT_TYPES.POLYGON]: poisMutations,
 			[OBJECT_TYPES.BEACON]: beaconsMutations,
-			[OBJECT_TYPES.NODE]: routeNodesMutations,  // Use your existing routeNodesMutations here
+			[OBJECT_TYPES.NODE]: routeNodesMutations,
 		};
 
 		for (const change of changeQueue) {
@@ -1811,7 +1803,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const handleLayerItemClick = (
 		type: "polygon" | "beacon" | "node",
-		id: string
+		id: number
 	) => {
 		setSelectedItem({type, id});
 		setActiveTool("select");
@@ -1820,7 +1812,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const handleEditItem = (
 		type: "polygon" | "beacon" | "node",
-		id: string,
+		id: number,
 		e: React.MouseEvent<HTMLButtonElement>
 	) => {
 		e.stopPropagation();
