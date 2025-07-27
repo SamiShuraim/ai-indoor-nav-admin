@@ -28,6 +28,7 @@ import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
 import {OBJECT_TYPES} from "./FloorEditor/enums/OBJECT_TYPES";
 import {STORAGE_KEYS} from "./FloorEditor/enums/STORAGE_KEYS";
 import {API_URL_KEYS} from "./FloorEditor/enums/API_URL_KEYS";
+import {useEntityMutations} from "./FloorEditor/useEntityMutations";
 
 const logger = createLogger("FloorEditor");
 
@@ -96,7 +97,7 @@ const saveToStorage = (key: string, value: any): void => {
 
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
-	logger.info("FloorEditor component starting", { floorId });
+	logger.info("FloorEditor component starting", {floorId});
 
 	const queryClient = useQueryClient();
 
@@ -234,13 +235,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
+	const poisMutations = useEntityMutations(queryClient, 'pois', poisApi);
+	const beaconsMutations = useEntityMutations(queryClient, 'beacons', beaconsApi);
+	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
 	// Sync queue to local storage
 	useEffect(() => {
 		saveQueueToStorage(changeQueue);
 	}, [changeQueue]);
 
 	useEffect(() => {
-		logger.info("FloorEditor component mounted", { floorId });
+		logger.info("FloorEditor component mounted", {floorId});
 
 		return () => {
 			logger.info("FloorEditor component unmounted");
@@ -487,10 +491,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						lookingForToNodeId: edge.toNodeId,
 						availableNodeIds: currentNodes.map((n) => n.id),
 						fromNode: fromNode
-							? { id: fromNode.id, visible: fromNode.visible }
+							? {id: fromNode.id, visible: fromNode.visible}
 							: null,
 						toNode: toNode
-							? { id: toNode.id, visible: toNode.visible }
+							? {id: toNode.id, visible: toNode.visible}
 							: null,
 					});
 
@@ -573,7 +577,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			// Add highlighting for selected object
 			if (selectedItem) {
-				const { type, id } = selectedItem;
+				const {type, id} = selectedItem;
 
 				if (type === "polygon") {
 					const polygon = currentPolygons.find((p) => p.id === id);
@@ -889,7 +893,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			return;
 		}
 
-		const { lng, lat } = e.lngLat;
+		const {lng, lat} = e.lngLat;
 		const currentTool = activeToolRef.current; // Use ref to get current tool
 
 		switch (currentTool) {
@@ -915,11 +919,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const addBeacon = (lng: number, lat: number) => {
 		// Show beacon name dialog
-		setPendingBeaconLocation({ lng, lat });
+		setPendingBeaconLocation({lng, lat});
 		setBeaconName(`Beacon ${beacons.length + 1}`); // Default name
 		setShowBeaconDialog(true);
 
-		logger.userAction("Beacon dialog opened", { location: { lng, lat } });
+		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
 	};
 
 	const handleNodeClick = (lng: number, lat: number) => {
@@ -1164,14 +1168,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		markerElement.style.border = "2px solid white";
 		markerElement.style.boxShadow = "0 0 4px rgba(0,0,0,0.3)";
 
-		const marker = new Marker({ element: markerElement })
+		const marker = new Marker({element: markerElement})
 			.setLngLat([lng, lat])
 			.addTo(map.current);
 
 		tempDrawingMarkers.current.push(marker);
 
 		logger.info("Added polygon point marker", {
-			point: { lng, lat },
+			point: {lng, lat},
 			pointIndex,
 			isFirst,
 			color,
@@ -1271,7 +1275,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		const maxDelta = 0.0001; // About 10 meters - much easier to click accurately
 
 		logger.info("Checking if close to first point", {
-			clickedPoint: { lng, lat },
+			clickedPoint: {lng, lat},
 			firstPoint,
 			deltaLng,
 			deltaLat,
@@ -1284,7 +1288,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Handle polygon point addition with the new flow
 	const addPolygonPoint = (lng: number, lat: number) => {
-		const newPoint: Point = { x: lng, y: lat };
+		const newPoint: Point = {x: lng, y: lat};
 
 		logger.userAction("🎯 Polygon point clicked", {
 			point: newPoint,
@@ -1306,8 +1310,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			const closingLineId = Math.random() * 1000000;
 			addPolygonLine(
 				pendingPolygonPointsRef.current[
-					pendingPolygonPointsRef.current.length - 1
-				],
+				pendingPolygonPointsRef.current.length - 1
+					],
 				pendingPolygonPointsRef.current[0],
 				closingLineId
 			);
@@ -1333,7 +1337,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			setShowPolygonDialog(true);
 
 			logger.info("🎉 Showing polygon dialog", {
-				center: { lng: centerX, lat: centerY },
+				center: {lng: centerX, lat: centerY},
 				points: pendingPolygonPointsRef.current.length,
 			});
 
@@ -1476,7 +1480,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Edit
 			const beacon = beacons.find((b) => b.id === editingBeaconId);
 			if (beacon) {
-				const updated = { ...beacon, name: beaconName };
+				const updated = {...beacon, name: beaconName};
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => (b.id === editingBeaconId ? updated : b))
 				);
@@ -1519,7 +1523,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Edit
 			const node = nodes.find((n) => n.id === editingNodeId);
 			if (node) {
-				const updated = { ...node, name: nodeName };
+				const updated = {...node, name: nodeName};
 				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
 					old.map(n => (n.id === editingNodeId ? updated : n))
 				);
@@ -1545,7 +1549,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		e: React.MouseEvent<HTMLButtonElement>
 	) => {
 		e.stopPropagation();
-		logger.userAction("Delete item clicked", { type, id });
+		logger.userAction("Delete item clicked", {type, id});
 		switch (type) {
 			case "polygon":
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
@@ -1554,7 +1558,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.POLYGON,
-					data: { id },
+					data: {id},
 				});
 				break;
 			case "beacon":
@@ -1564,7 +1568,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.BEACON,
-					data: { id },
+					data: {id},
 				});
 				break;
 			case "node":
@@ -1578,7 +1582,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.NODE,
-					data: { id },
+					data: {id},
 				});
 				break;
 		}
@@ -1594,7 +1598,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		type: "polygon" | "beacon" | "node",
 		id: string
 	) => {
-		logger.userAction("Layer visibility toggled", { type, id });
+		logger.userAction("Layer visibility toggled", {type, id});
 
 		if (!map.current) return;
 
@@ -1636,7 +1640,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								);
 							}
 
-							return { ...p, visible: newVisible };
+							return {...p, visible: newVisible};
 						}
 						return p;
 					})
@@ -1659,7 +1663,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								}
 							}
 
-							return { ...b, visible: newVisible };
+							return {...b, visible: newVisible};
 						}
 						return b;
 					})
@@ -1701,7 +1705,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								}
 							});
 
-							return { ...n, visible: newVisible };
+							return {...n, visible: newVisible};
 						}
 						return n;
 					})
@@ -1716,72 +1720,24 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setSaveError(null);
 		let newQueue = [...changeQueue];
 
+		const mutationMap = {
+			[OBJECT_TYPES.POLYGON]: poisMutations,
+			[OBJECT_TYPES.BEACON]: beaconsMutations,
+			[OBJECT_TYPES.NODE]: routeNodesMutations,  // Use your existing routeNodesMutations here
+		};
+
 		for (const change of changeQueue) {
 			try {
-				if (change.objectType === OBJECT_TYPES.POLYGON) {
-					// POI = polygon of type 'poi', wall = polygon of type 'wall'
-					if (change.type === CHANGE_TYPES.ADD) {
-						// Always create new polygons
-						await poisApi.create({ // TODO: this needs to be replaced by a mutation somehow.
-							floorId: parseInt(floorId),
-							name: change.data.name,
-							poiType: change.data.type,
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.EDIT) {
-						const id = change.data.id;
-						await poisApi.update(parseInt(id), {
-							name: change.data.name,
-							poiType: change.data.type,
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.DELETE) {
-						const id = change.data.id;
-						await poisApi.delete(parseInt(id));
-					}
-				} else if (change.objectType === OBJECT_TYPES.BEACON) {
-					if (change.type === CHANGE_TYPES.ADD) {
-						await beaconsApi.create({
-							floorId: parseInt(floorId),
-							name: change.data.name,
-							x: change.data.x,
-							y: change.data.y,
-							isActive: true,
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.EDIT) {
-						const id = change.data.id;
-						await beaconsApi.update(parseInt(id), {
-							name: change.data.name,
-							x: change.data.x,
-							y: change.data.y,
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.DELETE) {
-						const id = change.data.id;
-						await beaconsApi.delete(parseInt(id));
-					}
-				} else if (change.objectType === OBJECT_TYPES.NODE) {
-					if (change.type === CHANGE_TYPES.ADD) {
-						await routeNodesApi.create({
-							floorId: parseInt(floorId),
-							x: change.data.x,
-							y: change.data.y,
-							nodeType: "waypoint",
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.EDIT) {
-						const id = change.data.id;
-						await routeNodesApi.update(parseInt(id), {
-							x: change.data.x,
-							y: change.data.y,
-							nodeType: "waypoint",
-							isVisible: change.data.visible,
-						});
-					} else if (change.type === CHANGE_TYPES.DELETE) {
-						const id = change.data.id;
-						await routeNodesApi.delete(parseInt(id));
-					}
+				const mutations = mutationMap[change.objectType];
+				if (!mutations) throw new Error(`No mutations defined for objectType ${change.objectType}`);
+
+				if (change.type === CHANGE_TYPES.ADD) {
+					await mutations.create.mutateAsync(change);
+				} else if (change.type === CHANGE_TYPES.EDIT) {
+					await mutations.update.mutateAsync(change);
+				} else if (change.type === CHANGE_TYPES.DELETE) {
+					const id = typeof change.data.id === 'string' ? parseInt(change.data.id) : change.data.id;
+					await mutations.delete.mutateAsync(id);
 				}
 				// Remove from queue on success
 				newQueue = newQueue.filter((q) => q.id !== change.id);
@@ -1853,9 +1809,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		type: "polygon" | "beacon" | "node",
 		id: string
 	) => {
-		setSelectedItem({ type, id });
+		setSelectedItem({type, id});
 		setActiveTool("select");
-		logger.userAction("Layer item selected", { type, id });
+		logger.userAction("Layer item selected", {type, id});
 	};
 
 	const handleEditItem = (
@@ -2009,17 +1965,17 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						queueChange({
 							type: CHANGE_TYPES.DELETE,
 							objectType: OBJECT_TYPES.POLYGON,
-							data: { id: "all" },
+							data: {id: "all"},
 						});
 						queueChange({
 							type: CHANGE_TYPES.DELETE,
 							objectType: OBJECT_TYPES.BEACON,
-							data: { id: "all" },
+							data: {id: "all"},
 						});
 						queueChange({
 							type: CHANGE_TYPES.DELETE,
 							objectType: OBJECT_TYPES.NODE,
-							data: { id: "all" },
+							data: {id: "all"},
 						});
 						logger.info("All data cleared from state and queue");
 					}}
