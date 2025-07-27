@@ -235,8 +235,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	const poisMutations = useEntityMutations(queryClient, 'pois', poisApi);
-	const beaconsMutations = useEntityMutations(queryClient, 'beacons', beaconsApi);
+	const poisMutations = useEntityMutations('pois', poisApi);
+	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
 	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
 	// Sync queue to local storage
 	useEffect(() => {
