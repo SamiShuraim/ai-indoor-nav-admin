@@ -1,50 +1,23 @@
 import React from 'react';
-import { UI_MESSAGES } from '../../constants/ui';
-import { createLogger } from '../../utils/logger';
+import {UI_MESSAGES} from '../../constants/ui';
+import {createLogger} from '../../utils/logger';
+import {Polygon} from "./interfaces/Polygon";
+import {Beacon} from "./interfaces/Beacon";
+import {RouteNode} from "./interfaces/RouteNode";
 
 const logger = createLogger('LayersPanel');
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface Polygon {
-  id: string;
-  name: string;
-  points: Point[];
-  type: 'poi' | 'wall';
-  visible: boolean;
-  color: string;
-}
-
-interface Beacon {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  visible: boolean;
-}
-
-interface RouteNode {
-  id: string;
-  x: number;
-  y: number;
-  connections: string[];
-  visible: boolean;
-}
 
 interface LayersPanelProps {
   polygons: Polygon[];
   beacons: Beacon[];
   nodes: RouteNode[];
   layerFilter: 'polygons' | 'beacons' | 'nodes';
-  selectedItem: {type: 'polygon' | 'beacon' | 'node', id: string} | null;
+  selectedItem: { type: 'polygon' | 'beacon' | 'node', id: number } | null;
   onFilterChange: (filter: 'polygons' | 'beacons' | 'nodes') => void;
-  onLayerItemClick: (type: 'polygon' | 'beacon' | 'node', id: string) => void;
-  onToggleVisibility: (type: 'polygon' | 'beacon' | 'node', id: string) => void;
-  onEditItem: (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => void;
-  onDeleteItem: (type: 'polygon' | 'beacon' | 'node', id: string, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onLayerItemClick: (type: 'polygon' | 'beacon' | 'node', id: number) => void;
+  onToggleVisibility: (type: 'polygon' | 'beacon' | 'node', id: number) => void;
+  onEditItem: (type: 'polygon' | 'beacon' | 'node', id: number, e: React.MouseEvent<HTMLButtonElement>) => void;
+  onDeleteItem: (type: 'polygon' | 'beacon' | 'node', id: number, e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const LayersPanel: React.FC<LayersPanelProps> = ({

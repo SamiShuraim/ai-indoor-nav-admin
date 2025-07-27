@@ -420,6 +420,89 @@
   align-items: center;
 }
 
+/* Unsaved changes and save status indicators */
+.unsaved-changes-indicator {
+  color: #f59e0b;
+  font-weight: 500;
+  padding: 4px 8px;
+  background-color: #fef3c7;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.save-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.save-status.saving {
+  color: #3b82f6;
+  background-color: #dbeafe;
+}
+
+.save-status.success {
+  color: #10b981;
+  background-color: #d1fae5;
+}
+
+.save-status.error {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+
+/* Dialog overlays */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dialog-content h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.dialog-checkbox {
+  margin: 16px 0;
+}
+
+.dialog-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .editor-main {

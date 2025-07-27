@@ -1,7 +1,7 @@
 import React from 'react';
-import { UI_MESSAGES } from '../../constants/ui';
-import { createLogger } from '../../utils/logger';
-import { Button } from '../common';
+import {UI_MESSAGES} from '../../constants/ui';
+import {createLogger} from '../../utils/logger';
+import {Button} from '../common';
 
 const logger = createLogger('DrawingToolbar');
 
@@ -17,8 +17,8 @@ interface DrawingToolbarProps {
   onClearAll: () => void;
   // Route node state
   nodesCount: number;
-  selectedNodeForConnection: string | null;
-  lastPlacedNodeId: string | null;
+  selectedNodeForConnection: number | null;
+  lastPlacedNodeId: number | null;
 }
 
 const DrawingToolbar: React.FC<DrawingToolbarProps> = ({

@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { API_BASE_URL, API_ENDPOINTS } from '../constants/api';
-import { UI_MESSAGES } from '../constants/ui';
-import { Building, buildingsApi, Floor, floorsApi } from '../utils/api';
-import { createLogger } from '../utils/logger';
+import React, {useEffect, useState} from 'react';
+import {API_BASE_URL, API_ENDPOINTS} from '../constants/api';
+import {UI_MESSAGES} from '../constants/ui';
+import {buildingsApi, floorsApi} from '../utils/api';
+import {createLogger} from '../utils/logger';
 import './BuildingsManagement.css';
-import { Button, Card, Container, Header, Input } from './common';
+import {Button, Card, Container, Header, Input} from './common';
+import {Building} from "../utils/api_helpers/api_interfaces/building";
+import {Floor} from "../utils/api_helpers/api_interfaces/floor";
 
 const logger = createLogger('BuildingsManagement');
 

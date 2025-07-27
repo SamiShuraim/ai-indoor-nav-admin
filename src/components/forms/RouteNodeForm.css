@@ -1,0 +1,414 @@
+/* RouteNodeForm.css */
+.route-node-form-card {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.route-node-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 32px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.route-node-form-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.route-node-form {
+  padding: 32px;
+}
+
+.form-section {
+  margin-bottom: 32px;
+}
+
+.form-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.form-group input[type="number"],
+.form-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.form-group input[type="number"]:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.form-group input[type="number"].error,
+.form-group select.error {
+  border-color: #ef4444;
+}
+
+.form-group select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 40px;
+  appearance: none;
+}
+
+.error-message {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.field-description {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Checkbox */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 16px;
+  color: #374151;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  height: 20px;
+  width: 20px;
+  background-color: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 4px;
+  margin-right: 12px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.checkbox-label:hover input ~ .checkmark {
+  border-color: #8b5cf6;
+}
+
+.checkbox-label input:checked ~ .checkmark {
+  background-color: #8b5cf6;
+  border-color: #8b5cf6;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.checkbox-label input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.checkbox-label .checkmark:after {
+  left: 6px;
+  top: 2px;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Coordinate Help */
+.coordinate-help {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.coordinate-help p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #7c3aed;
+  line-height: 1.5;
+}
+
+.coordinate-help p:first-child {
+  margin-top: 0;
+}
+
+.coordinate-help p:last-child {
+  margin-bottom: 0;
+}
+
+.coordinate-help strong {
+  color: #581c87;
+  font-weight: 600;
+}
+
+/* Node Information */
+.node-info {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.info-value {
+  color: #6b7280;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 32px;
+}
+
+.submit-button {
+  min-width: 120px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: none;
+  color: white;
+}
+
+.submit-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+}
+
+/* Node Type Icons */
+.node-type-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.node-type-waypoint { background-color: #3b82f6; }
+.node-type-entrance { background-color: #10b981; }
+.node-type-exit { background-color: #ef4444; }
+.node-type-junction { background-color: #f59e0b; }
+.node-type-stairs { background-color: #8b5cf6; }
+.node-type-elevator { background-color: #06b6d4; }
+.node-type-escalator { background-color: #84cc16; }
+.node-type-door { background-color: #f97316; }
+.node-type-landmark { background-color: #ec4899; }
+.node-type-checkpoint { background-color: #6b7280; }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .route-node-form-card {
+    margin: 16px;
+    border-radius: 8px;
+  }
+
+  .route-node-form-header {
+    padding: 20px 24px;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .route-node-form-header h2 {
+    font-size: 20px;
+  }
+
+  .route-node-form {
+    padding: 24px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .submit-button {
+    min-width: auto;
+  }
+
+  .info-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .info-value {
+    align-self: stretch;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .route-node-form-card {
+    margin: 8px;
+  }
+
+  .route-node-form-header {
+    padding: 16px 20px;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .route-node-form {
+    padding: 20px;
+  }
+
+  .form-section {
+    margin-bottom: 24px;
+  }
+
+  .form-section h3 {
+    font-size: 16px;
+  }
+
+  .coordinate-help {
+    padding: 12px;
+  }
+
+  .coordinate-help p {
+    font-size: 13px;
+  }
+
+  .node-info {
+    padding: 16px;
+  }
+}
+
+/* Loading States */
+.form-group input:disabled,
+.form-group select:disabled {
+  background-color: #f8fafc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Animation */
+.route-node-form-card {
+  animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Focus styles for accessibility */
+.form-group input:focus-visible,
+.form-group select:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+/* Required field indicator */
+.form-group label[for*="required"]::after {
+  content: " *";
+  color: #ef4444;
+  font-weight: bold;
+}
+
+/* Node type badges */
+.node-type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.node-type-badge.waypoint { background-color: #dbeafe; color: #1e40af; }
+.node-type-badge.entrance { background-color: #dcfce7; color: #166534; }
+.node-type-badge.exit { background-color: #fee2e2; color: #991b1b; }
+.node-type-badge.junction { background-color: #fef3c7; color: #92400e; }
+.node-type-badge.stairs { background-color: #ede9fe; color: #5b21b6; }
+.node-type-badge.elevator { background-color: #cffafe; color: #0e7490; }
+.node-type-badge.escalator { background-color: #ecfccb; color: #3f6212; }
+.node-type-badge.door { background-color: #fed7aa; color: #c2410c; }
+.node-type-badge.landmark { background-color: #fce7f3; color: #be185d; }
+.node-type-badge.checkpoint { background-color: #f3f4f6; color: #374151; } 
