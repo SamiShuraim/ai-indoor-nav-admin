@@ -1028,6 +1028,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	): string => {
 		const newNode: RouteNode = {
 			id: Date.now().toString(),
+			floorId: parseInt(floorId),
 			x: lng,
 			y: lat,
 			connections: connectToNodeId ? [connectToNodeId] : [],
@@ -1083,6 +1084,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			const newEdge: Edge = {
 				id: `edge_${connectToNodeId}_to_${newNode.id}_${Date.now()}`,
+				floorId: parseInt(floorId),
 				fromNodeId: connectToNodeId,
 				toNodeId: newNode.id,
 				visible: true,
@@ -1454,6 +1456,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				.substr(2, 5)}`;
 			const newPolygon = {
 				id: newId,
+				floorId: parseInt(floorId),
 				name: polygonName,
 				points: pendingPolygonPoints,
 				type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
@@ -1498,6 +1501,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					.substr(2, 5)}`;
 				const newBeacon = {
 					id: newId,
+					floorId: parseInt(floorId),
 					name: beaconName,
 					x: pendingBeaconLocation.lng,
 					y: pendingBeaconLocation.lat,
