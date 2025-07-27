@@ -148,7 +148,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const activeToolRef = useRef<DrawingTool>("select");
 
 	const {data: polygons = []} = useQuery({
-		queryKey: ['pois'],
+		queryKey: ['polygons'],
 		queryFn: () => loadFromApi(API_URL_KEYS.POI),
 	});
 	const {data: beacons = []} = useQuery({
