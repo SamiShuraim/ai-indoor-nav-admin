@@ -210,9 +210,9 @@ function AppContent() {
           path={ROUTES.FLOOR_EDITOR} 
           element={
             token ? (
-              <FloorEditor 
-                floorId={location.pathname.split('/').pop() || ''}
-                onBack={handleNavigateToBuildings}
+                <FloorEditor
+                    floorId={Number(location.pathname.split('/').pop()) || 0}
+                    onBack={handleNavigateToBuildings}
               />
             ) : (
               <Navigate to={ROUTES.LOGIN} replace />
