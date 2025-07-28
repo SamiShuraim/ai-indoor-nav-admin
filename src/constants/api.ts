@@ -23,7 +23,7 @@ export const API_ENDPOINTS = {
   // Beacons
   BEACONS: '/api/Beacon',
   BEACON_BY_ID: (id: string | number) => `/api/Beacon/${id}`,
-  BEACONS_BY_FLOOR: (floorId: string | number) => `/api/Beacon/floor/${floorId}`,
+  BEACONS_BY_FLOOR: (floorId: string | number) => `/api/Beacon?floor=${floorId}`,
   BEACON_BY_UUID: (uuid: string) => `/api/Beacon/uuid/${uuid}`,
   BEACONS_ACTIVE: '/api/Beacon/active',
   BEACONS_LOW_BATTERY: (threshold: number) => `/api/Beacon/low-battery/${threshold}`,
