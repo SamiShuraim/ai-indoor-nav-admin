@@ -1,10 +1,10 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import {createLogger} from '../../utils/logger';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './RouteNodeForm.css';
-import {RouteNode} from "../../utils/api_helpers/api_interfaces/routeNode";
+import {RouteNode} from "../../interfaces/RouteNode";
 
 const logger = createLogger('RouteNodeForm');
 
@@ -49,17 +49,17 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
 
   const isEditing = !!routeNode?.id;
 
-  // Initialize form data when editing
-  useEffect(() => {
-    if (routeNode) {
-      setFormData({
-        nodeType: routeNode.nodeType || 'waypoint',
-        x: routeNode.x || 0,
-        y: routeNode.y || 0,
-        isVisible: routeNode.isVisible ?? true
-      });
-    }
-  }, [routeNode]);
+  // // Initialize form data when editing
+  // useEffect(() => {
+  //   if (routeNode) {
+  //     setFormData({
+  //       nodeType: routeNode.nodeType || 'waypoint',
+  //       x: routeNode.x || 0,
+  //       y: routeNode.y || 0,
+  //       isVisible: routeNode.isVisible ?? true
+  //     });
+  //   }
+  // }, [routeNode]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -97,28 +97,28 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
     }
 
     setIsSubmitting(true);
-    
-    try {
-      const routeNodeData = {
-        floorId,
-        nodeType: formData.nodeType,
-        x: formData.x,
-        y: formData.y,
-        isVisible: formData.isVisible
-      };
 
-      if (isEditing && routeNode?.id) {
-        await onUpdate(routeNode.id, routeNodeData);
-        logger.info('Route node updated successfully', { nodeId: routeNode.id });
-      } else {
-        await onSave(routeNodeData);
-        logger.info('Route node created successfully');
-      }
-    } catch (error) {
-      logger.error('Failed to save route node', error as Error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    //   try {
+    //     const routeNodeData = {
+    //       floorId,
+    //       nodeType: formData.nodeType,
+    //       x: formData.x,
+    //       y: formData.y,
+    //       isVisible: formData.isVisible
+    //     };
+    //
+    //     if (isEditing && routeNode?.id) {
+    //       await onUpdate(routeNode.id, routeNodeData);
+    //       logger.info('Route node updated successfully', { nodeId: routeNode.id });
+    //     } else {
+    //       await onSave(routeNodeData);
+    //       logger.info('Route node created successfully');
+    //     }
+    //   } catch (error) {
+    //     logger.error('Failed to save route node', error as Error);
+    //   } finally {
+    //     setIsSubmitting(false);
+    //   }
   };
 
   const handleCancel = () => {
@@ -247,21 +247,21 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
             </div>
             <div className="info-item">
               <span className="info-label">Created:</span>
-              <span className="info-value">
-                {isEditing && routeNode?.createdAt 
-                  ? new Date(routeNode.createdAt).toLocaleString()
-                  : 'Will be set on creation'
-                }
-              </span>
+              {/*<span className="info-value">*/}
+              {/*  {isEditing && routeNode?.createdAt */}
+              {/*    ? new Date(routeNode.createdAt).toLocaleString()*/}
+              {/*    : 'Will be set on creation'*/}
+              {/*  }*/}
+              {/*</span>*/}
             </div>
             <div className="info-item">
               <span className="info-label">Last Updated:</span>
-              <span className="info-value">
-                {isEditing && routeNode?.updatedAt 
-                  ? new Date(routeNode.updatedAt).toLocaleString()
-                  : 'Will be set on creation'
-                }
-              </span>
+              {/*<span className="info-value">*/}
+              {/*  {isEditing && routeNode?.updatedAt */}
+              {/*    ? new Date(routeNode.updatedAt).toLocaleString()*/}
+              {/*    : 'Will be set on creation'*/}
+              {/*  }*/}
+              {/*</span>*/}
             </div>
           </div>
         </div>

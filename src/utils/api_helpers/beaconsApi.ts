@@ -3,7 +3,7 @@ import {FloorScopedApi} from "../abstract_classes/floorScopedApi";
 import {API_ENDPOINTS} from "../../constants/api";
 import {apiRequest} from "./apiRequest";
 import {logger} from "../api";
-import {Beacon} from "./api_interfaces/beacon";
+import {Beacon} from "../../interfaces/Beacon";
 
 export class BeaconsApi extends FloorScopedApi<Beacon> {
     resourceEndpoint = API_ENDPOINTS.BEACONS;

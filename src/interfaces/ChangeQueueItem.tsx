@@ -1,5 +1,5 @@
-import {OBJECT_TYPES} from "../enums/OBJECT_TYPES";
-import {CHANGE_TYPES} from "../enums/CHANGE_TYPES";
+import {OBJECT_TYPES} from "../components/FloorEditor/enums/OBJECT_TYPES";
+import {CHANGE_TYPES} from "../components/FloorEditor/enums/CHANGE_TYPES";
 
 export interface ChangeQueueItem {
     id: number; // unique for queue

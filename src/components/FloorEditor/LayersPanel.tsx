@@ -1,9 +1,9 @@
 import React from 'react';
 import {UI_MESSAGES} from '../../constants/ui';
 import {createLogger} from '../../utils/logger';
-import {Polygon} from "./interfaces/Polygon";
-import {Beacon} from "./interfaces/Beacon";
-import {RouteNode} from "./interfaces/RouteNode";
+import {Polygon} from "../../interfaces/Polygon";
+import {Beacon} from "../../interfaces/Beacon";
+import {RouteNode} from "../../interfaces/RouteNode";
 
 const logger = createLogger('LayersPanel');
 
@@ -97,9 +97,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility('polygon', polygon.id);
                   }}
-                  title={polygon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={polygon.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {polygon.visible ? '👁️' : '🚫'}
+                  {polygon.isVisible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
                 <span className="layer-name">{polygon.name}</span>
@@ -141,9 +141,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility('beacon', beacon.id);
                   }}
-                  title={beacon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={beacon.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {beacon.visible ? '👁️' : '🚫'}
+                  {beacon.isVisible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color beacon-color"></div>
                 <span className="layer-name">{beacon.name}</span>

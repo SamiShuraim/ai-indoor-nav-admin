@@ -3,7 +3,7 @@ import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
 import {UI_MESSAGES} from "../constants/ui";
-import {beaconsApi, floorsApi, poisApi, routeNodesApi,} from "../utils/api";
+import {beaconsApi, floorsApi, polygonsApi, routeNodesApi,} from "../utils/api";
 import {createLogger} from "../utils/logger";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
@@ -12,21 +12,21 @@ import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
-import {Floor} from "../utils/api_helpers/api_interfaces/floor";
 import {BaseApi} from "../utils/abstract_classes/baseApi";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
 import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
-import {FloorEditorProps} from "./FloorEditor/interfaces/FloorEditorProps";
-import {Polygon} from "./FloorEditor/interfaces/Polygon";
-import {RouteNode} from "./FloorEditor/interfaces/RouteNode";
-import {Beacon} from "./FloorEditor/interfaces/Beacon";
-import {ChangeQueueItem} from "./FloorEditor/interfaces/ChangeQueueItem";
+import {FloorEditorProps} from "../interfaces/FloorEditorProps";
+import {Polygon} from "../interfaces/Polygon";
+import {RouteNode} from "../interfaces/RouteNode";
+import {Beacon} from "../interfaces/Beacon";
+import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
 import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
 import {OBJECT_TYPES} from "./FloorEditor/enums/OBJECT_TYPES";
 import {STORAGE_KEYS} from "./FloorEditor/enums/STORAGE_KEYS";
 import {API_URL_KEYS} from "./FloorEditor/enums/API_URL_KEYS";
 import {useEntityMutations} from "./FloorEditor/useEntityMutations";
+import {Floor} from "../interfaces/Floor";
 
 const logger = createLogger("FloorEditor");
 
@@ -227,7 +227,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	const poisMutations = useEntityMutations('pois', poisApi);
+	const poisMutations = useEntityMutations('pois', polygonsApi);
 	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
 	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
 	// Sync queue to local storage
@@ -1466,44 +1466,44 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Beacon Save (add or edit)
 	const handleBeaconSave = () => {
-		if (editingBeaconId) {
-			// Edit
-			const beacon = beacons.find((b) => b.id === editingBeaconId);
-			if (beacon) {
-				const updated = {...beacon, name: beaconName};
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.map(b => (b.id === editingBeaconId ? updated : b))
-				);
-				queueChange({
-					type: CHANGE_TYPES.EDIT,
-					objectType: OBJECT_TYPES.BEACON,
-					data: updated,
-				});
-			}
-		} else {
-			// Add
-			if (pendingBeaconLocation) {
-				const newId = Date.now();
-				const newBeacon = {
-					id: newId,
-					floorId: floorId,
-					name: beaconName,
-					x: pendingBeaconLocation.lng,
-					y: pendingBeaconLocation.lat,
-					visible: true,
-				};
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
-				queueChange({
-					type: CHANGE_TYPES.ADD,
-					objectType: OBJECT_TYPES.BEACON,
-					data: newBeacon,
-				});
-			}
-		}
-		setShowBeaconDialog(false);
-		setBeaconName("");
-		setPendingBeaconLocation(null);
-		setEditingBeaconId(null);
+		// 	if (editingBeaconId) {
+		// 		// Edit
+		// 		const beacon = beacons.find((b) => b.id === editingBeaconId);
+		// 		if (beacon) {
+		// 			const updated = {...beacon, name: beaconName};
+		// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+		// 				old.map(b => (b.id === editingBeaconId ? updated : b))
+		// 			);
+		// 			queueChange({
+		// 				type: CHANGE_TYPES.EDIT,
+		// 				objectType: OBJECT_TYPES.BEACON,
+		// 				data: updated,
+		// 			});
+		// 		}
+		// 	} else {
+		// 		// Add
+		// 		if (pendingBeaconLocation) {
+		// 			const newId = Date.now();
+		// 			const newBeacon = {
+		// 				id: newId,
+		// 				floorId: floorId,
+		// 				name: beaconName,
+		// 				x: pendingBeaconLocation.lng,
+		// 				y: pendingBeaconLocation.lat,
+		// 				visible: true,
+		// 			};
+		// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
+		// 			queueChange({
+		// 				type: CHANGE_TYPES.ADD,
+		// 				objectType: OBJECT_TYPES.BEACON,
+		// 				data: newBeacon,
+		// 			});
+		// 		}
+		// 	}
+		// 	setShowBeaconDialog(false);
+		// 	setBeaconName("");
+		// 	setPendingBeaconLocation(null);
+		// 	setEditingBeaconId(null);
 	};
 
 	// Node Save (add or edit) - implement similar logic if you have node editing dialog
