@@ -1,11 +1,12 @@
-import {Point} from "./Point";
-
 export interface Polygon {
     id: number;
     floorId: number;
     name: string;
-    points: Point[];
-    type: "poi" | "wall";
+    type: "Room" | "Stairs" | "Elevator" | "Wall";
     visible: boolean;
     color: string;
+    geometry: {
+        type: "Polygon";
+        coordinates: number[][][];
+    };
 }

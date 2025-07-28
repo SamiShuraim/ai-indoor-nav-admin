@@ -184,9 +184,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility('node', node.id);
                   }}
-                  title={node.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={node.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {node.visible ? '👁️' : '🚫'}
+                  {node.isVisible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color node-color"></div>
                 <span className="layer-name">Node {node.id}</span>
