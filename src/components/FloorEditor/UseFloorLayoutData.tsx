@@ -1,11 +1,12 @@
 import {useQuery} from "@tanstack/react-query";
-import {polygonsApi, routeNodesApi} from "../../utils/api";
+import {beaconsApi, polygonsApi, routeNodesApi} from "../../utils/api";
 import FloorLayoutData from "../../interfaces/FloorLayoutData";
 
 export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutData> => {
-    const [polygons, routeNodes] = await Promise.all([
+    const [polygons, routeNodes, beacons] = await Promise.all([
         polygonsApi.getByFloor(floorId.toString()),
         routeNodesApi.getByFloor(floorId.toString()),
+        beaconsApi.getByFloor(floorId.toString()),
     ]);
 
     const nodes = routeNodes.map((node) => {
@@ -21,6 +22,7 @@ export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutDa
     return {
         polygons,
         nodes,
+        beacons,
     };
 };
 
