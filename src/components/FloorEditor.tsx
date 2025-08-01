@@ -714,6 +714,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 			});
 
+			// Click handlers for different tools
+			mapInstance.on("click", (e) => {
+				handleMapClick(e);
+			});
+
 			// Set a timeout to catch cases where the map never loads
 			mapLoadTimeout.current = setTimeout(() => {
 				// Only show timeout error if map is still loading (not if it already loaded)
