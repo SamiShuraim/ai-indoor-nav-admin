@@ -1,4 +1,4 @@
-import {config, Map, Marker} from "@maptiler/sdk";
+import {config, Map, Marker, Point} from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
@@ -17,7 +17,7 @@ import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
 import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
-import {Polygon} from "../interfaces/Polygon";
+import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
 import {RouteNode} from "../interfaces/RouteNode";
 import {Beacon} from "../interfaces/Beacon";
 import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
@@ -92,6 +92,10 @@ const saveToStorage = (key: string, value: any): void => {
 		);
 	}
 };
+
+function convertPointsToCoordinates(points: Point[]): number[][][] {
+	return [points.map(p => [p.x, p.y])];
+}
 
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
@@ -197,16 +201,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
 	// 	[]
 	// );
-	// const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>(
-	// 	[]
-	// );
+	const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>(
+		[]
+	);
 	// const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
 	// 	lng: number;
 	// 	lat: number;
 	// } | null>(null);
 
 	// Use refs to prevent state loss during re-renders
-	// const pendingPolygonPointsRef = useRef<Point[]>([]);
+	const pendingPolygonPointsRef = useRef<Point[]>([]);
 	const isDrawingPolygonRef = useRef<boolean>(false);
 	const [editingPolygonId, setEditingPolygonId] = useState<number | null>(
 		null
@@ -641,40 +645,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// 	},
 	// 	[selectedItem]
 	// ); // Add selectedItem as dependency
-
-	// Clean up orphaned edges that reference non-existent nodes
-	const cleanupOrphanedEdges = useCallback(() => {
-		const currentNodes = JSON.parse(localStorage.getItem("floorEditor_nodes") || "[]");
-		const currentEdges = JSON.parse(localStorage.getItem("floorEditor_edges") || "[]");
-		const nodeIds = new Set(currentNodes.map((n: any) => n.id));
-
-		const validEdges = currentEdges.filter((edge: any) => {
-			const isValid = nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
-			if (!isValid) {
-				logger.warn("Removing orphaned edge", {
-					edgeId: edge.id,
-					fromNodeId: edge.fromNodeId,
-					toNodeId: edge.toNodeId,
-					availableNodeIds: Array.from(nodeIds),
-				});
-			}
-			return isValid;
-		});
-
-		if (validEdges.length !== currentEdges.length) {
-			localStorage.setItem("floorEditor_edges", JSON.stringify(validEdges));
-
-			// ✅ Update React Query cache
-			queryClient.setQueryData(['edges'], validEdges);
-
-			logger.info("Cleaned up orphaned edges", {
-				originalCount: currentEdges.length,
-				cleanedCount: validEdges.length,
-				removedCount: currentEdges.length - validEdges.length,
-			});
-		}
-	}, [queryClient]);
-
 
 	// Load initial sample data and update map when data changes
 	// useEffect(() => {
@@ -1371,39 +1341,39 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// 	});
 	// };
 	//
-	// const handleToolChange = (tool: DrawingTool) => {
-	// 	logger.info("Tool change requested", {
-	// 		from: activeTool,
-	// 		to: tool,
-	// 		isDrawingPolygon,
-	// 		pendingPoints: pendingPolygonPoints.length,
-	// 	});
-	//
-	// 	// If switching away from POI tool, clear any polygon drawing state
-	// 	if (
-	// 		activeTool === "poi" &&
-	// 		tool !== "poi" &&
-	// 		isDrawingPolygonRef.current
-	// 	) {
-	// 		isDrawingPolygonRef.current = false;
-	// 		pendingPolygonPointsRef.current = [];
-	// 		setIsDrawingPolygon(false);
-	// 		// setCurrentPolygonPoints([]);
-	// 		setPendingPolygonPoints([]);
-	// 		clearTempDrawing();
-	// 	}
-	//
-	// 	// If switching away from nodes tool, clear node selection state
-	// 	if (activeTool === "nodes" && tool !== "nodes") {
-	// 		setSelectedNodeForConnection(null);
-	// 		setLastPlacedNodeId(null);
-	// 		lastPlacedNodeIdRef.current = null;
-	// 	}
-	//
-	// 	setActiveTool(tool);
-	// 	activeToolRef.current = tool; // Keep ref in sync
-	// 	setSelectedItem(null);
-	// };//
+	const handleToolChange = (tool: DrawingTool) => {
+		logger.info("Tool change requested", {
+			from: activeTool,
+			to: tool,
+			isDrawingPolygon,
+			// pendingPoints: pendingPolygonPoints.length,
+		});
+
+		// If switching away from POI tool, clear any polygon drawing state
+		if (
+			activeTool === "poi" &&
+			tool !== "poi" &&
+			isDrawingPolygonRef.current
+		) {
+			isDrawingPolygonRef.current = false;
+			pendingPolygonPointsRef.current = [];
+			setIsDrawingPolygon(false);
+			// setCurrentPolygonPoints([]);
+			setPendingPolygonPoints([]);
+			clearTempDrawing();
+		}
+
+		// If switching away from nodes tool, clear node selection state
+		if (activeTool === "nodes" && tool !== "nodes") {
+			setSelectedNodeForConnection(null);
+			setLastPlacedNodeId(null);
+			lastPlacedNodeIdRef.current = null;
+		}
+
+		setActiveTool(tool);
+		activeToolRef.current = tool; // Keep ref in sync
+		setSelectedItem(null);
+	};
 
 	// Add to change queue helper
 	const queueChange = (change: Omit<ChangeQueueItem, "id">) => {
@@ -1419,50 +1389,53 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// --- Update handlers ---
 
 	// Polygon Save (add or edit)
-	// const handlePolygonSave = () => {
-	// 	if (editingPolygonId) {
-	// 		// Edit
-	// 		const polygon = polygons.find((p) => p.id === editingPolygonId);
-	// 		if (polygon) {
-	// 			const updated = {
-	// 				...polygon,
-	// 				name: polygonName,
-	// 				type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
-	// 			};
-	// 			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-	// 				old.map(p => (p.id === editingPolygonId ? updated : p))
-	// 			);
-	// 			queueChange({
-	// 				type: CHANGE_TYPES.EDIT,
-	// 				objectType: OBJECT_TYPES.POLYGON,
-	// 				data: updated,
-	// 			});
-	// 		}
-	// 	} else {
-	// 		// Add
-	// 		const newId = Date.now();
-	// 		const newPolygon = {
-	// 			id: newId,
-	// 			floorId: floorId,
-	// 			name: polygonName,
-	// 			points: pendingPolygonPoints,
-	// 			type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
-	// 			visible: true,
-	// 			color: "#3b82f6",
-	// 		};
-	// 		queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, newPolygon]);
-	// 		queueChange({
-	// 			type: CHANGE_TYPES.ADD,
-	// 			objectType: OBJECT_TYPES.POLYGON,
-	// 			data: newPolygon,
-	// 		});
-	// 	}
-	// 	setShowPolygonDialog(false);
-	// 	setPolygonName("");
-	// 	setIsWallMode(false);
-	// 	setEditingPolygonId(null);
-	// 	setPendingPolygonPoints([]);
-	// };
+	const handlePolygonSave = () => {
+		if (editingPolygonId) {
+			// Edit
+			const polygon = polygons.find((p) => p.id === editingPolygonId);
+			if (polygon) {
+				const updated = {
+					...polygon,
+					name: polygonName,
+					type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
+				};
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+					old.map(p => (p.id === editingPolygonId ? updated : p))
+				);
+				queueChange({
+					type: CHANGE_TYPES.EDIT,
+					objectType: OBJECT_TYPES.POLYGON,
+					data: updated,
+				});
+			}
+		} else {
+			// Add
+			const newId = Date.now();
+			const newPolygon = new PolygonBuilder()
+				.setId(newId)
+				.setFloorId(floorId)
+				.setName(polygonName)
+				.setDescription("")
+				.setType("Room")
+				.setIsVisible(true)
+				.setColor("#3b82f6")
+				.setCategoryId(0) // or an appropriate value
+				.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
+				.build();
+
+			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, newPolygon]);
+			queueChange({
+				type: CHANGE_TYPES.ADD,
+				objectType: OBJECT_TYPES.POLYGON,
+				data: newPolygon,
+			});
+		}
+		setShowPolygonDialog(false);
+		setPolygonName("");
+		setIsWallMode(false);
+		setEditingPolygonId(null);
+		setPendingPolygonPoints([]);
+	};
 
 	// Beacon Save (add or edit)
 	const handleBeaconSave = () => {
@@ -1799,14 +1772,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	// // Add missing handler functions
-	// const handlePolygonCancel = () => {
-	// 	setShowPolygonDialog(false);
-	// 	setPolygonName("");
-	// 	setIsWallMode(false);
-	// 	setEditingPolygonId(null);
-	// 	setPendingPolygonPoints([]);
-	// 	logger.userAction("Polygon dialog cancelled");
-	// };
+	const handlePolygonCancel = () => {
+		setShowPolygonDialog(false);
+		setPolygonName("");
+		setIsWallMode(false);
+		setEditingPolygonId(null);
+		setPendingPolygonPoints([]);
+		logger.userAction("Polygon dialog cancelled");
+	};
 
 	const handleBeaconCancel = () => {
 		setShowBeaconDialog(false);
@@ -1959,16 +1932,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				{/* Drawing Tools Toolbar */}
 				<DrawingToolbar
 					activeTool={activeTool}
-					onToolChange={() => {
-					}}
+					onToolChange={handleToolChange}
 					isDrawingPolygon={isDrawingPolygon}
-					pendingPolygonPoints={0}
+					pendingPolygonPoints={pendingPolygonPoints.length}
 					onCancelDrawing={() => {
 						isDrawingPolygonRef.current = false;
-						// pendingPolygonPointsRef.current = [];
+						pendingPolygonPointsRef.current = [];
 						setIsDrawingPolygon(false);
 						// setCurrentPolygonPoints([]);
-						// setPendingPolygonPoints([]);
+						setPendingPolygonPoints([]);
 						clearTempDrawing();
 						setSelectedNodeForConnection(null);
 						setLastPlacedNodeId(null);
@@ -2039,10 +2011,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				isEditing={!!editingPolygonId}
 				onNameChange={setPolygonName}
 				onWallModeChange={setIsWallMode}
-				onSave={() => {
-				}}
-				onCancel={() => {
-				}}
+				onSave={handlePolygonSave}
+				onCancel={handlePolygonCancel}
 			/>
 
 			{/* Beacon Dialog */}
