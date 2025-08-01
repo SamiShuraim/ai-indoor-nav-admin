@@ -19,7 +19,7 @@ import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
 import {RouteNode} from "../interfaces/RouteNode";
-import {Beacon} from "../interfaces/Beacon";
+import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
 import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
 import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
 import {OBJECT_TYPES} from "./FloorEditor/enums/OBJECT_TYPES";
@@ -1439,44 +1439,46 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Beacon Save (add or edit)
 	const handleBeaconSave = () => {
-		// 	if (editingBeaconId) {
-		// 		// Edit
-		// 		const beacon = beacons.find((b) => b.id === editingBeaconId);
-		// 		if (beacon) {
-		// 			const updated = {...beacon, name: beaconName};
-		// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-		// 				old.map(b => (b.id === editingBeaconId ? updated : b))
-		// 			);
-		// 			queueChange({
-		// 				type: CHANGE_TYPES.EDIT,
-		// 				objectType: OBJECT_TYPES.BEACON,
-		// 				data: updated,
-		// 			});
-		// 		}
-		// 	} else {
-		// 		// Add
-		// 		if (pendingBeaconLocation) {
-		// 			const newId = Date.now();
-		// 			const newBeacon = {
-		// 				id: newId,
-		// 				floorId: floorId,
-		// 				name: beaconName,
-		// 				x: pendingBeaconLocation.lng,
-		// 				y: pendingBeaconLocation.lat,
-		// 				visible: true,
-		// 			};
-		// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
-		// 			queueChange({
-		// 				type: CHANGE_TYPES.ADD,
-		// 				objectType: OBJECT_TYPES.BEACON,
-		// 				data: newBeacon,
-		// 			});
-		// 		}
-		// 	}
-		// 	setShowBeaconDialog(false);
-		// 	setBeaconName("");
-		// 	setPendingBeaconLocation(null);
-		// 	setEditingBeaconId(null);
+		if (editingBeaconId) {
+			// Edit
+			const beacon = beacons.find((b) => b.id === editingBeaconId);
+			if (beacon) {
+				const updated = {...beacon, name: beaconName};
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.map(b => (b.id === editingBeaconId ? updated : b))
+				);
+				queueChange({
+					type: CHANGE_TYPES.EDIT,
+					objectType: OBJECT_TYPES.BEACON,
+					data: updated,
+				});
+			}
+		} else {
+			// Add
+			if (pendingBeaconLocation) {
+				const newId = Date.now();
+				const newBeacon = new BeaconBuilder()
+					.setId(newId)
+					.setFloorId(floorId)
+					.setName(beaconName)
+					.setGeometry(pendingBeaconLocation.lng, pendingBeaconLocation.lat)
+					.setIsVisible(true)
+					.setIsActive(true)
+					.setBatteryLevel(100)
+					.build();
+
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
+				queueChange({
+					type: CHANGE_TYPES.ADD,
+					objectType: OBJECT_TYPES.BEACON,
+					data: newBeacon,
+				});
+			}
+		}
+		setShowBeaconDialog(false);
+		setBeaconName("");
+		setPendingBeaconLocation(null);
+		setEditingBeaconId(null);
 	};
 
 	// Node Save (add or edit) - implement similar logic if you have node editing dialog
