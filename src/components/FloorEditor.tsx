@@ -1,4 +1,4 @@
-import {config, Map, Marker, Point} from "@maptiler/sdk";
+import {config, Map, Marker, Point, Popup} from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
@@ -18,7 +18,7 @@ import {Button, Container, Header} from "./common";
 import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
-import {RouteNode} from "../interfaces/RouteNode";
+import {RouteNode, RouteNodeBuilder} from "../interfaces/RouteNode";
 import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
 import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
 import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
@@ -131,9 +131,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Timeout reference for cleanup
 	const mapLoadTimeout = useRef<NodeJS.Timeout | null>(null);
 
-	// Track if we've loaded initial data
-	const initialDataLoaded = useRef<boolean>(false);
-
 	// Throttle coordinate updates to prevent infinite re-renders
 	const coordinateUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -198,16 +195,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Polygon drawing state
 	const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-	// const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
-	// 	[]
-	// );
+	const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
+		[]
+	);
 	const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>(
 		[]
 	);
-	// const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
-	// 	lng: number;
-	// 	lat: number;
-	// } | null>(null);
+	const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
+		lng: number;
+		lat: number;
+	} | null>(null);
 
 	// Use refs to prevent state loss during re-renders
 	const pendingPolygonPointsRef = useRef<Point[]>([]);
@@ -266,411 +263,334 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// NOTE: Map initialization useEffect moved to after initializeMap function declaration
 
 	// Function to update map with current data (called manually when needed)
-	// const updateMapData = useCallback(
-	// 	(
-	// 		currentPolygons: Polygon[],
-	// 		currentBeacons: Beacon[],
-	// 		currentNodes: RouteNode[],
-	// 		selectedNodeId?: number | null
-	// 	) => {
-	// 		if (!map.current) return;
-	//
-	// 		// Clean up orphaned edges before rendering
-	// 		const nodeIds = new Set(currentNodes.map((n) => n.id));
-	// 		const validEdges = originalEdges.filter((edge: Edge) => {
-	// 			const isValid =
-	// 				nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
-	// 			if (!isValid) {
-	// 				logger.warn("Skipping orphaned edge during render", {
-	// 					edgeId: edge.id,
-	// 					fromNodeId: edge.fromNodeId,
-	// 					toNodeId: edge.toNodeId,
-	// 				});
-	// 			}
-	// 			return isValid;
-	// 		});
-	//
-	// 		// Use validated edges for rendering
-	// 		const renderEdges = validEdges;
-	//
-	// 		logger.info("Updating map with current data", {
-	// 			polygonsCount: currentPolygons.length,
-	// 			beaconsCount: currentBeacons.length,
-	// 			nodesCount: currentNodes.length,
-	// 			edgesCount: validEdges.length,
-	// 			originalEdgesCount: originalEdges.length,
-	// 			selectedNodeId,
-	// 			nodeIds: currentNodes.map((n) => n.id),
-	// 			edgeIds: renderEdges.map((e: Edge) => e.id),
-	// 			nodeDetails: currentNodes.map((n) => ({
-	// 				id: n.id,
-	// 				x: n.x,
-	// 				y: n.y,
-	// 				visible: n.visible,
-	// 			})),
-	// 			edgeDetails: renderEdges.map((e: Edge) => ({
-	// 				id: e.id,
-	// 				from: e.fromNodeId,
-	// 				to: e.toNodeId,
-	// 				visible: e.visible,
-	// 			})),
-	// 		});
-	// 		const mapInstance = map.current;
-	//
-	// 		// Clear existing markers and layers
-	// 		Object.values(mapMarkers.current).forEach((marker) =>
-	// 			marker.remove()
-	// 		);
-	// 		mapMarkers.current = {};
-	//
-	// 		// Remove layers
-	// 		Object.values(mapLayers.current).forEach((layerId) => {
-	// 			if (mapInstance.getLayer(layerId)) {
-	// 				mapInstance.removeLayer(layerId);
-	// 			}
-	// 		});
-	// 		mapLayers.current = {};
-	//
-	// 		// Remove sources
-	// 		Object.values(mapSources.current).forEach((sourceId) => {
-	// 			if (mapInstance.getSource(sourceId)) {
-	// 				mapInstance.removeSource(sourceId);
-	// 			}
-	// 		});
-	// 		mapSources.current = {};
-	//
-	// 		// Add polygons as filled areas
-	// 		currentPolygons.forEach((polygon) => {
-	// 			if (polygon.visible && polygon.geometry.coordinates[0][0].length >= 3) {
-	// 				const coordinates = polygon.geometry.coordinates[0][0].map((p) => [p.x, p.y]);
-	// 				coordinates.push(coordinates[0]); // Close the polygon
-	//
-	// 				const sourceId = `polygon-source-${polygon.id}`;
-	// 				const layerId = `polygon-layer-${polygon.id}`;
-	//
-	// 				mapInstance.addSource(sourceId, {
-	// 					type: "geojson",
-	// 					data: {
-	// 						type: "Feature",
-	// 						geometry: {
-	// 							type: "Polygon",
-	// 							coordinates: [coordinates],
-	// 						},
-	// 						properties: {},
-	// 					},
-	// 				});
-	//
-	// 				mapInstance.addLayer({
-	// 					id: layerId,
-	// 					type: "fill",
-	// 					source: sourceId,
-	// 					paint: {
-	// 						"fill-color": polygon.color,
-	// 						"fill-opacity": 0.6,
-	// 					},
-	// 				});
-	//
-	// 				// Add border
-	// 				const borderLayerId = `polygon-border-${polygon.id}`;
-	// 				mapInstance.addLayer({
-	// 					id: borderLayerId,
-	// 					type: "line",
-	// 					source: sourceId,
-	// 					paint: {
-	// 						"line-color": polygon.color,
-	// 						"line-width": 2,
-	// 					},
-	// 				});
-	//
-	// 				// Track sources and layers
-	// 				mapSources.current[`polygon-${polygon.id}`] = sourceId;
-	// 				mapLayers.current[`polygon-${polygon.id}`] = layerId;
-	// 				mapLayers.current[`polygon-border-${polygon.id}`] =
-	// 					borderLayerId;
-	//
-	// 				// Add center marker for interaction
-	// 				const centerX =
-	// 					polygon.points.reduce((sum, p) => sum + p.x, 0) /
-	// 					polygon.points.length;
-	// 				const centerY =
-	// 					polygon.points.reduce((sum, p) => sum + p.y, 0) /
-	// 					polygon.points.length;
-	//
-	// 				mapMarkers.current[`polygon-${polygon.id}`] = new Marker({
-	// 					color: polygon.color,
-	// 					scale: 0.8,
-	// 				})
-	// 					.setLngLat([centerX, centerY])
-	// 					.setPopup(
-	// 						new Popup().setHTML(
-	// 							`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`
-	// 						)
-	// 					)
-	// 					.addTo(mapInstance);
-	// 			}
-	// 		});
-	//
-	// 		// Add beacons
-	// 		currentBeacons.forEach((beacon) => {
-	// 			if (beacon.visible) {
-	// 				mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
-	// 					.setLngLat([beacon.x, beacon.y])
-	// 					.setPopup(
-	// 						new Popup().setHTML(
-	// 							`<strong>${beacon.name}</strong><br>Type: Beacon`
-	// 						)
-	// 					)
-	// 					.addTo(mapInstance);
-	// 			}
-	// 		});
-	//
-	// 		// Add nodes
-	// 		logger.info("Processing nodes for rendering", {
-	// 			totalNodes: currentNodes.length,
-	// 			visibleNodes: currentNodes.filter((n) => n.visible).length,
-	// 		});
-	//
-	// 		currentNodes.forEach((node) => {
-	// 			logger.info("Processing node", {
-	// 				nodeId: node.id,
-	// 				visible: node.visible,
-	// 				x: node.x,
-	// 				y: node.y,
-	// 				connections: node.connections,
-	// 				isSelected: selectedNodeId === node.id,
-	// 			});
-	//
-	// 			if (node.visible) {
-	// 				const isSelected = selectedNodeId === node.id;
-	// 				mapMarkers.current[`node-${node.id}`] = new Marker({
-	// 					color: isSelected ? "#ef4444" : "#3b82f6",
-	// 				})
-	// 					.setLngLat([node.x, node.y])
-	// 					.addTo(mapInstance);
-	// 				logger.info("Node marker added to map", {
-	// 					nodeId: node.id,
-	// 					markerKey: `node-${node.id}`,
-	// 				});
-	// 			} else {
-	// 				logger.warn("Node not visible, skipping", {
-	// 					nodeId: node.id,
-	// 				});
-	// 			}
-	// 		});
-	//
-	// 		// Add route lines between connected nodes
-	// 		logger.info("Processing edges for rendering", {
-	// 			totalEdges: renderEdges.length,
-	// 			visibleEdges: renderEdges.filter((e) => e.visible).length,
-	// 		});
-	//
-	// 		renderEdges.forEach((edge) => {
-	// 			logger.info("Processing edge", {
-	// 				edgeId: edge.id,
-	// 				visible: edge.visible,
-	// 				fromNodeId: edge.fromNodeId,
-	// 				toNodeId: edge.toNodeId,
-	// 			});
-	//
-	// 			if (edge.visible) {
-	// 				const fromNode = currentNodes.find(
-	// 					(n) => n.id === edge.fromNodeId
-	// 				);
-	// 				const toNode = currentNodes.find(
-	// 					(n) => n.id === edge.toNodeId
-	// 				);
-	//
-	// 				logger.info("Edge node lookup", {
-	// 					edgeId: edge.id,
-	// 					lookingForFromNodeId: edge.fromNodeId,
-	// 					lookingForToNodeId: edge.toNodeId,
-	// 					availableNodeIds: currentNodes.map((n) => n.id),
-	// 					fromNode: fromNode
-	// 						? {id: fromNode.id, visible: fromNode.visible}
-	// 						: null,
-	// 					toNode: toNode
-	// 						? {id: toNode.id, visible: toNode.visible}
-	// 						: null,
-	// 				});
-	//
-	// 				if (
-	// 					fromNode &&
-	// 					toNode &&
-	// 					fromNode.visible &&
-	// 					toNode.visible
-	// 				) {
-	// 					const sourceId = `edge-source-${edge.id}`;
-	// 					const layerId = `edge-layer-${edge.id}`;
-	//
-	// 					logger.info("Adding edge to map", {
-	// 						edgeId: edge.id,
-	// 						sourceId,
-	// 						layerId,
-	// 						fromCoords: [fromNode.x, fromNode.y],
-	// 						toCoords: [toNode.x, toNode.y],
-	// 					});
-	//
-	// 					mapInstance.addSource(sourceId, {
-	// 						type: "geojson",
-	// 						data: {
-	// 							type: "Feature",
-	// 							geometry: {
-	// 								type: "LineString",
-	// 								coordinates: [
-	// 									[fromNode.x, fromNode.y],
-	// 									[toNode.x, toNode.y],
-	// 								],
-	// 							},
-	// 							properties: {},
-	// 						},
-	// 					});
-	//
-	// 					mapInstance.addLayer({
-	// 						id: layerId,
-	// 						type: "line",
-	// 						source: sourceId,
-	// 						paint: {
-	// 							"line-color": "#3b82f6", // Blue color as requested
-	// 							"line-width": 3,
-	// 							"line-opacity": 0.8,
-	// 						},
-	// 					});
-	//
-	// 					// Track sources and layers
-	// 					mapSources.current[`edge-${edge.id}`] = sourceId;
-	// 					mapLayers.current[`edge-${edge.id}`] = layerId;
-	//
-	// 					logger.info("Edge layer added successfully", {
-	// 						edgeId: edge.id,
-	// 						sourceId,
-	// 						layerId,
-	// 					});
-	// 				} else {
-	// 					logger.warn("Edge nodes not found or not visible", {
-	// 						edgeId: edge.id,
-	// 						fromNodeId: edge.fromNodeId,
-	// 						toNodeId: edge.toNodeId,
-	// 						fromNodeFound: !!fromNode,
-	// 						toNodeFound: !!toNode,
-	// 						fromNodeVisible: fromNode?.visible,
-	// 						toNodeVisible: toNode?.visible,
-	// 						availableNodeIds: currentNodes.map((n) => n.id),
-	// 						"fromNodeId in available": currentNodes.some(
-	// 							(n) => n.id === edge.fromNodeId
-	// 						),
-	// 						"toNodeId in available": currentNodes.some(
-	// 							(n) => n.id === edge.toNodeId
-	// 						),
-	// 					});
-	// 				}
-	// 			} else {
-	// 				logger.warn("Edge not visible, skipping", {
-	// 					edgeId: edge.id,
-	// 				});
-	// 			}
-	// 		});
-	//
-	// 		// Add highlighting for selected object
-	// 		if (selectedItem) {
-	// 			const {type, id} = selectedItem;
-	//
-	// 			if (type === "polygon") {
-	// 				const polygon = currentPolygons.find((p) => p.id === id);
-	// 				if (polygon && polygon.visible) {
-	// 					// Highlight selected polygon with a thicker border or different color
-	// 					const layerId = `polygon-layer-${id}`;
-	// 					const borderLayerId = `polygon-border-${id}`;
-	//
-	// 					if (mapInstance.getLayer(layerId)) {
-	// 						mapInstance.setPaintProperty(
-	// 							layerId,
-	// 							"fill-opacity",
-	// 							0.8
-	// 						);
-	// 					}
-	// 					if (mapInstance.getLayer(borderLayerId)) {
-	// 						mapInstance.setPaintProperty(
-	// 							borderLayerId,
-	// 							"line-width",
-	// 							4
-	// 						);
-	// 						mapInstance.setPaintProperty(
-	// 							borderLayerId,
-	// 							"line-color",
-	// 							"#ef4444"
-	// 						);
-	// 					}
-	// 				}
-	// 			} else if (type === "beacon") {
-	// 				const beacon = currentBeacons.find((b) => b.id === id);
-	// 				if (beacon && beacon.visible) {
-	// 					// Highlight selected beacon
-	// 					const marker = mapMarkers.current[`beacon-${id}`];
-	// 					if (marker) {
-	// 						marker.remove();
-	// 						mapMarkers.current[`beacon-${id}`] =
-	// 							new Marker({
-	// 								color: "#ef4444",
-	// 								scale: 1.2,
-	// 							})
-	// 								.setLngLat([beacon.x, beacon.y])
-	// 								.setPopup(
-	// 									new Popup().setHTML(
-	// 										`<strong>${beacon.name}</strong><br>Type: Beacon (SELECTED)`
-	// 									)
-	// 								)
-	// 								.addTo(mapInstance);
-	// 					}
-	// 				}
-	// 			} else if (type === "node") {
-	// 				const node = currentNodes.find((n) => n.id === id);
-	// 				if (node && node.visible) {
-	// 					// Highlight selected node
-	// 					const marker = mapMarkers.current[`node-${id}`];
-	// 					if (marker) {
-	// 						marker.remove();
-	// 						mapMarkers.current[`node-${id}`] =
-	// 							new Marker({
-	// 								color: "#ef4444",
-	// 								scale: 1.2,
-	// 							})
-	// 								.setLngLat([node.x, node.y])
-	// 								.addTo(mapInstance);
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	//
-	// 		logger.info("Map data updated successfully");
-	// 	},
-	// 	[selectedItem]
-	// ); // Add selectedItem as dependency
+	const updateMapData = useCallback(
+		(
+			currentPolygons: Polygon[],
+			currentBeacons: Beacon[],
+			currentNodes: RouteNode[],
+			selectedNodeId?: number | null
+		) => {
+			if (!map.current) return;
+
+			logger.info("Updating map with current data", {
+				polygonsCount: currentPolygons.length,
+				beaconsCount: currentBeacons.length,
+				nodesCount: currentNodes.length,
+				selectedNodeId,
+				nodeIds: currentNodes.map((n) => n.id),
+				nodeDetails: currentNodes.map((n) => ({
+					id: n.id,
+					location: n.location?.coordinates,
+					visible: n.isVisible,
+				})),
+			});
+			const mapInstance = map.current;
+
+			// Clear existing markers and layers
+			Object.values(mapMarkers.current).forEach((marker) =>
+				marker.remove()
+			);
+			mapMarkers.current = {};
+
+			// Remove layers
+			Object.values(mapLayers.current).forEach((layerId) => {
+				if (mapInstance.getLayer(layerId)) {
+					mapInstance.removeLayer(layerId);
+				}
+			});
+			mapLayers.current = {};
+
+			// Remove sources
+			Object.values(mapSources.current).forEach((sourceId) => {
+				if (mapInstance.getSource(sourceId)) {
+					mapInstance.removeSource(sourceId);
+				}
+			});
+			mapSources.current = {};
+
+			// Add polygons as filled areas
+			currentPolygons.forEach((polygon) => {
+				if (polygon.isVisible && polygon.geometry.coordinates[0][0].length >= 3) {
+					const coordinates = polygon.geometry.coordinates;
+
+					const sourceId = `polygon-source-${polygon.id}`;
+					const layerId = `polygon-layer-${polygon.id}`;
+
+					mapInstance.addSource(sourceId, {
+						type: "geojson",
+						data: {
+							type: "Feature",
+							geometry: {
+								type: "Polygon",
+								coordinates: coordinates,
+							},
+							properties: {},
+						},
+					});
+
+					mapInstance.addLayer({
+						id: layerId,
+						type: "fill",
+						source: sourceId,
+						paint: {
+							"fill-color": polygon.color,
+							"fill-opacity": 0.6,
+						},
+					});
+
+					// Add border
+					const borderLayerId = `polygon-border-${polygon.id}`;
+					mapInstance.addLayer({
+						id: borderLayerId,
+						type: "line",
+						source: sourceId,
+						paint: {
+							"line-color": polygon.color,
+							"line-width": 2,
+						},
+					});
+
+					// Track sources and layers
+					mapSources.current[`polygon-${polygon.id}`] = sourceId;
+					mapLayers.current[`polygon-${polygon.id}`] = layerId;
+					mapLayers.current[`polygon-border-${polygon.id}`] =
+						borderLayerId;
+
+					// Add center marker for interaction using GeoJSON
+					const ring = polygon.geometry.coordinates[0]; // outer ring
+
+					const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+					const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+
+
+					mapMarkers.current[`polygon-${polygon.id}`] = new Marker({
+						color: polygon.color,
+						scale: 0.8,
+					})
+						.setLngLat([centerX, centerY])
+						.setPopup(
+							new Popup().setHTML(
+								`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`
+							)
+						)
+						.addTo(mapInstance);
+				}
+			});
+
+			// Add beacons
+			currentBeacons.forEach((beacon) => {
+				if (beacon.isVisible) {
+					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
+						.setLngLat(beacon.geometry!!.coordinates)
+						.setPopup(
+							new Popup().setHTML(
+								`<strong>${beacon.name}</strong><br>Type: Beacon`
+							)
+						)
+						.addTo(mapInstance);
+				}
+			});
+
+			// Add nodes
+			logger.info("Processing nodes for rendering", {
+				totalNodes: currentNodes.length,
+				visibleNodes: currentNodes.filter((n) => n.isVisible).length,
+			});
+
+			currentNodes.forEach((node) => {
+				logger.info("Processing node", {
+					nodeId: node.id,
+					visible: node.isVisible,
+					location: node.location,
+					connections: node.connections,
+					isSelected: selectedNodeId === node.id,
+				});
+
+				if (node.isVisible) {
+					const isSelected = selectedNodeId === node.id;
+					mapMarkers.current[`node-${node.id}`] = new Marker({
+						color: isSelected ? "#ef4444" : "#3b82f6",
+					})
+						.setLngLat(node.location!!.coordinates)
+						.addTo(mapInstance);
+					logger.info("Node marker added to map", {
+						nodeId: node.id,
+						markerKey: `node-${node.id}`,
+					});
+				} else {
+					logger.warn("Node not visible, skipping", {
+						nodeId: node.id,
+					});
+				}
+			});
+
+			const renderedEdges = new Set<string>(); // Prevent duplicate lines
+
+			currentNodes.forEach((node) => {
+				if (!node.isVisible || !node.location) return;
+
+				node.connections.forEach((connectedNodeId) => {
+					const targetNode = currentNodes.find(n => n.id === connectedNodeId);
+
+					if (
+						!targetNode ||
+						!targetNode.isVisible ||
+						!targetNode.location
+					) {
+						logger.warn("Skipping connection due to missing/hidden node", {
+							fromId: node.id,
+							toId: connectedNodeId,
+							fromVisible: node.isVisible,
+							toVisible: targetNode?.isVisible,
+						});
+						return;
+					}
+
+					// Prevent duplicate edges (e.g., from both A→B and B→A)
+					const edgeKey = [node.id, connectedNodeId].sort((a, b) => a - b).join("-");
+					if (renderedEdges.has(edgeKey)) return;
+					renderedEdges.add(edgeKey);
+
+					const sourceId = `edge-source-${edgeKey}`;
+					const layerId = `edge-layer-${edgeKey}`;
+
+					const fromCoords = node.location!!.coordinates;
+					const toCoords = targetNode.location.coordinates;
+
+					logger.info("Rendering route edge", {
+						edgeKey,
+						fromId: node.id,
+						toId: connectedNodeId,
+						fromCoords,
+						toCoords,
+					});
+
+					mapInstance.addSource(sourceId, {
+						type: "geojson",
+						data: {
+							type: "Feature",
+							geometry: {
+								type: "LineString",
+								coordinates: [fromCoords, toCoords],
+							},
+							properties: {},
+						},
+					});
+
+					mapInstance.addLayer({
+						id: layerId,
+						type: "line",
+						source: sourceId,
+						paint: {
+							"line-color": "#3b82f6",
+							"line-width": 3,
+							"line-opacity": 0.8,
+						},
+					});
+
+					mapSources.current[`edge-${edgeKey}`] = sourceId;
+					mapLayers.current[`edge-${edgeKey}`] = layerId;
+
+					logger.info("Edge layer added", {
+						sourceId,
+						layerId,
+					});
+				});
+			});
+
+			// Add highlighting for selected object
+			if (selectedItem) {
+				const {type, id} = selectedItem;
+
+				if (type === "polygon") {
+					const polygon = currentPolygons.find((p) => p.id === id);
+					if (polygon && polygon.isVisible) {
+						// Highlight selected polygon with a thicker border or different color
+						const layerId = `polygon-layer-${id}`;
+						const borderLayerId = `polygon-border-${id}`;
+
+						if (mapInstance.getLayer(layerId)) {
+							mapInstance.setPaintProperty(
+								layerId,
+								"fill-opacity",
+								0.8
+							);
+						}
+						if (mapInstance.getLayer(borderLayerId)) {
+							mapInstance.setPaintProperty(
+								borderLayerId,
+								"line-width",
+								4
+							);
+							mapInstance.setPaintProperty(
+								borderLayerId,
+								"line-color",
+								"#ef4444"
+							);
+						}
+					}
+				} else if (type === "beacon") {
+					const beacon = currentBeacons.find((b) => b.id === id);
+					if (beacon && beacon.isVisible) {
+						// Highlight selected beacon
+						const marker = mapMarkers.current[`beacon-${id}`];
+						if (marker) {
+							marker.remove();
+							mapMarkers.current[`beacon-${id}`] =
+								new Marker({
+									color: "#ef4444",
+									scale: 1.2,
+								})
+									.setLngLat(beacon.geometry!!.coordinates)
+									.setPopup(
+										new Popup().setHTML(
+											`<strong>${beacon.name}</strong><br>Type: Beacon (SELECTED)`
+										)
+									)
+									.addTo(mapInstance);
+						}
+					}
+				} else if (type === "node") {
+					const node = currentNodes.find((n) => n.id === id);
+					if (node && node.isVisible) {
+						// Highlight selected node
+						const marker = mapMarkers.current[`node-${id}`];
+						if (marker) {
+							marker.remove();
+							mapMarkers.current[`node-${id}`] =
+								new Marker({
+									color: "#ef4444",
+									scale: 1.2,
+								})
+									.setLngLat(node.location!!.coordinates)
+									.addTo(mapInstance);
+						}
+					}
+				}
+			}
+
+			logger.info("Map data updated successfully");
+		},
+		[selectedItem]
+	); // Add selectedItem as dependency
 
 	// Load initial sample data and update map when data changes
-	// useEffect(() => {
-	// 	if (!mapLoading && map.current) {
-	// 		if (!initialDataLoaded.current) {
-	// 			logger.info("Adding initial sample data to map");
-	// 			// Clean up any orphaned edges first
-	// 			cleanupOrphanedEdges();
-	// 			initialDataLoaded.current = true;
-	// 		}
-	// 		updateMapData(
-	// 			polygons,
-	// 			beacons,
-	// 			nodes,
-	// 			edges,
-	// 			selectedNodeForConnection
-	// 		);
-	// 	}
-	// }, [
-	// 	mapLoading,
-	// 	polygons,
-	// 	beacons,
-	// 	nodes,
-	// 	edges,
-	// 	selectedNodeForConnection,
-	// ]);
+	useEffect(() => {
+		if (!mapLoading && map.current) {
+			updateMapData(
+				polygons,
+				beacons,
+				nodes,
+				selectedNodeForConnection
+			);
+		}
+	}, [
+		mapLoading,
+		polygons,
+		beacons,
+		nodes,
+		selectedNodeForConnection,
+	]);
 
 	// const getUserLocationAndCenter = (mapInstance: Map) => {
 	// 	if ("geolocation" in navigator) {
@@ -794,24 +714,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 			});
 
-			// Mouse move event to track coordinates (TEMPORARILY DISABLED to fix infinite re-renders)
-			// mapInstance.on('mousemove', (e) => {
-			//   // Clear previous timeout
-			//   if (coordinateUpdateTimeout.current) {
-			//     clearTimeout(coordinateUpdateTimeout.current);
-			//   }
-			//
-			//   // Throttle coordinate updates to every 100ms
-			//   coordinateUpdateTimeout.current = setTimeout(() => {
-			//     updateCoordinates(e.lngLat.lng, e.lngLat.lat);
-			//   }, 100);
-			// });
-
-			// // Click handlers for different tools
-			// mapInstance.on("click", (e) => {
-			// 	handleMapClick(e);
-			// });
-
 			// Set a timeout to catch cases where the map never loads
 			mapLoadTimeout.current = setTimeout(() => {
 				// Only show timeout error if map is still loading (not if it already loaded)
@@ -837,46 +739,46 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	}, [loading, initializeMap]); // Depend on loading and initializeMap
 
-	// const handleMapClick = (e: any) => {
-	// 	logger.userAction("Map clicked - DETAILED", {
-	// 		hasMap: !!map.current,
-	// 		activeTool,
-	// 		lng: e.lngLat.lng,
-	// 		lat: e.lngLat.lat,
-	// 		eventType: e.type,
-	// 		currentBeacons: beacons.length,
-	// 		currentNodes: nodes.length,
-	// 		currentPolygons: polygons.length,
-	// 	});
-	//
-	// 	if (!map.current) {
-	// 		logger.error("Map click failed - no map instance");
-	// 		return;
-	// 	}
-	//
-	// 	const {lng, lat} = e.lngLat;
-	// 	const currentTool = activeToolRef.current; // Use ref to get current tool
-	//
-	// 	switch (currentTool) {
-	// 		case "beacons":
-	// 			addBeacon(lng, lat);
-	// 			// Keep the tool active for adding multiple beacons
-	// 			break;
-	// 		case "nodes":
-	// 			handleNodeClick(lng, lat);
-	// 			// Keep the tool active for adding multiple nodes
-	// 			break;
-	// 		case "poi":
-	// 			addPolygonPoint(lng, lat);
-	// 			break;
-	// 		case "select":
-	// 			break;
-	// 		case "pan":
-	// 			break;
-	// 		default:
-	// 			break;
-	// 	}
-	// };
+	const handleMapClick = (e: any) => {
+		logger.userAction("Map clicked - DETAILED", {
+			hasMap: !!map.current,
+			activeTool,
+			lng: e.lngLat.lng,
+			lat: e.lngLat.lat,
+			eventType: e.type,
+			currentBeacons: beacons.length,
+			currentNodes: nodes.length,
+			currentPolygons: polygons.length,
+		});
+
+		if (!map.current) {
+			logger.error("Map click failed - no map instance");
+			return;
+		}
+
+		const {lng, lat} = e.lngLat;
+		const currentTool = activeToolRef.current; // Use ref to get current tool
+
+		switch (currentTool) {
+			case "beacons":
+				addBeacon(lng, lat);
+				// Keep the tool active for adding multiple beacons
+				break;
+			case "nodes":
+				handleNodeClick(lng, lat);
+				// Keep the tool active for adding multiple nodes
+				break;
+			case "poi":
+				addPolygonPoint(lng, lat);
+				break;
+			case "select":
+				break;
+			case "pan":
+				break;
+			default:
+				break;
+		}
+	};
 
 	const addBeacon = (lng: number, lat: number) => {
 		// Show beacon name dialog
@@ -887,205 +789,166 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
 	};
 
-	// const handleNodeClick = (lng: number, lat: number) => {
-	// 	// Check if this click is near an existing node (using Canvas-style distance calculation)
-	// 	const clickedNode = nodes.find((node) => {
-	// 		if (!node.visible) return false;
-	// 		// Use proper Euclidean distance like the working Canvas version
-	// 		const distance = Math.sqrt(
-	// 			(node.x - lng) ** 2 + (node.y - lat) ** 2
-	// 		);
-	// 		return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
-	// 	});
-	//
-	// 	// Use ref values for current state to avoid stale closures
-	// 	const currentSelectedNode = selectedNodeForConnectionRef.current;
-	// 	const currentLastPlacedNode = lastPlacedNodeIdRef.current;
-	//
-	// 	// Debug logging to understand what's happening
-	// 	logger.info("Node click detected", {
-	// 		lng,
-	// 		lat,
-	// 		nodesCount: nodes.length,
-	// 		selectedNodeForConnection: currentSelectedNode,
-	// 		lastPlacedNodeId: currentLastPlacedNode,
-	// 		clickedNodeId: clickedNode?.id || "none",
-	// 	});
-	//
-	// 	if (clickedNode) {
-	// 		// Clicked on an existing node
-	// 		if (currentSelectedNode) {
-	// 			if (currentSelectedNode === clickedNode.id) {
-	// 				// Clicking on the same node - deselect it
-	// 				setSelectedNodeForConnection(null);
-	// 				selectedNodeForConnectionRef.current = null;
-	// 				logger.userAction("Node deselected", {
-	// 					nodeId: clickedNode.id,
-	// 				});
-	// 			} else {
-	// 				// Can't connect a node to itself or create duplicate connections
-	// 				logger.warn(
-	// 					"Cannot connect node to itself or create duplicate connection"
-	// 				);
-	// 			}
-	// 		} else {
-	// 			// Select this node for connection
-	// 			setSelectedNodeForConnection(clickedNode.id);
-	// 			selectedNodeForConnectionRef.current = clickedNode.id;
-	// 			logger.userAction("Node selected for connection", {
-	// 				nodeId: clickedNode.id,
-	// 			});
-	// 		}
-	// 	} else {
-	// 		// Clicked on empty space
-	// 		logger.info("Clicked on empty space - DETAILED STATE", {
-	// 			lng,
-	// 			lat,
-	// 			nodesLength: nodes.length,
-	// 			selectedNodeForConnection: currentSelectedNode,
-	// 			lastPlacedNodeId: currentLastPlacedNode,
-	// 			hasSelectedNode: !!currentSelectedNode,
-	// 			hasLastPlaced: !!currentLastPlacedNode,
-	// 			"nodes.length === 0": nodes.length === 0,
-	// 		});
-	//
-	// 		if (currentSelectedNode) {
-	// 			// Have a selected node - create new node and connect it (first connection after selecting)
-	// 			logger.info("Creating first connected node", {
-	// 				selectedNodeForConnection: currentSelectedNode,
-	// 			});
-	// 			const newNodeId = addNewNode(lng, lat, currentSelectedNode);
-	// 			setSelectedNodeForConnection(null);
-	// 			selectedNodeForConnectionRef.current = null;
-	// 			setLastPlacedNodeId(newNodeId);
-	// 			lastPlacedNodeIdRef.current = newNodeId;
-	// 		} else if (currentLastPlacedNode) {
-	// 			// Chain mode - connect to the last placed node
-	// 			logger.info("Creating chained node", {
-	// 				lastPlacedNodeId: currentLastPlacedNode,
-	// 			});
-	// 			const newNodeId = addNewNode(lng, lat, currentLastPlacedNode);
-	// 			setLastPlacedNodeId(newNodeId);
-	// 			lastPlacedNodeIdRef.current = newNodeId;
-	// 		} else if (nodes.length === 0) {
-	// 			// No nodes exist - create first isolated node (Canvas logic)
-	// 			logger.info("Creating first isolated node");
-	// 			const newNodeId = addNewNode(lng, lat, null);
-	// 			setLastPlacedNodeId(newNodeId);
-	// 			lastPlacedNodeIdRef.current = newNodeId;
-	// 		} else {
-	// 			// Canvas logic: Can't create node if nodes exist but none selected
-	// 			logger.info(
-	// 				"Cannot create node - select existing node first or clear all nodes"
-	// 			);
-	// 		}
-	// 	}
-	// };
+	const handleNodeClick = (lng: number, lat: number) => {
+		// Check if this click is near an existing node (using Canvas-style distance calculation)
+		const clickedNode = nodes.find((node) => {
+			if (!node.visible) return false;
+			// Use proper Euclidean distance like the working Canvas version
+			const distance = Math.sqrt(
+				(node.x - lng) ** 2 + (node.y - lat) ** 2
+			);
+			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
+		});
 
-	// const addNewNode = (
-	// 	lng: number,
-	// 	lat: number,
-	// 	connectToNodeId: number | null
-	// ): number => {
-	// 	const newNode: RouteNode = {
-	// 		id: Date.now(),
-	// 		floorId: floorId,
-	// 		x: lng,
-	// 		y: lat,
-	// 		connections: connectToNodeId ? [connectToNodeId] : [],
-	// 		visible: true,
-	// 	};
-	//
-	// 	logger.info("Adding new node - DETAILED", {
-	// 		newNodeId: newNode.id,
-	// 		newNodeCoords: [lng, lat],
-	// 		connectToNodeId,
-	// 		currentNodesCount: nodes.length,
-	// 		currentEdgesCount: edges.length,
-	// 		currentNodeIds: nodes.map((n) => n.id),
-	// 		currentEdgeIds: edges.map((e) => e.id),
-	// 		lastPlacedNodeIdRef: lastPlacedNodeIdRef.current,
-	// 		willCreateEdge: !!connectToNodeId,
-	// 	});
-	//
-	// 	// CRITICAL FIX: Update state atomically to prevent race conditions
-	// 	// Use functional updates to ensure we're working with the latest state
-	// 	const updatedNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
-	// 	const finalNodes = [...updatedNodes, newNode];
-	//
-	// 	let newNodes: RouteNode[];
-	//
-	// 	if (connectToNodeId) {
-	// 		newNodes = finalNodes.map((node) =>
-	// 			node.id === connectToNodeId
-	// 				? {
-	// 					...node,
-	// 					connections: [...node.connections, newNode.id],
-	// 				}
-	// 				: node
-	// 		);
-	//
-	// 		saveToStorage(STORAGE_KEYS.NODES, newNodes);
-	//
-	// 		logger.info("Updated node connections", {
-	// 			connectToNodeId,
-	// 			newNodeId: newNode.id,
-	// 			totalNodes: newNodes.length,
-	// 		});
-	// 	} else {
-	// 		newNodes = finalNodes;
-	// 		saveToStorage(STORAGE_KEYS.NODES, newNodes);
-	// 		logger.userAction("Isolated node added", {newNode});
-	// 	}
-	//
-	// 	queryClient.setQueryData(['nodes'], newNodes);
-	//
-	// 	if (connectToNodeId) {
-	// 		const existingEdges = queryClient.getQueryData<Edge[]>(['edges']) || [];
-	//
-	// 		const newEdge: Edge = {
-	// 			id: Date.now(), // generates a unique number based on timestamp
-	// 			floorId: floorId,
-	// 			fromNodeId: connectToNodeId,
-	// 			toNodeId: newNode.id,
-	// 			visible: true,
-	// 		};
-	//
-	// 		const finalEdges = [...existingEdges, newEdge];
-	//
-	// 		// Save to localStorage if needed (you'll probably remove this soon)
-	// 		saveToStorage(STORAGE_KEYS.EDGES, finalEdges);
-	//
-	// 		// Logging
-	// 		logger.info("Edge created and saved", {
-	// 			newEdge,
-	// 			totalEdges: finalEdges.length,
-	// 			edgeDetails: {
-	// 				from: connectToNodeId,
-	// 				to: newNode.id,
-	// 				id: newEdge.id,
-	// 			},
-	// 		});
-	// 		logger.userAction("Connected node added", {
-	// 			newNode,
-	// 			connectedToNodeId: connectToNodeId,
-	// 			newEdge,
-	// 		});
-	//
-	// 		// Update cache
-	// 		queryClient.setQueryData(['edges'], finalEdges);
-	// 	}
-	//
-	// 	logger.info("Node creation completed", {
-	// 		newNodeId: newNode.id,
-	// 		wasConnected: !!connectToNodeId,
-	// 		connectToNodeId,
-	// 	});
-	//
-	// 	// DON'T call updateMapData here - let the useEffect handle it when state updates
-	//
-	// 	return newNode.id;
-	// };
+		// Use ref values for current state to avoid stale closures
+		const currentSelectedNode = selectedNodeForConnectionRef.current;
+		const currentLastPlacedNode = lastPlacedNodeIdRef.current;
+
+		// Debug logging to understand what's happening
+		logger.info("Node click detected", {
+			lng,
+			lat,
+			nodesCount: nodes.length,
+			selectedNodeForConnection: currentSelectedNode,
+			lastPlacedNodeId: currentLastPlacedNode,
+			clickedNodeId: clickedNode?.id || "none",
+		});
+
+		if (clickedNode) {
+			// Clicked on an existing node
+			if (currentSelectedNode) {
+				if (currentSelectedNode === clickedNode.id) {
+					// Clicking on the same node - deselect it
+					setSelectedNodeForConnection(null);
+					selectedNodeForConnectionRef.current = null;
+					logger.userAction("Node deselected", {
+						nodeId: clickedNode.id,
+					});
+				} else {
+					// Can't connect a node to itself or create duplicate connections
+					logger.warn(
+						"Cannot connect node to itself or create duplicate connection"
+					);
+				}
+			} else {
+				// Select this node for connection
+				setSelectedNodeForConnection(clickedNode.id);
+				selectedNodeForConnectionRef.current = clickedNode.id;
+				logger.userAction("Node selected for connection", {
+					nodeId: clickedNode.id,
+				});
+			}
+		} else {
+			// Clicked on empty space
+			logger.info("Clicked on empty space - DETAILED STATE", {
+				lng,
+				lat,
+				nodesLength: nodes.length,
+				selectedNodeForConnection: currentSelectedNode,
+				lastPlacedNodeId: currentLastPlacedNode,
+				hasSelectedNode: !!currentSelectedNode,
+				hasLastPlaced: !!currentLastPlacedNode,
+				"nodes.length === 0": nodes.length === 0,
+			});
+
+			if (currentSelectedNode) {
+				// Have a selected node - create new node and connect it (first connection after selecting)
+				logger.info("Creating first connected node", {
+					selectedNodeForConnection: currentSelectedNode,
+				});
+				const newNodeId = addNewNode(lng, lat, currentSelectedNode);
+				setSelectedNodeForConnection(null);
+				selectedNodeForConnectionRef.current = null;
+				setLastPlacedNodeId(newNodeId);
+				lastPlacedNodeIdRef.current = newNodeId;
+			} else if (currentLastPlacedNode) {
+				// Chain mode - connect to the last placed node
+				logger.info("Creating chained node", {
+					lastPlacedNodeId: currentLastPlacedNode,
+				});
+				const newNodeId = addNewNode(lng, lat, currentLastPlacedNode);
+				setLastPlacedNodeId(newNodeId);
+				lastPlacedNodeIdRef.current = newNodeId;
+			} else if (nodes.length === 0) {
+				// No nodes exist - create first isolated node (Canvas logic)
+				logger.info("Creating first isolated node");
+				const newNodeId = addNewNode(lng, lat, null);
+				setLastPlacedNodeId(newNodeId);
+				lastPlacedNodeIdRef.current = newNodeId;
+			} else {
+				// Canvas logic: Can't create node if nodes exist but none selected
+				logger.info(
+					"Cannot create node - select existing node first or clear all nodes"
+				);
+			}
+		}
+	};
+
+	const addNewNode = (
+		lng: number,
+		lat: number,
+		connectToNodeId: number | null
+	): number => {
+		const newNode = new RouteNodeBuilder()
+			.setId(Date.now())
+			.setFloorId(floorId)
+			.setLocation(lng, lat)
+			.setIsVisible(true)
+			.setConnections(connectToNodeId ? [connectToNodeId] : [])
+			.build();
+
+		logger.info("Adding new node - DETAILED", {
+			newNodeId: newNode.id,
+			newNodeCoords: [lng, lat],
+			connectToNodeId,
+			currentNodesCount: nodes.length,
+			currentNodeIds: nodes.map((n) => n.id),
+			lastPlacedNodeIdRef: lastPlacedNodeIdRef.current,
+			willCreateEdge: !!connectToNodeId,
+		});
+
+		// CRITICAL FIX: Update state atomically to prevent race conditions
+		// Use functional updates to ensure we're working with the latest state
+		const updatedNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+		const finalNodes = [...updatedNodes, newNode];
+
+		let newNodes: RouteNode[];
+
+		if (connectToNodeId) {
+			newNodes = finalNodes.map((node) =>
+				node.id === connectToNodeId
+					? {
+						...node,
+						connections: [...node.connections, newNode.id],
+					}
+					: node
+			);
+
+			saveToStorage(STORAGE_KEYS.NODES, newNodes);
+
+			logger.info("Updated node connections", {
+				connectToNodeId,
+				newNodeId: newNode.id,
+				totalNodes: newNodes.length,
+			});
+		} else {
+			newNodes = finalNodes;
+			saveToStorage(STORAGE_KEYS.NODES, newNodes);
+			logger.userAction("Isolated node added", {newNode});
+		}
+
+		queryClient.setQueryData(['nodes'], newNodes);
+
+		logger.info("Node creation completed", {
+			newNodeId: newNode.id,
+			wasConnected: !!connectToNodeId,
+			connectToNodeId,
+		});
+
+		// DON'T call updateMapData here - let the useEffect handle it when state updates
+
+		return newNode.id;
+	};
 
 	// Clear all temporary drawing elements from the map
 	const clearTempDrawing = () => {
@@ -1146,201 +1009,201 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	// // Add a line between two points
-	// const addPolygonLine = (
-	// 	fromPoint: Point,
-	// 	toPoint: Point,
-	// 	lineId: number
-	// ) => {
-	// 	if (!map.current) {
-	// 		logger.error("Cannot add polygon line - no map instance");
-	// 		return;
-	// 	}
-	//
-	// 	const sourceId = `temp-polygon-line-source-${Math.floor(lineId)}`;
-	// 	const layerId = `temp-polygon-line-layer-${Math.floor(lineId)}`;
-	//
-	// 	logger.info("ATTEMPTING to add polygon line", {
-	// 		from: fromPoint,
-	// 		to: toPoint,
-	// 		lineId,
-	// 		sourceId,
-	// 		layerId,
-	// 		mapExists: !!map.current,
-	// 	});
-	//
-	// 	try {
-	// 		// Check if source already exists and remove it
-	// 		if (map.current.getSource(sourceId)) {
-	// 			logger.warn("Source already exists, removing it first", {
-	// 				sourceId,
-	// 			});
-	// 			if (map.current.getLayer(layerId)) {
-	// 				map.current.removeLayer(layerId);
-	// 			}
-	// 			map.current.removeSource(sourceId);
-	// 		}
-	//
-	// 		map.current.addSource(sourceId, {
-	// 			type: "geojson",
-	// 			data: {
-	// 				type: "Feature",
-	// 				geometry: {
-	// 					type: "LineString",
-	// 					coordinates: [
-	// 						[fromPoint.x, fromPoint.y],
-	// 						[toPoint.x, toPoint.y],
-	// 					],
-	// 				},
-	// 				properties: {},
-	// 			},
-	// 		});
-	//
-	// 		map.current.addLayer({
-	// 			id: layerId,
-	// 			type: "line",
-	// 			source: sourceId,
-	// 			paint: {
-	// 				"line-color": "#0066ff", // Blue lines
-	// 				"line-width": 3,
-	// 			},
-	// 		});
-	//
-	// 		tempDrawingLines.current[layerId] = sourceId;
-	//
-	// 		logger.info("✅ SUCCESS - Added polygon line", {
-	// 			from: fromPoint,
-	// 			to: toPoint,
-	// 			lineId,
-	// 			sourceId,
-	// 			layerId,
-	// 		});
-	// 	} catch (error) {
-	// 		logger.error("❌ FAILED to add polygon line", error as Error, {
-	// 			fromPoint,
-	// 			toPoint,
-	// 			lineId,
-	// 			sourceId,
-	// 			layerId,
-	// 			errorMessage: (error as Error).message,
-	// 			mapLoaded: !!map.current,
-	// 		});
-	// 	}
-	// };
+	const addPolygonLine = (
+		fromPoint: Point,
+		toPoint: Point,
+		lineId: number
+	) => {
+		if (!map.current) {
+			logger.error("Cannot add polygon line - no map instance");
+			return;
+		}
+
+		const sourceId = `temp-polygon-line-source-${Math.floor(lineId)}`;
+		const layerId = `temp-polygon-line-layer-${Math.floor(lineId)}`;
+
+		logger.info("ATTEMPTING to add polygon line", {
+			from: fromPoint,
+			to: toPoint,
+			lineId,
+			sourceId,
+			layerId,
+			mapExists: !!map.current,
+		});
+
+		try {
+			// Check if source already exists and remove it
+			if (map.current.getSource(sourceId)) {
+				logger.warn("Source already exists, removing it first", {
+					sourceId,
+				});
+				if (map.current.getLayer(layerId)) {
+					map.current.removeLayer(layerId);
+				}
+				map.current.removeSource(sourceId);
+			}
+
+			map.current.addSource(sourceId, {
+				type: "geojson",
+				data: {
+					type: "Feature",
+					geometry: {
+						type: "LineString",
+						coordinates: [
+							[fromPoint.x, fromPoint.y],
+							[toPoint.x, toPoint.y],
+						],
+					},
+					properties: {},
+				},
+			});
+
+			map.current.addLayer({
+				id: layerId,
+				type: "line",
+				source: sourceId,
+				paint: {
+					"line-color": "#0066ff", // Blue lines
+					"line-width": 3,
+				},
+			});
+
+			tempDrawingLines.current[layerId] = sourceId;
+
+			logger.info("✅ SUCCESS - Added polygon line", {
+				from: fromPoint,
+				to: toPoint,
+				lineId,
+				sourceId,
+				layerId,
+			});
+		} catch (error) {
+			logger.error("❌ FAILED to add polygon line", error as Error, {
+				fromPoint,
+				toPoint,
+				lineId,
+				sourceId,
+				layerId,
+				errorMessage: (error as Error).message,
+				mapLoaded: !!map.current,
+			});
+		}
+	};
 
 	// // Check if the clicked point is close to the first point (to close the polygon)
-	// const isCloseToFirstPoint = (
-	// 	lng: number,
-	// 	lat: number,
-	// 	firstPoint: Point
-	// ): boolean => {
-	// 	const deltaLng = Math.abs(lng - firstPoint.x);
-	// 	const deltaLat = Math.abs(lat - firstPoint.y);
-	// 	const maxDelta = 0.0001; // About 10 meters - much easier to click accurately
-	//
-	// 	logger.info("Checking if close to first point", {
-	// 		clickedPoint: {lng, lat},
-	// 		firstPoint,
-	// 		deltaLng,
-	// 		deltaLat,
-	// 		maxDelta,
-	// 		isClose: deltaLng < maxDelta && deltaLat < maxDelta,
-	// 	});
-	//
-	// 	return deltaLng < maxDelta && deltaLat < maxDelta;
-	// };
+	const isCloseToFirstPoint = (
+		lng: number,
+		lat: number,
+		firstPoint: Point
+	): boolean => {
+		const deltaLng = Math.abs(lng - firstPoint.x);
+		const deltaLat = Math.abs(lat - firstPoint.y);
+		const maxDelta = 0.0001; // About 10 meters - much easier to click accurately
+
+		logger.info("Checking if close to first point", {
+			clickedPoint: {lng, lat},
+			firstPoint,
+			deltaLng,
+			deltaLat,
+			maxDelta,
+			isClose: deltaLng < maxDelta && deltaLat < maxDelta,
+		});
+
+		return deltaLng < maxDelta && deltaLat < maxDelta;
+	};
 
 	// Handle polygon point addition with the new flow
-	// const addPolygonPoint = (lng: number, lat: number) => {
-	// 	const newPoint: Point = {x: lng, y: lat};
-	//
-	// 	logger.userAction("🎯 Polygon point clicked", {
-	// 		point: newPoint,
-	// 		currentPoints: pendingPolygonPointsRef.current.length,
-	// 		pendingPoints: pendingPolygonPointsRef.current,
-	// 		isDrawingPolygon: isDrawingPolygonRef.current,
-	// 		activeTool: activeTool,
-	// 	});
-	//
-	// 	// If this is not the first point, check if it's close to the first point to close
-	// 	if (
-	// 		pendingPolygonPointsRef.current.length >= 3 &&
-	// 		isCloseToFirstPoint(lng, lat, pendingPolygonPointsRef.current[0])
-	// 	) {
-	// 		// Close the polygon and show dialog
-	// 		logger.info("🎉 POLYGON CLOSED by clicking near first point!");
-	//
-	// 		// Add closing line back to first point
-	// 		const closingLineId = Math.random() * 1000000;
-	// 		addPolygonLine(
-	// 			pendingPolygonPointsRef.current[
-	// 			pendingPolygonPointsRef.current.length - 1
-	// 				],
-	// 			pendingPolygonPointsRef.current[0],
-	// 			closingLineId
-	// 		);
-	//
-	// 		// Store the completed polygon points and show dialog
-	// 		// setCurrentPolygonPoints([...pendingPolygonPointsRef.current]); // Don't include the closing point
-	//
-	// 		// Calculate center for the dialog
-	// 		const centerX =
-	// 			pendingPolygonPointsRef.current.reduce(
-	// 				(sum, p) => sum + p.x,
-	// 				0
-	// 			) / pendingPolygonPointsRef.current.length;
-	// 		const centerY =
-	// 			pendingPolygonPointsRef.current.reduce(
-	// 				(sum, p) => sum + p.y,
-	// 				0
-	// 			) / pendingPolygonPointsRef.current.length;
-	//
-	// 		// setPendingPolygonCenter({ lng: centerX, lat: centerY });
-	// 		setPolygonName("");
-	// 		setIsWallMode(false);
-	// 		setShowPolygonDialog(true);
-	//
-	// 		logger.info("🎉 Showing polygon dialog", {
-	// 			center: {lng: centerX, lat: centerY},
-	// 			points: pendingPolygonPointsRef.current.length,
-	// 		});
-	//
-	// 		return;
-	// 	}
-	//
-	// 	// Add the new point
-	// 	const updatedPoints = [...pendingPolygonPointsRef.current, newPoint];
-	// 	pendingPolygonPointsRef.current = updatedPoints;
-	// 	setPendingPolygonPoints(updatedPoints);
-	//
-	// 	// Add visual marker for this point
-	// 	addPolygonPointMarker(lng, lat, updatedPoints.length - 1);
-	//
-	// 	// Set drawing state first
-	// 	if (updatedPoints.length === 1) {
-	// 		isDrawingPolygonRef.current = true;
-	// 		setIsDrawingPolygon(true);
-	// 		logger.info("Started drawing polygon");
-	// 	}
-	//
-	// 	// Add line from previous point to this point (if not the first point)
-	// 	if (updatedPoints.length > 1) {
-	// 		const previousPoint = updatedPoints[updatedPoints.length - 2];
-	// 		const lineId = Math.random() * 1000000; // Use random number for unique ID
-	// 		logger.info("🔵 ADDING LINE between points", {
-	// 			from: previousPoint,
-	// 			to: newPoint,
-	// 			lineId,
-	// 			totalPoints: updatedPoints.length,
-	// 		});
-	// 		addPolygonLine(previousPoint, newPoint, lineId);
-	// 	}
-	//
-	// 	logger.userAction("Polygon point added", {
-	// 		point: newPoint,
-	// 		totalPoints: updatedPoints.length,
-	// 	});
-	// };
-	//
+	const addPolygonPoint = (lng: number, lat: number) => {
+		const newPoint: Point = {x: lng, y: lat} as Point;
+
+		logger.userAction("🎯 Polygon point clicked", {
+			point: newPoint,
+			currentPoints: pendingPolygonPointsRef.current.length,
+			pendingPoints: pendingPolygonPointsRef.current,
+			isDrawingPolygon: isDrawingPolygonRef.current,
+			activeTool: activeTool,
+		});
+
+		// If this is not the first point, check if it's close to the first point to close
+		if (
+			pendingPolygonPointsRef.current.length >= 3 &&
+			isCloseToFirstPoint(lng, lat, pendingPolygonPointsRef.current[0])
+		) {
+			// Close the polygon and show dialog
+			logger.info("🎉 POLYGON CLOSED by clicking near first point!");
+
+			// Add closing line back to first point
+			const closingLineId = Math.random() * 1000000;
+			addPolygonLine(
+				pendingPolygonPointsRef.current[
+				pendingPolygonPointsRef.current.length - 1
+					],
+				pendingPolygonPointsRef.current[0],
+				closingLineId
+			);
+
+			// Store the completed polygon points and show dialog
+			// setCurrentPolygonPoints([...pendingPolygonPointsRef.current]); // Don't include the closing point
+
+			// Calculate center for the dialog
+			const centerX =
+				pendingPolygonPointsRef.current.reduce(
+					(sum, p) => sum + p.x,
+					0
+				) / pendingPolygonPointsRef.current.length;
+			const centerY =
+				pendingPolygonPointsRef.current.reduce(
+					(sum, p) => sum + p.y,
+					0
+				) / pendingPolygonPointsRef.current.length;
+
+			// setPendingPolygonCenter({ lng: centerX, lat: centerY });
+			setPolygonName("");
+			setIsWallMode(false);
+			setShowPolygonDialog(true);
+
+			logger.info("🎉 Showing polygon dialog", {
+				center: {lng: centerX, lat: centerY},
+				points: pendingPolygonPointsRef.current.length,
+			});
+
+			return;
+		}
+
+		// Add the new point
+		const updatedPoints = [...pendingPolygonPointsRef.current, newPoint];
+		pendingPolygonPointsRef.current = updatedPoints;
+		setPendingPolygonPoints(updatedPoints);
+
+		// Add visual marker for this point
+		addPolygonPointMarker(lng, lat, updatedPoints.length - 1);
+
+		// Set drawing state first
+		if (updatedPoints.length === 1) {
+			isDrawingPolygonRef.current = true;
+			setIsDrawingPolygon(true);
+			logger.info("Started drawing polygon");
+		}
+
+		// Add line from previous point to this point (if not the first point)
+		if (updatedPoints.length > 1) {
+			const previousPoint = updatedPoints[updatedPoints.length - 2];
+			const lineId = Math.random() * 1000000; // Use random number for unique ID
+			logger.info("🔵 ADDING LINE between points", {
+				from: previousPoint,
+				to: newPoint,
+				lineId,
+				totalPoints: updatedPoints.length,
+			});
+			addPolygonLine(previousPoint, newPoint, lineId);
+		}
+
+		logger.userAction("Polygon point added", {
+			point: newPoint,
+			totalPoints: updatedPoints.length,
+		});
+	};
+
 	const handleToolChange = (tool: DrawingTool) => {
 		logger.info("Tool change requested", {
 			from: activeTool,
@@ -1507,205 +1370,160 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	// // Delete handler
-	// const handleDeleteItem = (
-	// 	type: "polygon" | "beacon" | "node",
-	// 	id: number,
-	// 	e: React.MouseEvent<HTMLButtonElement>
-	// ) => {
-	// 	e.stopPropagation();
-	// 	logger.userAction("Delete item clicked", {type, id});
-	// 	switch (type) {
-	// 		case "polygon":
-	// 			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-	// 				old.filter(p => p.id !== id)
-	// 			);
-	// 			queueChange({
-	// 				type: CHANGE_TYPES.DELETE,
-	// 				objectType: OBJECT_TYPES.POLYGON,
-	// 				data: {id},
-	// 			});
-	// 			break;
-	// 		case "beacon":
-	// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-	// 				old.filter(b => b.id !== id)
-	// 			);
-	// 			queueChange({
-	// 				type: CHANGE_TYPES.DELETE,
-	// 				objectType: OBJECT_TYPES.BEACON,
-	// 				data: {id},
-	// 			});
-	// 			break;
-	// 		case "node":
-	// 			queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
-	// 				old.filter(n => n.id !== id)
-	// 			);
-	//
-	// 			queryClient.setQueryData<Edge[]>(['edges'], (old = []) =>
-	// 				old.filter(e => e.fromNodeId !== id && e.toNodeId !== id)
-	// 			);
-	// 			queueChange({
-	// 				type: CHANGE_TYPES.DELETE,
-	// 				objectType: OBJECT_TYPES.NODE,
-	// 				data: {id},
-	// 			});
-	// 			break;
-	// 	}
-	// 	if (selectedItem?.type === type && selectedItem?.id === id) {
-	// 		setSelectedItem(null);
-	// 	}
-	// };
+	const handleDeleteItem = (
+		type: "polygon" | "beacon" | "node",
+		id: number,
+		e: React.MouseEvent<HTMLButtonElement>
+	) => {
+		e.stopPropagation();
+		logger.userAction("Delete item clicked", {type, id});
+		switch (type) {
+			case "polygon":
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+					old.filter(p => p.id !== id)
+				);
+				queueChange({
+					type: CHANGE_TYPES.DELETE,
+					objectType: OBJECT_TYPES.POLYGON,
+					data: {id},
+				});
+				break;
+			case "beacon":
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.filter(b => b.id !== id)
+				);
+				queueChange({
+					type: CHANGE_TYPES.DELETE,
+					objectType: OBJECT_TYPES.BEACON,
+					data: {id},
+				});
+				break;
+			case "node":
+				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
+					old.filter(n => n.id !== id)
+				);
+
+				queueChange({
+					type: CHANGE_TYPES.DELETE,
+					objectType: OBJECT_TYPES.NODE,
+					data: {id},
+				});
+				break;
+		}
+		if (selectedItem?.type === type && selectedItem?.id === id) {
+			setSelectedItem(null);
+		}
+	};
 
 	// --- UI: Unsaved changes indicator ---
 	const hasUnsavedChanges = changeQueue.length > 0;
 
-	// const toggleLayerVisibility = (
-	// 	type: "polygon" | "beacon" | "node",
-	// 	id: number
-	// ) => {
-	// 	logger.userAction("Layer visibility toggled", {type, id});
-	//
-	// 	if (!map.current) {
-	// 		logger.userAction("Map instance not available, aborting toggle", {type, id});
-	// 		return;
-	// 	}
-	//
-	// 	const mapInstance = map.current;
-	// 	logger.userAction("Map instance found, proceeding", {type, id});
-	//
-	// 	switch (type) {
-	// 		case "polygon":
-	// 			logger.userAction("Handling polygon visibility toggle", {id});
-	// 			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => {
-	// 				logger.userAction("Current polygons fetched from cache", {count: old.length});
-	//
-	// 				const newPolygons = old.map(p => {
-	// 					if (p.id === id) {
-	// 						const newVisible = !p.visible;
-	// 						logger.userAction("Found matching polygon, toggling visibility", {
-	// 							id,
-	// 							oldVisible: p.visible,
-	// 							newVisible
-	// 						});
-	//
-	// 						// Update map visibility
-	// 						const marker = mapMarkers.current[`polygon-${id}`];
-	// 						const layerId = mapLayers.current[`polygon-${id}`];
-	// 						const borderLayerId = mapLayers.current[`polygon-border-${id}`];
-	//
-	// 						if (marker) {
-	// 							logger.userAction("Marker found for polygon", {id});
-	// 							if (newVisible) {
-	// 								marker.addTo(mapInstance);
-	// 								logger.userAction("Marker added to map", {id});
-	// 							} else {
-	// 								marker.remove();
-	// 								logger.userAction("Marker removed from map", {id});
-	// 							}
-	// 						} else {
-	// 							logger.userAction("No marker found for polygon", {id});
-	// 						}
-	//
-	// 						if (layerId && mapInstance.getLayer(layerId)) {
-	// 							mapInstance.setLayoutProperty(
-	// 								layerId,
-	// 								"visibility",
-	// 								newVisible ? "visible" : "none"
-	// 							);
-	// 							logger.userAction("Layer visibility set", {layerId, visible: newVisible});
-	// 						} else {
-	// 							logger.userAction("Layer ID not found or layer missing in map instance", {layerId, id});
-	// 						}
-	//
-	// 						if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
-	// 							mapInstance.setLayoutProperty(
-	// 								borderLayerId,
-	// 								"visibility",
-	// 								newVisible ? "visible" : "none"
-	// 							);
-	// 							logger.userAction("Border layer visibility set", {borderLayerId, visible: newVisible});
-	// 						} else {
-	// 							logger.userAction("Border layer ID not found or layer missing in map instance", {
-	// 								borderLayerId,
-	// 								id
-	// 							});
-	// 						}
-	//
-	// 						return {...p, visible: newVisible};
-	// 					}
-	// 					return p;
-	// 				});
-	//
-	// 				logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
-	// 				return newPolygons;
-	// 			});
-	// 			break;
-	//
-	// 		case "beacon":
-	// 			queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-	// 				old.map(b => {
-	// 					if (b.id === id) {
-	// 						const newVisible = !b.visible;
-	//
-	// 						// Update map visibility
-	// 						const marker = mapMarkers.current[`beacon-${id}`];
-	// 						if (marker) {
-	// 							if (newVisible) {
-	// 								marker.addTo(mapInstance);
-	// 							} else {
-	// 								marker.remove();
-	// 							}
-	// 						}
-	//
-	// 						return {...b, visible: newVisible};
-	// 					}
-	// 					return b;
-	// 				})
-	// 			);
-	// 			break;
-	//
-	// 		case "node": // TODO: should nodes have the functionality to appear and disappear? doesnt make sense tbh.
-	// 			queryClient.setQueryData<RouteNode[]>(['nodes'], (oldNodes = []) =>
-	// 				oldNodes.map(n => {
-	// 					if (n.id === id) {
-	// 						const newVisible = !n.visible;
-	//
-	// 						// Update map visibility for the node
-	// 						const marker = mapMarkers.current[`node-${id}`];
-	// 						if (marker) {
-	// 							if (newVisible) {
-	// 								marker.addTo(mapInstance);
-	// 							} else {
-	// 								marker.remove();
-	// 							}
-	// 						}
-	//
-	// 						// Update edges connected to this node
-	// 						edges.forEach(edge => {
-	// 							if (edge.fromNodeId === id || edge.toNodeId === id) {
-	// 								const layerId = mapLayers.current[`edge-${edge.id}`];
-	// 								if (layerId && mapInstance.getLayer(layerId)) {
-	// 									// Find nodes from the *updated* cache, fallback to oldNodes
-	// 									const fromNode = oldNodes.find(node => node.id === edge.fromNodeId);
-	// 									const toNode = oldNodes.find(node => node.id === edge.toNodeId);
-	// 									const shouldShowEdge =
-	// 										fromNode?.visible && toNode?.visible && edge.visible;
-	// 									mapInstance.setLayoutProperty(
-	// 										layerId,
-	// 										"visibility",
-	// 										shouldShowEdge ? "visible" : "none"
-	// 									);
-	// 								}
-	// 							}
-	// 						});
-	//
-	// 						return {...n, visible: newVisible};
-	// 					}
-	// 					return n;
-	// 				})
-	// 			);
-	// 			break;
-	// 	}
-	// };
+	const toggleLayerVisibility = (
+		type: "polygon" | "beacon" | "node",
+		id: number
+	) => {
+		logger.userAction("Layer visibility toggled", {type, id});
+
+		if (!map.current) {
+			logger.userAction("Map instance not available, aborting toggle", {type, id});
+			return;
+		}
+
+		const mapInstance = map.current;
+		logger.userAction("Map instance found, proceeding", {type, id});
+
+		switch (type) {
+			case "polygon":
+				logger.userAction("Handling polygon visibility toggle", {id});
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => {
+					logger.userAction("Current polygons fetched from cache", {count: old.length});
+
+					const newPolygons = old.map(p => {
+						if (p.id === id) {
+							const newVisible = !p.isVisible;
+							logger.userAction("Found matching polygon, toggling visibility", {
+								id,
+								oldVisible: p.isVisible,
+								newVisible
+							});
+
+							// Update map visibility
+							const marker = mapMarkers.current[`polygon-${id}`];
+							const layerId = mapLayers.current[`polygon-${id}`];
+							const borderLayerId = mapLayers.current[`polygon-border-${id}`];
+
+							if (marker) {
+								logger.userAction("Marker found for polygon", {id});
+								if (newVisible) {
+									marker.addTo(mapInstance);
+									logger.userAction("Marker added to map", {id});
+								} else {
+									marker.remove();
+									logger.userAction("Marker removed from map", {id});
+								}
+							} else {
+								logger.userAction("No marker found for polygon", {id});
+							}
+
+							if (layerId && mapInstance.getLayer(layerId)) {
+								mapInstance.setLayoutProperty(
+									layerId,
+									"visibility",
+									newVisible ? "visible" : "none"
+								);
+								logger.userAction("Layer visibility set", {layerId, visible: newVisible});
+							} else {
+								logger.userAction("Layer ID not found or layer missing in map instance", {layerId, id});
+							}
+
+							if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
+								mapInstance.setLayoutProperty(
+									borderLayerId,
+									"visibility",
+									newVisible ? "visible" : "none"
+								);
+								logger.userAction("Border layer visibility set", {borderLayerId, visible: newVisible});
+							} else {
+								logger.userAction("Border layer ID not found or layer missing in map instance", {
+									borderLayerId,
+									id
+								});
+							}
+
+							return {...p, visible: newVisible};
+						}
+						return p;
+					});
+
+					logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
+					return newPolygons;
+				});
+				break;
+
+			case "beacon":
+				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+					old.map(b => {
+						if (b.id === id) {
+							const newVisible = !b.isVisible;
+
+							// Update map visibility
+							const marker = mapMarkers.current[`beacon-${id}`];
+							if (marker) {
+								if (newVisible) {
+									marker.addTo(mapInstance);
+								} else {
+									marker.remove();
+								}
+							}
+
+							return {...b, visible: newVisible};
+						}
+						return b;
+					})
+				);
+				break;
+		}
+	};
 
 	const handleSave = async () => {
 		if (changeQueue.length === 0) return;
@@ -1941,7 +1759,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						isDrawingPolygonRef.current = false;
 						pendingPolygonPointsRef.current = [];
 						setIsDrawingPolygon(false);
-						// setCurrentPolygonPoints([]);
+						setCurrentPolygonPoints([]);
 						setPendingPolygonPoints([]);
 						clearTempDrawing();
 						setSelectedNodeForConnection(null);
@@ -1996,11 +1814,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						selectedItem={selectedItem}
 						onFilterChange={setLayerFilter}
 						onLayerItemClick={handleLayerItemClick}
-						onToggleVisibility={() => {
-						}}
+						onToggleVisibility={toggleLayerVisibility}
 						onEditItem={handleEditItem}
-						onDeleteItem={() => {
-						}}
+						onDeleteItem={handleDeleteItem}
 					/>
 				</div>
 			</div>
