@@ -1552,8 +1552,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				} else if (change.type === CHANGE_TYPES.EDIT) {
 					await mutations.update.mutateAsync(change);
 				} else if (change.type === CHANGE_TYPES.DELETE) {
-					const id = typeof change.data.id === 'string' ? parseInt(change.data.id) : change.data.id;
-					await mutations.delete.mutateAsync(id);
+					await mutations.delete.mutateAsync(change.id);
 				}
 				// Remove from queue on success
 				newQueue = newQueue.filter((q) => q.id !== change.id);
