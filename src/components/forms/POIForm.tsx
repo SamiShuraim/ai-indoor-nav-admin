@@ -75,7 +75,7 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = !!poi?.id;
+  const isEditing = !!poi?.properties.id;
 
   // Load categories on component mount
   useEffect(() => {
@@ -85,13 +85,14 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
   // Initialize form data when editing
   useEffect(() => {
     if (poi) {
+      const p = poi.properties;
       setFormData({
-        name: poi.name || '',
-        description: poi.description || '',
-        poiType: poi.type || 'room',
-        categoryId: poi.categoryId || null,
-        color: poi.color || '#3B82F6',
-        isVisible: poi.isVisible ?? true,
+        name: p.name || '',
+        description: p.description || '',
+        poiType: p.type || 'room',
+        categoryId: p.categoryId || null,
+        color: p.color || '#3B82F6',
+        isVisible: p.isVisible ?? true,
         x: 0, // POI coordinates will be handled separately with POI points
         y: 0  // POI coordinates will be handled separately with POI points
       });

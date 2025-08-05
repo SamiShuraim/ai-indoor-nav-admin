@@ -1,25 +1,28 @@
 export interface Beacon {
-    id: number;
-    floorId: number;
-    beaconTypeId?: number | null;
-    name: string;
-    uuid?: string | null;
-    majorId?: number | null;
-    minorId?: number | null;
     geometry?: {
         type: "Point";
         coordinates: [number, number]; // [longitude, latitude]
     } | null;
-    isActive: boolean;
-    isVisible: boolean;
-    batteryLevel: number;
-    lastSeen?: string | null; // ISO date string
-    beaconType?: {
+    properties: {
+        id: number;
+        floorId: number;
+        beaconTypeId?: number | null;
         name: string;
-    } | null;
+        uuid?: string | null;
+        majorId?: number | null;
+        minorId?: number | null;
+        isActive: boolean;
+        isVisible: boolean;
+        batteryLevel: number;
+        lastSeen?: string | null; // ISO date string
+        beaconType?: {
+            name: string;
+        } | null;
+    }
 }
 
 export class BeaconBuilder {
+    private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _id!: number;
     private _floorId!: number;
     private _beaconTypeId: number | null = null;
@@ -27,7 +30,6 @@ export class BeaconBuilder {
     private _uuid: string | null = null;
     private _majorId: number | null = null;
     private _minorId: number | null = null;
-    private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isActive: boolean = true;
     private _isVisible: boolean = true;
     private _batteryLevel: number = 100;
@@ -104,19 +106,21 @@ export class BeaconBuilder {
 
     public build(): Beacon {
         return {
-            id: this._id,
-            floorId: this._floorId,
-            beaconTypeId: this._beaconTypeId,
-            name: this._name,
-            uuid: this._uuid,
-            majorId: this._majorId,
-            minorId: this._minorId,
             geometry: this._geometry,
-            isActive: this._isActive,
-            isVisible: this._isVisible,
-            batteryLevel: this._batteryLevel,
-            lastSeen: this._lastSeen,
-            beaconType: this._beaconType,
+            properties: {
+                id: this._id,
+                floorId: this._floorId,
+                beaconTypeId: this._beaconTypeId,
+                name: this._name,
+                uuid: this._uuid,
+                majorId: this._majorId,
+                minorId: this._minorId,
+                isActive: this._isActive,
+                isVisible: this._isVisible,
+                batteryLevel: this._batteryLevel,
+                lastSeen: this._lastSeen,
+                beaconType: this._beaconType,
+            },
         };
     }
 }

@@ -309,9 +309,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			mapSources.current = {};
 
 			// Add polygons as filled areas
-			currentPolygons.forEach((polygon) => {
-				if (polygon.isVisible && polygon.geometry.coordinates[0][0].length >= 3) {
-					const coordinates = polygon.geometry.coordinates;
+			currentPolygons.forEach((p) => {
+				const polygon = p.properties;
+				if (polygon.isVisible && p.geometry.coordinates[0][0].length >= 3) {
+					const coordinates = p.geometry.coordinates;
 
 					const sourceId = `polygon-source-${polygon.id}`;
 					const layerId = `polygon-layer-${polygon.id}`;
@@ -357,7 +358,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						borderLayerId;
 
 					// Add center marker for interaction using GeoJSON
-					const ring = polygon.geometry.coordinates[0]; // outer ring
+					const ring = p.geometry.coordinates[0]; // outer ring
 
 					const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
 					const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
@@ -378,10 +379,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			});
 
 			// Add beacons
-			currentBeacons.forEach((beacon) => {
+			currentBeacons.forEach((b) => {
+				let beacon = b.properties;
 				if (beacon.isVisible) {
 					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
-						.setLngLat(beacon.geometry!!.coordinates)
+						.setLngLat(b.geometry!!.coordinates)
 						.setPopup(
 							new Popup().setHTML(
 								`<strong>${beacon.name}</strong><br>Type: Beacon`
@@ -503,8 +505,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const {type, id} = selectedItem;
 
 				if (type === "polygon") {
-					const polygon = currentPolygons.find((p) => p.id === id);
-					if (polygon && polygon.isVisible) {
+					const polygon = currentPolygons.find((p) => p.properties.id === id);
+					if (polygon && polygon.properties.isVisible) {
 						// Highlight selected polygon with a thicker border or different color
 						const layerId = `polygon-layer-${id}`;
 						const borderLayerId = `polygon-border-${id}`;
@@ -530,7 +532,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						}
 					}
 				} else if (type === "beacon") {
-					const beacon = currentBeacons.find((b) => b.id === id);
+					const b = currentBeacons.find((b) => b.properties.id === id);
+					const beacon = b?.properties
 					if (beacon && beacon.isVisible) {
 						// Highlight selected beacon
 						const marker = mapMarkers.current[`beacon-${id}`];
@@ -541,7 +544,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 									color: "#ef4444",
 									scale: 1.2,
 								})
-									.setLngLat(beacon.geometry!!.coordinates)
+									.setLngLat(b.geometry!!.coordinates)
 									.setPopup(
 										new Popup().setHTML(
 											`<strong>${beacon.name}</strong><br>Type: Beacon (SELECTED)`
@@ -1268,7 +1271,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
 				};
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.map(p => (p.id === editingPolygonId ? updated : p))
+					old.map(p => (p.properties.id === editingPolygonId ? updated : p))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1313,7 +1316,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			if (beacon) {
 				const updated = {...beacon, name: beaconName};
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.map(b => (b.id === editingBeaconId ? updated : b))
+					old.map(b => (b.properties.id === editingBeaconId ? updated : b))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1385,7 +1388,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		switch (type) {
 			case "polygon":
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.filter(p => p.id !== id)
+					old.filter(p => p.properties.id !== id)
 				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
@@ -1395,7 +1398,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				break;
 			case "beacon":
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.filter(b => b.id !== id)
+					old.filter(b => b.properties.id !== id)
 				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
@@ -1443,7 +1446,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => {
 					logger.userAction("Current polygons fetched from cache", {count: old.length});
 
-					const newPolygons = old.map(p => {
+					const newPolygons = old.map(polygon => {
+						const p = polygon.properties;
 						if (p.id === id) {
 							const newVisible = !p.isVisible;
 							logger.userAction("Found matching polygon, toggling visibility", {
@@ -1495,9 +1499,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								});
 							}
 
-							return {...p, visible: newVisible};
+							return {
+								...polygon, // includes geometry and properties
+								properties: {
+									...polygon.properties,
+									visible: newVisible, // override the visible field
+								},
+							};
 						}
-						return p;
+						return polygon;
 					});
 
 					logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
@@ -1508,8 +1518,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			case "beacon":
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => {
-						if (b.id === id) {
-							const newVisible = !b.isVisible;
+						if (b.properties.id === id) {
+							const newVisible = !b.properties.isVisible;
 
 							// Update map visibility
 							const marker = mapMarkers.current[`beacon-${id}`];

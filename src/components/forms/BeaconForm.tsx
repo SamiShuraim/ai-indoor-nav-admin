@@ -49,7 +49,7 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = !!beacon?.id;
+  const isEditing = !!beacon?.properties.id;
 
   // Load beacon types on component mount
   useEffect(() => {
@@ -59,15 +59,16 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
   // Initialize form data when editing
   useEffect(() => {
     if (beacon) {
+      const b = beacon.properties;
       setFormData({
-        name: beacon.name || '',
-        uuid: beacon.uuid || '',
-        majorId: beacon.majorId || null,
-        minorId: beacon.minorId || null,
-        beaconTypeId: beacon.beaconTypeId || null,
+        name: b.name || '',
+        uuid: b.uuid || '',
+        majorId: b.majorId || null,
+        minorId: b.minorId || null,
+        beaconTypeId: b.beaconTypeId || null,
         geometry: beacon.geometry || null,
-        isVisible: beacon.isVisible ?? true,
-        batteryLevel: beacon.batteryLevel || null,
+        isVisible: b.isVisible ?? true,
+        batteryLevel: b.batteryLevel || null,
       });
     }
   }, [beacon]);

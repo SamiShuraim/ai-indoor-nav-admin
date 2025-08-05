@@ -148,9 +148,11 @@ const BuildingsManagement: React.FC<BuildingsManagementProps> = ({ onBack, onFlo
 
     try {
       const floorData = {
-        name: floorFormData.name.trim(),
-        floorNumber: floorFormData.floorNumber,
-        buildingId: selectedBuilding.id,
+        properties: {
+          name: floorFormData.name.trim(),
+          floorNumber: floorFormData.floorNumber,
+          buildingId: selectedBuilding.id,
+        },
       };
 
       if (editingFloor) {

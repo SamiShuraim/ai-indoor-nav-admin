@@ -295,7 +295,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         editing: { ...prev.editing, poi: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'POI created successfully');
-      logger.info('POI created successfully', { poiId: newPOI.id });
+      logger.info('POI created successfully', {poiId: newPOI.properties.id});
     } catch (error) {
       logger.error('Failed to create POI', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create POI');
@@ -311,7 +311,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
             entities: {
                 ...prev.entities,
                 pois: prev.entities.pois.map(poi =>
-                    poi.id === id ? {...poi, ...poiData} : poi
+                    poi.properties.id === id ? {...poi, ...poiData} : poi
                 )
             },
             editing: {...prev.editing, poi: null}
@@ -331,8 +331,8 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          pois: prev.entities.pois.filter(poi => poi.id !== id)
+          ...prev.entities,
+          pois: prev.entities.pois.filter(poi => poi.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'POI deleted successfully');
@@ -353,7 +353,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         editing: { ...prev.editing, beacon: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Beacon created successfully');
-      logger.info('Beacon created successfully', { beaconId: newBeacon.id });
+      logger.info('Beacon created successfully', {beaconId: newBeacon.properties.id});
     } catch (error) {
       logger.error('Failed to create beacon', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create beacon');
@@ -368,7 +368,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
             entities: {
                 ...prev.entities,
                 beacons: prev.entities.beacons.map(beacon =>
-                    beacon.id === id ? {...beacon, ...beaconData} : beacon
+                    beacon.properties.id === id ? {...beacon, ...beaconData} : beacon
                 ),
             },
             editing: {...prev.editing, beacon: null},
@@ -387,8 +387,8 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          beacons: prev.entities.beacons.filter(beacon => beacon.id !== id)
+          ...prev.entities,
+          beacons: prev.entities.beacons.filter(beacon => beacon.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Beacon deleted successfully');
