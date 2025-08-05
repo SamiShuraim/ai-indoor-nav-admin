@@ -1562,7 +1562,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				} else if (change.type === CHANGE_TYPES.EDIT) {
 					await mutations.update.mutateAsync(change);
 				} else if (change.type === CHANGE_TYPES.DELETE) {
-					await mutations.delete.mutateAsync(change.id);
+					await mutations.delete.mutateAsync(change.data.id);
 				}
 				// Remove from queue on success
 				newQueue = newQueue.filter((q) => q.id !== change.id);
