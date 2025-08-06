@@ -76,6 +76,13 @@ export class PolygonBuilder {
     }
 
     public setGeometry(coordinates: number[][][]): this {
+        const ring = coordinates[0];
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+
+        if (first[0] !== last[0] || first[1] !== last[1]) {
+            ring.push([...first]); // Use a shallow copy to avoid reference issues
+        }
         this._geometry = {
             type: "Polygon",
             coordinates,
