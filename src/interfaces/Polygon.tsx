@@ -8,7 +8,7 @@ export interface PolygonProperties {
     type: PolygonType;
     isVisible: boolean;
     color: string;
-    categoryId: number;
+    categoryId: number | null;
 }
 
 export interface Polygon {
@@ -70,7 +70,7 @@ export class PolygonBuilder {
         return this;
     }
 
-    public setCategoryId(categoryId: number): this {
+    public setCategoryId(categoryId: number | null): this {
         this._properties.categoryId = categoryId;
         return this;
     }

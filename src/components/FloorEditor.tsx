@@ -1290,7 +1290,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				.setType("Room")
 				.setIsVisible(true)
 				.setColor("#3b82f6")
-				.setCategoryId(0) // or an appropriate value
+                .setCategoryId(null) // or an appropriate value
 				.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
 				.build();
 
