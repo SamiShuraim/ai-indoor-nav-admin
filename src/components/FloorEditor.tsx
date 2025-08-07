@@ -898,7 +898,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		connectToNodeId: number | null
 	): number => {
 		const newNode = new RouteNodeBuilder()
-			.setId(Date.now())
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
 			.setIsVisible(true)
@@ -1252,7 +1251,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			...prev,
 			{
 				...change,
-				id: Date.now(),
+                id: change.data.id,
 			},
 		]);
 	};
@@ -1281,9 +1280,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			}
 		} else {
 			// Add
-			const newId = Date.now();
 			const newPolygon = new PolygonBuilder()
-				.setId(newId)
 				.setFloorId(floorId)
 				.setName(polygonName)
 				.setDescription("")
@@ -1327,9 +1324,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		} else {
 			// Add
 			if (pendingBeaconLocation) {
-				const newId = Date.now();
 				const newBeacon = new BeaconBuilder()
-					.setId(newId)
 					.setFloorId(floorId)
 					.setName(beaconName)
 					.setGeometry(pendingBeaconLocation.lng, pendingBeaconLocation.lat)
