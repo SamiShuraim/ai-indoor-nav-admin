@@ -47,7 +47,7 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = !!routeNode?.id;
+    const isEditing = !!routeNode?.properties.id;
 
   // // Initialize form data when editing
   // useEffect(() => {
@@ -239,7 +239,7 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
           <div className="node-info">
             <div className="info-item">
               <span className="info-label">Node ID:</span>
-              <span className="info-value">{isEditing ? routeNode?.id : 'Will be assigned'}</span>
+                <span className="info-value">{isEditing ? routeNode?.properties.id : 'Will be assigned'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Floor ID:</span>

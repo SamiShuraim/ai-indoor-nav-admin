@@ -11,11 +11,13 @@ export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutDa
 
     const nodes = routeNodes.map((node) => {
         return ({
-            id: node.id,
-            floorId: node.floorId,
-            location: node.location,
-            isVisible: node.isVisible,
-            connections: node.connections,
+            geometry: node.geometry,
+            properties: {
+                id: node.properties.id,
+                floorId: node.properties.floorId,
+                isVisible: node.properties.isVisible,
+                connections: node.properties.connections,
+            }
         });
     });
 

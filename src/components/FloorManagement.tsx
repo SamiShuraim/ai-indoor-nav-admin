@@ -409,7 +409,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         editing: { ...prev.editing, routeNode: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Route node created successfully');
-      logger.info('Route node created successfully', { nodeId: newNode.id });
+        logger.info('Route node created successfully', {nodeId: newNode.properties.id});
     } catch (error) {
       logger.error('Failed to create route node', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create route node');
@@ -423,7 +423,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         ...prev,
           entities: {
               ...prev.entities,
-              routeNodes: prev.entities.routeNodes.map(node => node.id === id ? {...node, ...nodeData} : node)
+              routeNodes: prev.entities.routeNodes.map(node => node.properties.id === id ? {...node, ...nodeData} : node)
         },
         editing: { ...prev.editing, routeNode: null }
       }));
@@ -441,8 +441,8 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          routeNodes: prev.entities.routeNodes.filter(node => node.id !== id)
+          ...prev.entities,
+            routeNodes: prev.entities.routeNodes.filter(node => node.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Route node deleted successfully');

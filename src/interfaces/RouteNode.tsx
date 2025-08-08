@@ -1,18 +1,20 @@
 export interface RouteNode {
-    id: number;
-    floorId: number;
-    location: {
+    geometry: {
         type: "Point";
         coordinates: [number, number]; // [x, y] as [longitude, latitude]
     } | null;
-    isVisible: boolean;
-    connections: number[]; // IDs of connected RouteNodes
+    properties: {
+        id: number;
+        floorId: number;
+        isVisible: boolean;
+        connections: number[]; // IDs of connected RouteNodes
+    }
 }
 
 export class RouteNodeBuilder {
     private _id!: number;
     private _floorId!: number;
-    private _location: { type: "Point"; coordinates: [number, number] } | null = null;
+    private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isVisible: boolean = true;
     private _connections: number[] = [];
 
@@ -27,7 +29,7 @@ export class RouteNodeBuilder {
     }
 
     public setLocation(x: number, y: number): this {
-        this._location = {
+        this._geometry = {
             type: "Point",
             coordinates: [x, y],
         };
@@ -53,11 +55,13 @@ export class RouteNodeBuilder {
 
     public build(): RouteNode {
         return {
-            id: this._id,
-            floorId: this._floorId,
-            location: this._location,
-            isVisible: this._isVisible,
-            connections: this._connections,
+            geometry: this._geometry,
+            properties: {
+                id: this._id,
+                floorId: this._floorId,
+                isVisible: this._isVisible,
+                connections: this._connections,
+            }
         };
     }
 }

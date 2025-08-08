@@ -173,35 +173,35 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
           <div className="layer-group">
             <h4>Route Nodes ({filteredData.nodes.length})</h4>
             {filteredData.nodes.map(node => (
-              <div 
-                key={node.id} 
-                className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.id ? 'selected' : ''}`}
-                onClick={() => onLayerItemClick('node', node.id)}
+              <div
+                  key={node.properties.id}
+                  className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.properties.id ? 'selected' : ''}`}
+                  onClick={() => onLayerItemClick('node', node.properties.id)}
               >
                 <button
                   className="visibility-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleVisibility('node', node.id);
+                      onToggleVisibility('node', node.properties.id);
                   }}
-                  title={node.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={node.properties.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {node.isVisible ? '👁️' : '🚫'}
+                    {node.properties.isVisible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color node-color"></div>
-                <span className="layer-name">Node {node.id}</span>
-                <span className="layer-connections">({node.connections.length} connections)</span>
+                  <span className="layer-name">Node {node.properties.id}</span>
+                  <span className="layer-connections">({node.properties.connections.length} connections)</span>
                 <div className="layer-actions">
                   <button
                     className="layer-action-button edit-button"
-                    onClick={(e) => onEditItem('node', node.id, e)}
+                    onClick={(e) => onEditItem('node', node.properties.id, e)}
                     title="Edit node"
                   >
                     ✏️
                   </button>
                   <button
                     className="layer-action-button delete-button"
-                    onClick={(e) => onDeleteItem('node', node.id, e)}
+                    onClick={(e) => onDeleteItem('node', node.properties.id, e)}
                     title="Delete node"
                   >
                     ❌
