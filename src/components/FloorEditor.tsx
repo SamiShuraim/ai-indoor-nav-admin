@@ -1644,9 +1644,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		switch (type) {
 			case "polygon":
-				const polygon = polygons.find((p) => p.id === id);
+                const polygon = polygons.find((p) => p.properties.id === id);
 				if (polygon) {
-					setPolygonName(polygon.name);
+                    setPolygonName(polygon.properties.name);
 					setIsWallMode(polygon.type === "wall");
 					setEditingPolygonId(id);
 					setShowPolygonDialog(true);
@@ -1654,16 +1654,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 				break;
 			case "beacon":
-				const beacon = beacons.find((b) => b.id === id);
+                const beacon = beacons.find((b) => b.properties.id === id);
 				if (beacon) {
-					setBeaconName(beacon.name);
+                    setBeaconName(beacon.properties.name);
 					setEditingBeaconId(id);
 					setShowBeaconDialog(true);
 					setSelectedItem({type, id});
 				}
 				break;
 			case "node":
-				const node = nodes.find((n) => n.id === id);
+                const node = nodes.find((n) => n.properties.id === id);
 				if (node) {
 					setNodeName(`Node ${node.id}`);
 					setEditingNodeId(id);
