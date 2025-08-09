@@ -1311,7 +1311,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Edit
             const beacon = beacons.find((b) => b.properties.id === editingBeaconId);
 			if (beacon) {
-				const updated = {...beacon, name: beaconName};
+                const updated = {...beacon, properties: {...beacon.properties, name: beaconName}};
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => (b.properties.id === editingBeaconId ? updated : b))
 				);

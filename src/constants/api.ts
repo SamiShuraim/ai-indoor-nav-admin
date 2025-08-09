@@ -3,7 +3,7 @@ export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localh
 
 // MapTiler Configuration
 export const MAPTILER_API_KEY = process.env.REACT_APP_MAPTILER_API_KEY || '';
-export const MAPTILER_STYLE_URL = process.env.REACT_APP_MAPTILER_STYLE_URL || 'https://api.maptiler.com/maps/0197febb-3c55-7863-a31f-7d8d1e3df976/style.json';
+export const MAPTILER_STYLE_URL = process.env.REACT_APP_MAPTILER_STYLE_URL || '';
 
 // API Endpoints
 export const API_ENDPOINTS = {
