@@ -36,6 +36,28 @@ export class BeaconBuilder {
     private _lastSeen: string | null = null;
     private _beaconType: { name: string } | null = null;
 
+    public constructor() {
+        return this;
+    }
+
+    public static fromBeacon(beacon: Beacon): BeaconBuilder {
+        let res = new BeaconBuilder();
+        res._id = beacon.properties.id;
+        res._beaconType = beacon.properties.beaconType?.name ? {name: beacon.properties.beaconType.name} : null;
+        res._floorId = beacon.properties.floorId;
+        res._beaconTypeId = beacon.properties.beaconTypeId ?? null;
+        res._name = beacon.properties.name;
+        res._uuid = beacon.properties.uuid ?? null;
+        res._majorId = beacon.properties.majorId ?? null;
+        res._minorId = beacon.properties.minorId ?? null;
+        res._isActive = beacon.properties.isActive;
+        res._isVisible = beacon.properties.isVisible;
+        res._batteryLevel = beacon.properties.batteryLevel;
+        res._lastSeen = beacon.properties.lastSeen ?? null;
+        res._geometry = beacon.geometry ?? null;
+        return res;
+    }
+    
     public setId(id: number): this {
         this._id = id;
         return this;

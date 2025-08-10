@@ -35,6 +35,20 @@ export class PolygonBuilder {
         coordinates: number[][][];
     };
 
+    public static fromPolygon(polygon: Polygon): PolygonBuilder {
+        let res = new PolygonBuilder();
+        res.setId(polygon.properties.id);
+        res.setFloorId(polygon.properties.floorId);
+        res.setName(polygon.properties.name);
+        res.setDescription(polygon.properties.description);
+        res.setType(polygon.properties.type);
+        res.setIsVisible(polygon.properties.isVisible);
+        res.setColor(polygon.properties.color);
+        res.setCategoryId(polygon.properties.categoryId);
+        res.setGeometry(polygon.geometry.coordinates);
+        return res;
+    }
+
     public setId(id: number): this {
         this._properties.id = id;
         return this;

@@ -183,7 +183,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Polygon dialog state
 	const [showPolygonDialog, setShowPolygonDialog] = useState(false);
 	const [polygonName, setPolygonName] = useState("");
-	const [isWallMode, setIsWallMode] = useState(false);
+    // const [isWallMode, setIsWallMode] = useState(false);
 
 	// Beacon dialog state
 	const [showBeaconDialog, setShowBeaconDialog] = useState(false);
@@ -1166,7 +1166,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			// setPendingPolygonCenter({ lng: centerX, lat: centerY });
 			setPolygonName("");
-			setIsWallMode(false);
+            // setIsWallMode(false);
 			setShowPolygonDialog(true);
 
 			logger.info("🎉 Showing polygon dialog", {
@@ -1264,11 +1264,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Edit
             const polygon = polygons.find((p) => p.properties.id === editingPolygonId);
 			if (polygon) {
-				const updated = {
-					...polygon,
-					name: polygonName,
-					type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
-				};
+                const updated = PolygonBuilder.fromPolygon(polygon).setName(polygonName).build();
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
 					old.map(p => (p.properties.id === editingPolygonId ? updated : p))
 				);
@@ -1300,7 +1296,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 		setShowPolygonDialog(false);
 		setPolygonName("");
-		setIsWallMode(false);
+        // setIsWallMode(false);
 		setEditingPolygonId(null);
 		setPendingPolygonPoints([]);
 	};
@@ -1311,7 +1307,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Edit
             const beacon = beacons.find((b) => b.properties.id === editingBeaconId);
 			if (beacon) {
-                const updated = {...beacon, properties: {...beacon.properties, name: beaconName}};
+                const updated = BeaconBuilder.fromBeacon(beacon).setName(beaconName).build();
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => (b.properties.id === editingBeaconId ? updated : b))
 				);
@@ -1604,7 +1600,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handlePolygonCancel = () => {
 		setShowPolygonDialog(false);
 		setPolygonName("");
-		setIsWallMode(false);
+        // setIsWallMode(false);
 		setEditingPolygonId(null);
 		setPendingPolygonPoints([]);
 		logger.userAction("Polygon dialog cancelled");
@@ -1647,7 +1643,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
                 const polygon = polygons.find((p) => p.properties.id === id);
 				if (polygon) {
                     setPolygonName(polygon.properties.name);
-                    setIsWallMode(polygon.properties.type.toString() === "Wall");
 					setEditingPolygonId(id);
 					setShowPolygonDialog(true);
 					setSelectedItem({type, id});
@@ -1834,10 +1829,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			<PolygonDialog
 				show={showPolygonDialog}
 				polygonName={polygonName}
-				isWallMode={isWallMode}
+                isWallMode={false}
 				isEditing={!!editingPolygonId}
 				onNameChange={setPolygonName}
-				onWallModeChange={setIsWallMode}
+                onWallModeChange={() => {
+                }}
 				onSave={handlePolygonSave}
 				onCancel={handlePolygonCancel}
 			/>
