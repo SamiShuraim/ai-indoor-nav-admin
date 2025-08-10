@@ -311,11 +311,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Add polygons as filled areas
 			currentPolygons.forEach((p) => {
 				const polygon = p.properties;
-                console.log(polygon)
-                console.log(p.geometry.coordinates[0][0].length)
-                console.log(p.geometry.coordinates[0][0])
-                console.log(p.geometry.coordinates[0])
-                console.log(p.geometry.coordinates)
                 if (polygon.is_visible && p.geometry.coordinates[0].length >= 3) {
 					const coordinates = p.geometry.coordinates;
                     console.log("WE ARE IN")
@@ -1495,14 +1490,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								});
 							}
 
-							return {
-								...polygon, // includes geometry and properties
-								properties: {
-									...polygon.properties,
-									visible: newVisible, // override the visible field
-								},
-							};
-						}
+                            return PolygonBuilder.fromPolygon(polygon).setIsVisible(newVisible).build();
+                        }
 						return polygon;
 					});
 
@@ -1527,7 +1516,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								}
 							}
 
-							return {...b, visible: newVisible};
+                            return BeaconBuilder.fromBeacon(b).setIsVisible(newVisible).build();
 						}
 						return b;
 					})
