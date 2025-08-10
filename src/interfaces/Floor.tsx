@@ -5,8 +5,8 @@ import {Polygon} from "./Polygon";
 export interface Floor {
     id: number;
     name: string;
-    floorNumber: number;
-    buildingId: number;
+    floor_number: number;
+    building_id: number;
     building?: Building;
     nodes?: RouteNode[];
     polygons?: Polygon[];

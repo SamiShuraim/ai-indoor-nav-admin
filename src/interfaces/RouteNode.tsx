@@ -5,8 +5,8 @@ export interface RouteNode {
     } | null;
     properties: {
         id: number;
-        floorId: number;
-        isVisible: boolean;
+        floor_id: number;
+        is_visible: boolean;
         connections: number[]; // IDs of connected RouteNodes
     }
 }
@@ -58,8 +58,8 @@ export class RouteNodeBuilder {
             geometry: this._geometry,
             properties: {
                 id: this._id,
-                floorId: this._floorId,
-                isVisible: this._isVisible,
+                floor_id: this._floorId,
+                is_visible: this._isVisible,
                 connections: this._connections,
             }
         };

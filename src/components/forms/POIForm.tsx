@@ -90,9 +90,9 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
         name: p.name || '',
         description: p.description || '',
         poiType: p.type || 'room',
-        categoryId: p.categoryId || null,
+          categoryId: p.category_id || null,
         color: p.color || '#3B82F6',
-        isVisible: p.isVisible ?? true,
+          isVisible: p.is_visible ?? true,
         x: 0, // POI coordinates will be handled separately with POI points
         y: 0  // POI coordinates will be handled separately with POI points
       });

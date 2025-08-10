@@ -63,12 +63,12 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
       setFormData({
         name: b.name || '',
         uuid: b.uuid || '',
-        majorId: b.majorId || null,
-        minorId: b.minorId || null,
-        beaconTypeId: b.beaconTypeId || null,
+          majorId: b.major_id || null,
+          minorId: b.minor_id || null,
+          beaconTypeId: b.beacon_type_id || null,
         geometry: beacon.geometry || null,
-        isVisible: b.isVisible ?? true,
-        batteryLevel: b.batteryLevel || null,
+          isVisible: b.is_visible ?? true,
+          batteryLevel: b.battery_level || null,
       });
     }
   }, [beacon]);

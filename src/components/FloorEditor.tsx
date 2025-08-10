@@ -281,7 +281,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				nodeDetails: currentNodes.map((n) => ({
                     id: n.properties.id,
                     location: n.geometry?.coordinates,
-                    visible: n.properties.isVisible,
+                    visible: n.properties.is_visible,
 				})),
 			});
 			const mapInstance = map.current;
@@ -311,9 +311,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Add polygons as filled areas
 			currentPolygons.forEach((p) => {
 				const polygon = p.properties;
-				if (polygon.isVisible && p.geometry.coordinates[0][0].length >= 3) {
+                console.log(polygon)
+                console.log(p.geometry.coordinates[0][0].length)
+                console.log(p.geometry.coordinates[0][0])
+                console.log(p.geometry.coordinates[0])
+                console.log(p.geometry.coordinates)
+                if (polygon.is_visible && p.geometry.coordinates[0].length >= 3) {
 					const coordinates = p.geometry.coordinates;
-
+                    console.log("WE ARE IN")
 					const sourceId = `polygon-source-${polygon.id}`;
 					const layerId = `polygon-layer-${polygon.id}`;
 
@@ -381,7 +386,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Add beacons
 			currentBeacons.forEach((b) => {
 				let beacon = b.properties;
-				if (beacon.isVisible) {
+                if (beacon.is_visible) {
 					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
 						.setLngLat(b.geometry!!.coordinates)
 						.setPopup(
@@ -396,19 +401,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Add nodes
 			logger.info("Processing nodes for rendering", {
 				totalNodes: currentNodes.length,
-                visibleNodes: currentNodes.filter((n) => n.properties.isVisible).length,
+                visibleNodes: currentNodes.filter((n) => n.properties.is_visible).length,
 			});
 
 			currentNodes.forEach((node) => {
 				logger.info("Processing node", {
                     nodeId: node.properties.id,
-                    visible: node.properties.isVisible,
+                    visible: node.properties.is_visible,
                     location: node.geometry,
                     connections: node.properties.connections,
                     isSelected: selectedNodeId === node.properties.id,
 				});
 
-                if (node.properties.isVisible) {
+                if (node.properties.is_visible) {
                     const isSelected = selectedNodeId === node.properties.id;
                     mapMarkers.current[`node-${node.properties.id}`] = new Marker({
 						color: isSelected ? "#ef4444" : "#3b82f6",
@@ -429,21 +434,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			const renderedEdges = new Set<string>(); // Prevent duplicate lines
 
 			currentNodes.forEach((node) => {
-                if (!node.properties.isVisible || !node.geometry) return;
+                if (!node.properties.is_visible || !node.geometry) return;
 
                 node.properties.connections.forEach((connectedNodeId) => {
                     const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
 
 					if (
 						!targetNode ||
-                        !targetNode.properties.isVisible ||
+                        !targetNode.properties.is_visible ||
                         !targetNode.geometry
 					) {
 						logger.warn("Skipping connection due to missing/hidden node", {
                             fromId: node.properties.id,
 							toId: connectedNodeId,
-                            fromVisible: node.properties.isVisible,
-                            toVisible: targetNode?.properties.isVisible,
+                            fromVisible: node.properties.is_visible,
+                            toVisible: targetNode?.properties.is_visible,
 						});
 						return;
 					}
@@ -506,7 +511,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 				if (type === "polygon") {
 					const polygon = currentPolygons.find((p) => p.properties.id === id);
-					if (polygon && polygon.properties.isVisible) {
+                    if (polygon && polygon.properties.is_visible) {
 						// Highlight selected polygon with a thicker border or different color
 						const layerId = `polygon-layer-${id}`;
 						const borderLayerId = `polygon-border-${id}`;
@@ -534,7 +539,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				} else if (type === "beacon") {
 					const b = currentBeacons.find((b) => b.properties.id === id);
 					const beacon = b?.properties
-					if (beacon && beacon.isVisible) {
+                    if (beacon && beacon.is_visible) {
 						// Highlight selected beacon
 						const marker = mapMarkers.current[`beacon-${id}`];
 						if (marker) {
@@ -555,7 +560,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					}
 				} else if (type === "node") {
                     const node = currentNodes.find((n) => n.properties.id === id);
-                    if (node && node.properties.isVisible) {
+                    if (node && node.properties.is_visible) {
 						// Highlight selected node
 						const marker = mapMarkers.current[`node-${id}`];
 						if (marker) {
@@ -800,7 +805,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handleNodeClick = (lng: number, lat: number) => {
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
 		const clickedNode = nodes.find((node) => {
-            if (!node.properties.isVisible) return false;
+            if (!node.properties.is_visible) return false;
 			// Use proper Euclidean distance like the working Canvas version
 			const distance = Math.sqrt(
                 (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[0] - lat) ** 2
@@ -1440,10 +1445,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					const newPolygons = old.map(polygon => {
 						const p = polygon.properties;
 						if (p.id === id) {
-							const newVisible = !p.isVisible;
+                            const newVisible = !p.is_visible;
 							logger.userAction("Found matching polygon, toggling visibility", {
 								id,
-								oldVisible: p.isVisible,
+                                oldVisible: p.is_visible,
 								newVisible
 							});
 
@@ -1510,7 +1515,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => {
 						if (b.properties.id === id) {
-							const newVisible = !b.properties.isVisible;
+                            const newVisible = !b.properties.is_visible;
 
 							// Update map visibility
 							const marker = mapMarkers.current[`beacon-${id}`];

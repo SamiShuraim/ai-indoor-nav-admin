@@ -219,7 +219,7 @@ const BuildingsManagement: React.FC<BuildingsManagementProps> = ({ onBack, onFlo
   const startEditFloor = (floor: Floor) => {
     logger.userAction('Start editing floor', { floorId: floor.id });
     setEditingFloor(floor);
-    setFloorFormData({ name: floor.name || '', floorNumber: floor.floorNumber || 0 });
+      setFloorFormData({name: floor.name || '', floorNumber: floor.floor_number || 0});
     setShowFloorForm(true);
   };
 
@@ -340,7 +340,7 @@ const BuildingsManagement: React.FC<BuildingsManagementProps> = ({ onBack, onFlo
                 {floors.map((floor) => (
                   <Card
                     key={floor.id}
-                    title={`Floor ${floor.floorNumber < 0 ? 'B' + Math.abs(floor.floorNumber) : floor.floorNumber === 0 ? 'G' : floor.floorNumber}: ${floor.name}`}
+                    title={`Floor ${floor.floor_number < 0 ? 'B' + Math.abs(floor.floor_number) : floor.floor_number === 0 ? 'G' : floor.floor_number}: ${floor.name}`}
                     description={`Floor in ${selectedBuilding.name}`}
                     className="floor-card"
                     actions={

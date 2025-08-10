@@ -5,6 +5,6 @@ export interface PoiCategory {
     color?: string;
     icon?: string;
     description?: string;
-    createdAt: string;
-    updatedAt: string;
+    created_at: string;
+    updated_at: string;
 }

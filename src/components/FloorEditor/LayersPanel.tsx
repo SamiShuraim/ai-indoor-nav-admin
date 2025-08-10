@@ -97,9 +97,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility('polygon', polygon.properties.id);
                   }}
-                  title={polygon.properties.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={polygon.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {polygon.properties.isVisible ? '👁️' : '🚫'}
+                    {polygon.properties.is_visible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color" style={{backgroundColor: polygon.properties.color}}></div>
                 <span className="layer-name">{polygon.properties.name}</span>
@@ -141,9 +141,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                     onToggleVisibility('beacon', beacon.properties.id);
                   }}
-                  title={beacon.properties.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={beacon.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {beacon.properties.isVisible ? '👁️' : '🚫'}
+                    {beacon.properties.is_visible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color beacon-color"></div>
                 <span className="layer-name">{beacon.properties.name}</span>
@@ -184,9 +184,9 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                     e.stopPropagation();
                       onToggleVisibility('node', node.properties.id);
                   }}
-                  title={node.properties.isVisible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={node.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                    {node.properties.isVisible ? '👁️' : '🚫'}
+                    {node.properties.is_visible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color node-color"></div>
                   <span className="layer-name">Node {node.properties.id}</span>

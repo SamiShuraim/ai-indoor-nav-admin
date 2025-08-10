@@ -14,8 +14,8 @@ export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutDa
             geometry: node.geometry,
             properties: {
                 id: node.properties.id,
-                floorId: node.properties.floorId,
-                isVisible: node.properties.isVisible,
+                floor_id: node.properties.floor_id,
+                is_visible: node.properties.is_visible,
                 connections: node.properties.connections,
             }
         });

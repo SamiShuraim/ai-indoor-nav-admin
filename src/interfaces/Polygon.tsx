@@ -2,13 +2,13 @@ export type PolygonType = "Room" | "Stairs" | "Elevator" | "Wall";
 
 export interface PolygonProperties {
     id: number;
-    floorId: number;
+    floor_id: number;
     name: string;
     description: string;
     type: PolygonType;
-    isVisible: boolean;
+    is_visible: boolean;
     color: string;
-    categoryId: number | null;
+    category_id: number | null;
 }
 
 export interface Polygon {
@@ -22,13 +22,13 @@ export interface Polygon {
 export class PolygonBuilder {
     private _properties: PolygonProperties = {
         id: 0,
-        floorId: 0,
+        floor_id: 0,
         name: "",
         description: "",
         type: "Room",
-        isVisible: true,
+        is_visible: true,
         color: "#000000",
-        categoryId: 0,
+        category_id: 0,
     };
     private _geometry!: {
         type: "Polygon";
@@ -38,13 +38,13 @@ export class PolygonBuilder {
     public static fromPolygon(polygon: Polygon): PolygonBuilder {
         let res = new PolygonBuilder();
         res.setId(polygon.properties.id);
-        res.setFloorId(polygon.properties.floorId);
+        res.setFloorId(polygon.properties.floor_id);
         res.setName(polygon.properties.name);
         res.setDescription(polygon.properties.description);
         res.setType(polygon.properties.type);
-        res.setIsVisible(polygon.properties.isVisible);
+        res.setIsVisible(polygon.properties.is_visible);
         res.setColor(polygon.properties.color);
-        res.setCategoryId(polygon.properties.categoryId);
+        res.setCategoryId(polygon.properties.category_id);
         res.setGeometry(polygon.geometry.coordinates);
         return res;
     }
@@ -55,7 +55,7 @@ export class PolygonBuilder {
     }
 
     public setFloorId(floorId: number): this {
-        this._properties.floorId = floorId;
+        this._properties.floor_id = floorId;
         return this;
     }
 
@@ -75,7 +75,7 @@ export class PolygonBuilder {
     }
 
     public setIsVisible(isVisible: boolean): this {
-        this._properties.isVisible = isVisible;
+        this._properties.is_visible = isVisible;
         return this;
     }
 
@@ -85,7 +85,7 @@ export class PolygonBuilder {
     }
 
     public setCategoryId(categoryId: number | null): this {
-        this._properties.categoryId = categoryId;
+        this._properties.category_id = categoryId;
         return this;
     }
 

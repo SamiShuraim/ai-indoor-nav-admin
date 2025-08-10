@@ -5,17 +5,17 @@ export interface Beacon {
     } | null;
     properties: {
         id: number;
-        floorId: number;
-        beaconTypeId?: number | null;
+        floor_id: number;
+        beacon_type_id?: number | null;
         name: string;
         uuid?: string | null;
-        majorId?: number | null;
-        minorId?: number | null;
-        isActive: boolean;
-        isVisible: boolean;
-        batteryLevel: number;
-        lastSeen?: string | null; // ISO date string
-        beaconType?: {
+        major_id?: number | null;
+        minor_id?: number | null;
+        is_active: boolean;
+        is_visible: boolean;
+        battery_level: number;
+        last_seen?: string | null; // ISO date string
+        beacon_type?: {
             name: string;
         } | null;
     }
@@ -43,17 +43,17 @@ export class BeaconBuilder {
     public static fromBeacon(beacon: Beacon): BeaconBuilder {
         let res = new BeaconBuilder();
         res._id = beacon.properties.id;
-        res._beaconType = beacon.properties.beaconType?.name ? {name: beacon.properties.beaconType.name} : null;
-        res._floorId = beacon.properties.floorId;
-        res._beaconTypeId = beacon.properties.beaconTypeId ?? null;
+        res._beaconType = beacon.properties.beacon_type?.name ? {name: beacon.properties.beacon_type.name} : null;
+        res._floorId = beacon.properties.floor_id;
+        res._beaconTypeId = beacon.properties.beacon_type_id ?? null;
         res._name = beacon.properties.name;
         res._uuid = beacon.properties.uuid ?? null;
-        res._majorId = beacon.properties.majorId ?? null;
-        res._minorId = beacon.properties.minorId ?? null;
-        res._isActive = beacon.properties.isActive;
-        res._isVisible = beacon.properties.isVisible;
-        res._batteryLevel = beacon.properties.batteryLevel;
-        res._lastSeen = beacon.properties.lastSeen ?? null;
+        res._majorId = beacon.properties.major_id ?? null;
+        res._minorId = beacon.properties.minor_id ?? null;
+        res._isActive = beacon.properties.is_active;
+        res._isVisible = beacon.properties.is_visible;
+        res._batteryLevel = beacon.properties.battery_level;
+        res._lastSeen = beacon.properties.last_seen ?? null;
         res._geometry = beacon.geometry ?? null;
         return res;
     }
@@ -131,17 +131,17 @@ export class BeaconBuilder {
             geometry: this._geometry,
             properties: {
                 id: this._id,
-                floorId: this._floorId,
-                beaconTypeId: this._beaconTypeId,
+                floor_id: this._floorId,
+                beacon_type_id: this._beaconTypeId,
                 name: this._name,
                 uuid: this._uuid,
-                majorId: this._majorId,
-                minorId: this._minorId,
-                isActive: this._isActive,
-                isVisible: this._isVisible,
-                batteryLevel: this._batteryLevel,
-                lastSeen: this._lastSeen,
-                beaconType: this._beaconType,
+                major_id: this._majorId,
+                minor_id: this._minorId,
+                is_active: this._isActive,
+                is_visible: this._isVisible,
+                battery_level: this._batteryLevel,
+                last_seen: this._lastSeen,
+                beacon_type: this._beaconType,
             },
         };
     }
