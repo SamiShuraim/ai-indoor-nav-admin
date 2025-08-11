@@ -5,8 +5,8 @@ import {buildingsApi, floorsApi} from '../utils/api';
 import {createLogger} from '../utils/logger';
 import './BuildingsManagement.css';
 import {Button, Card, Container, Header, Input} from './common';
-import {Building} from "../utils/api_helpers/api_interfaces/building";
-import {Floor} from "../utils/api_helpers/api_interfaces/floor";
+import {Building} from "../interfaces/Building";
+import {Floor} from "../interfaces/Floor";
 
 const logger = createLogger('BuildingsManagement');
 
@@ -148,9 +148,9 @@ const BuildingsManagement: React.FC<BuildingsManagementProps> = ({ onBack, onFlo
 
     try {
       const floorData = {
-        name: floorFormData.name.trim(),
-        floorNumber: floorFormData.floorNumber,
-        buildingId: selectedBuilding.id,
+          name: floorFormData.name.trim(),
+          floorNumber: floorFormData.floorNumber,
+          buildingId: selectedBuilding.id,
       };
 
       if (editingFloor) {
@@ -219,7 +219,7 @@ const BuildingsManagement: React.FC<BuildingsManagementProps> = ({ onBack, onFlo
   const startEditFloor = (floor: Floor) => {
     logger.userAction('Start editing floor', { floorId: floor.id });
     setEditingFloor(floor);
-    setFloorFormData({ name: floor.name || '', floorNumber: floor.floorNumber || 0 });
+      setFloorFormData({name: floor.name || '', floorNumber: floor.floorNumber || 0});
     setShowFloorForm(true);
   };
 

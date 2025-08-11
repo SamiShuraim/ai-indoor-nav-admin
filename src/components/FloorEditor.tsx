@@ -1,9 +1,9 @@
-import {config, Map, Marker, Popup} from "@maptiler/sdk";
+import {config, Map, Marker, Point, Popup} from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
 import {UI_MESSAGES} from "../constants/ui";
-import {beaconsApi, floorsApi, poisApi, routeNodesApi,} from "../utils/api";
+import {beaconsApi, floorsApi, polygonsApi, routeNodesApi,} from "../utils/api";
 import {createLogger} from "../utils/logger";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
@@ -12,23 +12,21 @@ import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
-import {Floor} from "../utils/api_helpers/api_interfaces/floor";
 import {BaseApi} from "../utils/abstract_classes/baseApi";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
 import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
-import {FloorEditorProps} from "./FloorEditor/interfaces/FloorEditorProps";
-import {Point} from "./FloorEditor/interfaces/Point";
-import {Polygon} from "./FloorEditor/interfaces/Polygon";
-import {RouteNode} from "./FloorEditor/interfaces/RouteNode";
-import {Beacon} from "./FloorEditor/interfaces/Beacon";
-import {Edge} from "./FloorEditor/interfaces/Edge";
-import {ChangeQueueItem} from "./FloorEditor/interfaces/ChangeQueueItem";
+import {FloorEditorProps} from "../interfaces/FloorEditorProps";
+import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
+import {RouteNode, RouteNodeBuilder} from "../interfaces/RouteNode";
+import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
+import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
 import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
 import {OBJECT_TYPES} from "./FloorEditor/enums/OBJECT_TYPES";
 import {STORAGE_KEYS} from "./FloorEditor/enums/STORAGE_KEYS";
 import {API_URL_KEYS} from "./FloorEditor/enums/API_URL_KEYS";
 import {useEntityMutations} from "./FloorEditor/useEntityMutations";
+import {Floor} from "../interfaces/Floor";
 
 const logger = createLogger("FloorEditor");
 
@@ -95,6 +93,10 @@ const saveToStorage = (key: string, value: any): void => {
 	}
 };
 
+function convertPointsToCoordinates(points: Point[]): number[][][] {
+	return [points.map(p => [p.x, p.y])];
+}
+
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", {floorId});
@@ -129,9 +131,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Timeout reference for cleanup
 	const mapLoadTimeout = useRef<NodeJS.Timeout | null>(null);
 
-	// Track if we've loaded initial data
-	const initialDataLoaded = useRef<boolean>(false);
-
 	// Throttle coordinate updates to prevent infinite re-renders
 	const coordinateUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -147,21 +146,17 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const [activeTool, setActiveTool] = useState<DrawingTool>("select");
 	const activeToolRef = useRef<DrawingTool>("select");
 
-	const {data: polygons = []} = useQuery({
+    const {data: polygons = []} = useQuery<Polygon[]>({
 		queryKey: ['polygons'],
 		queryFn: () => loadFromApi(API_URL_KEYS.POI),
 	});
-	const {data: beacons = []} = useQuery({
+    const {data: beacons = []} = useQuery<Beacon[]>({
 		queryKey: ['beacons'],
 		queryFn: () => loadFromApi(API_URL_KEYS.BEACONS),
 	});
-	const {data: nodes = []} = useQuery({
+    const {data: nodes = []} = useQuery<RouteNode[]>({
 		queryKey: ['nodes'],
 		queryFn: () => loadFromApi(API_URL_KEYS.NODES),
-	});
-	const {data: edges = []} = useQuery({
-		queryKey: ['edges'],
-		queryFn: () => loadFromApi(API_URL_KEYS.EDGES),
 	});
 
 	// Route node creation state
@@ -188,7 +183,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Polygon dialog state
 	const [showPolygonDialog, setShowPolygonDialog] = useState(false);
 	const [polygonName, setPolygonName] = useState("");
-	const [isWallMode, setIsWallMode] = useState(false);
+    // const [isWallMode, setIsWallMode] = useState(false);
 
 	// Beacon dialog state
 	const [showBeaconDialog, setShowBeaconDialog] = useState(false);
@@ -200,16 +195,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Polygon drawing state
 	const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-	// const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
-	// 	[]
-	// );
+	const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
+		[]
+	);
 	const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>(
 		[]
 	);
-	// const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
-	// 	lng: number;
-	// 	lat: number;
-	// } | null>(null);
+	const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
+		lng: number;
+		lat: number;
+	} | null>(null);
 
 	// Use refs to prevent state loss during re-renders
 	const pendingPolygonPointsRef = useRef<Point[]>([]);
@@ -233,7 +228,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	const poisMutations = useEntityMutations('pois', poisApi);
+	const poisMutations = useEntityMutations('pois', polygonsApi);
 	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
 	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
 	// Sync queue to local storage
@@ -273,49 +268,20 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			currentPolygons: Polygon[],
 			currentBeacons: Beacon[],
 			currentNodes: RouteNode[],
-			originalEdges: Edge[],
 			selectedNodeId?: number | null
 		) => {
 			if (!map.current) return;
-
-			// Clean up orphaned edges before rendering
-			const nodeIds = new Set(currentNodes.map((n) => n.id));
-			const validEdges = originalEdges.filter((edge: Edge) => {
-				const isValid =
-					nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
-				if (!isValid) {
-					logger.warn("Skipping orphaned edge during render", {
-						edgeId: edge.id,
-						fromNodeId: edge.fromNodeId,
-						toNodeId: edge.toNodeId,
-					});
-				}
-				return isValid;
-			});
-
-			// Use validated edges for rendering
-			const renderEdges = validEdges;
 
 			logger.info("Updating map with current data", {
 				polygonsCount: currentPolygons.length,
 				beaconsCount: currentBeacons.length,
 				nodesCount: currentNodes.length,
-				edgesCount: validEdges.length,
-				originalEdgesCount: originalEdges.length,
 				selectedNodeId,
-				nodeIds: currentNodes.map((n) => n.id),
-				edgeIds: renderEdges.map((e: Edge) => e.id),
+                nodeIds: currentNodes.map((n) => n.properties.id),
 				nodeDetails: currentNodes.map((n) => ({
-					id: n.id,
-					x: n.x,
-					y: n.y,
-					visible: n.visible,
-				})),
-				edgeDetails: renderEdges.map((e: Edge) => ({
-					id: e.id,
-					from: e.fromNodeId,
-					to: e.toNodeId,
-					visible: e.visible,
+                    id: n.properties.id,
+                    location: n.geometry?.coordinates,
+                    visible: n.properties.is_visible,
 				})),
 			});
 			const mapInstance = map.current;
@@ -343,11 +309,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			mapSources.current = {};
 
 			// Add polygons as filled areas
-			currentPolygons.forEach((polygon) => {
-				if (polygon.visible && polygon.points.length >= 3) {
-					const coordinates = polygon.points.map((p) => [p.x, p.y]);
-					coordinates.push(coordinates[0]); // Close the polygon
-
+			currentPolygons.forEach((p) => {
+				const polygon = p.properties;
+                if (polygon.is_visible && p.geometry.coordinates[0].length >= 3) {
+					const coordinates = p.geometry.coordinates;
+                    console.log("WE ARE IN")
 					const sourceId = `polygon-source-${polygon.id}`;
 					const layerId = `polygon-layer-${polygon.id}`;
 
@@ -357,7 +323,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							type: "Feature",
 							geometry: {
 								type: "Polygon",
-								coordinates: [coordinates],
+								coordinates: coordinates,
 							},
 							properties: {},
 						},
@@ -391,13 +357,12 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					mapLayers.current[`polygon-border-${polygon.id}`] =
 						borderLayerId;
 
-					// Add center marker for interaction
-					const centerX =
-						polygon.points.reduce((sum, p) => sum + p.x, 0) /
-						polygon.points.length;
-					const centerY =
-						polygon.points.reduce((sum, p) => sum + p.y, 0) /
-						polygon.points.length;
+					// Add center marker for interaction using GeoJSON
+					const ring = p.geometry.coordinates[0]; // outer ring
+
+					const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+					const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+
 
 					mapMarkers.current[`polygon-${polygon.id}`] = new Marker({
 						color: polygon.color,
@@ -414,10 +379,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			});
 
 			// Add beacons
-			currentBeacons.forEach((beacon) => {
-				if (beacon.visible) {
+			currentBeacons.forEach((b) => {
+				let beacon = b.properties;
+                if (beacon.is_visible) {
 					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
-						.setLngLat([beacon.x, beacon.y])
+						.setLngLat(b.geometry!!.coordinates)
 						.setPopup(
 							new Popup().setHTML(
 								`<strong>${beacon.name}</strong><br>Type: Beacon`
@@ -430,147 +396,108 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			// Add nodes
 			logger.info("Processing nodes for rendering", {
 				totalNodes: currentNodes.length,
-				visibleNodes: currentNodes.filter((n) => n.visible).length,
+                visibleNodes: currentNodes.filter((n) => n.properties.is_visible).length,
 			});
 
 			currentNodes.forEach((node) => {
 				logger.info("Processing node", {
-					nodeId: node.id,
-					visible: node.visible,
-					x: node.x,
-					y: node.y,
-					connections: node.connections,
-					isSelected: selectedNodeId === node.id,
+                    nodeId: node.properties.id,
+                    visible: node.properties.is_visible,
+                    location: node.geometry,
+                    connections: node.properties.connections,
+                    isSelected: selectedNodeId === node.properties.id,
 				});
 
-				if (node.visible) {
-					const isSelected = selectedNodeId === node.id;
-					mapMarkers.current[`node-${node.id}`] = new Marker({
+                if (node.properties.is_visible) {
+                    const isSelected = selectedNodeId === node.properties.id;
+                    mapMarkers.current[`node-${node.properties.id}`] = new Marker({
 						color: isSelected ? "#ef4444" : "#3b82f6",
 					})
-						.setLngLat([node.x, node.y])
+                        .setLngLat(node.geometry!!.coordinates)
 						.addTo(mapInstance);
 					logger.info("Node marker added to map", {
-						nodeId: node.id,
-						markerKey: `node-${node.id}`,
+                        nodeId: node.properties.id,
+                        markerKey: `node-${node.properties.id}`,
 					});
 				} else {
 					logger.warn("Node not visible, skipping", {
-						nodeId: node.id,
+                        nodeId: node.properties.id,
 					});
 				}
 			});
 
-			// Add route lines between connected nodes
-			logger.info("Processing edges for rendering", {
-				totalEdges: renderEdges.length,
-				visibleEdges: renderEdges.filter((e) => e.visible).length,
-			});
+			const renderedEdges = new Set<string>(); // Prevent duplicate lines
 
-			renderEdges.forEach((edge) => {
-				logger.info("Processing edge", {
-					edgeId: edge.id,
-					visible: edge.visible,
-					fromNodeId: edge.fromNodeId,
-					toNodeId: edge.toNodeId,
-				});
+			currentNodes.forEach((node) => {
+                if (!node.properties.is_visible || !node.geometry) return;
 
-				if (edge.visible) {
-					const fromNode = currentNodes.find(
-						(n) => n.id === edge.fromNodeId
-					);
-					const toNode = currentNodes.find(
-						(n) => n.id === edge.toNodeId
-					);
-
-					logger.info("Edge node lookup", {
-						edgeId: edge.id,
-						lookingForFromNodeId: edge.fromNodeId,
-						lookingForToNodeId: edge.toNodeId,
-						availableNodeIds: currentNodes.map((n) => n.id),
-						fromNode: fromNode
-							? {id: fromNode.id, visible: fromNode.visible}
-							: null,
-						toNode: toNode
-							? {id: toNode.id, visible: toNode.visible}
-							: null,
-					});
+                node.properties.connections.forEach((connectedNodeId) => {
+                    const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
 
 					if (
-						fromNode &&
-						toNode &&
-						fromNode.visible &&
-						toNode.visible
+						!targetNode ||
+                        !targetNode.properties.is_visible ||
+                        !targetNode.geometry
 					) {
-						const sourceId = `edge-source-${edge.id}`;
-						const layerId = `edge-layer-${edge.id}`;
-
-						logger.info("Adding edge to map", {
-							edgeId: edge.id,
-							sourceId,
-							layerId,
-							fromCoords: [fromNode.x, fromNode.y],
-							toCoords: [toNode.x, toNode.y],
+						logger.warn("Skipping connection due to missing/hidden node", {
+                            fromId: node.properties.id,
+							toId: connectedNodeId,
+                            fromVisible: node.properties.is_visible,
+                            toVisible: targetNode?.properties.is_visible,
 						});
-
-						mapInstance.addSource(sourceId, {
-							type: "geojson",
-							data: {
-								type: "Feature",
-								geometry: {
-									type: "LineString",
-									coordinates: [
-										[fromNode.x, fromNode.y],
-										[toNode.x, toNode.y],
-									],
-								},
-								properties: {},
-							},
-						});
-
-						mapInstance.addLayer({
-							id: layerId,
-							type: "line",
-							source: sourceId,
-							paint: {
-								"line-color": "#3b82f6", // Blue color as requested
-								"line-width": 3,
-								"line-opacity": 0.8,
-							},
-						});
-
-						// Track sources and layers
-						mapSources.current[`edge-${edge.id}`] = sourceId;
-						mapLayers.current[`edge-${edge.id}`] = layerId;
-
-						logger.info("Edge layer added successfully", {
-							edgeId: edge.id,
-							sourceId,
-							layerId,
-						});
-					} else {
-						logger.warn("Edge nodes not found or not visible", {
-							edgeId: edge.id,
-							fromNodeId: edge.fromNodeId,
-							toNodeId: edge.toNodeId,
-							fromNodeFound: !!fromNode,
-							toNodeFound: !!toNode,
-							fromNodeVisible: fromNode?.visible,
-							toNodeVisible: toNode?.visible,
-							availableNodeIds: currentNodes.map((n) => n.id),
-							"fromNodeId in available": currentNodes.some(
-								(n) => n.id === edge.fromNodeId
-							),
-							"toNodeId in available": currentNodes.some(
-								(n) => n.id === edge.toNodeId
-							),
-						});
+						return;
 					}
-				} else {
-					logger.warn("Edge not visible, skipping", {
-						edgeId: edge.id,
+
+					// Prevent duplicate edges (e.g., from both A→B and B→A)
+                    const edgeKey = [node.properties.id, connectedNodeId].sort((a, b) => a - b).join("-");
+					if (renderedEdges.has(edgeKey)) return;
+					renderedEdges.add(edgeKey);
+
+					const sourceId = `edge-source-${edgeKey}`;
+					const layerId = `edge-layer-${edgeKey}`;
+
+                    const fromCoords = node.geometry!!.coordinates;
+                    const toCoords = targetNode.geometry.coordinates;
+
+					logger.info("Rendering route edge", {
+						edgeKey,
+                        fromId: node.properties.id,
+						toId: connectedNodeId,
+						fromCoords,
+						toCoords,
 					});
-				}
+
+					mapInstance.addSource(sourceId, {
+						type: "geojson",
+						data: {
+							type: "Feature",
+							geometry: {
+								type: "LineString",
+								coordinates: [fromCoords, toCoords],
+							},
+							properties: {},
+						},
+					});
+
+					mapInstance.addLayer({
+						id: layerId,
+						type: "line",
+						source: sourceId,
+						paint: {
+							"line-color": "#3b82f6",
+							"line-width": 3,
+							"line-opacity": 0.8,
+						},
+					});
+
+					mapSources.current[`edge-${edgeKey}`] = sourceId;
+					mapLayers.current[`edge-${edgeKey}`] = layerId;
+
+					logger.info("Edge layer added", {
+						sourceId,
+						layerId,
+					});
+				});
 			});
 
 			// Add highlighting for selected object
@@ -578,8 +505,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const {type, id} = selectedItem;
 
 				if (type === "polygon") {
-					const polygon = currentPolygons.find((p) => p.id === id);
-					if (polygon && polygon.visible) {
+					const polygon = currentPolygons.find((p) => p.properties.id === id);
+                    if (polygon && polygon.properties.is_visible) {
 						// Highlight selected polygon with a thicker border or different color
 						const layerId = `polygon-layer-${id}`;
 						const borderLayerId = `polygon-border-${id}`;
@@ -605,8 +532,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						}
 					}
 				} else if (type === "beacon") {
-					const beacon = currentBeacons.find((b) => b.id === id);
-					if (beacon && beacon.visible) {
+					const b = currentBeacons.find((b) => b.properties.id === id);
+					const beacon = b?.properties
+                    if (beacon && beacon.is_visible) {
 						// Highlight selected beacon
 						const marker = mapMarkers.current[`beacon-${id}`];
 						if (marker) {
@@ -616,7 +544,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 									color: "#ef4444",
 									scale: 1.2,
 								})
-									.setLngLat([beacon.x, beacon.y])
+									.setLngLat(b.geometry!!.coordinates)
 									.setPopup(
 										new Popup().setHTML(
 											`<strong>${beacon.name}</strong><br>Type: Beacon (SELECTED)`
@@ -626,8 +554,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						}
 					}
 				} else if (type === "node") {
-					const node = currentNodes.find((n) => n.id === id);
-					if (node && node.visible) {
+                    const node = currentNodes.find((n) => n.properties.id === id);
+                    if (node && node.properties.is_visible) {
 						// Highlight selected node
 						const marker = mapMarkers.current[`node-${id}`];
 						if (marker) {
@@ -637,7 +565,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 									color: "#ef4444",
 									scale: 1.2,
 								})
-									.setLngLat([node.x, node.y])
+                                    .setLngLat(node.geometry!!.coordinates)
 									.addTo(mapInstance);
 						}
 					}
@@ -649,54 +577,13 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		[selectedItem]
 	); // Add selectedItem as dependency
 
-	// Clean up orphaned edges that reference non-existent nodes
-	const cleanupOrphanedEdges = useCallback(() => {
-		const currentNodes = JSON.parse(localStorage.getItem("floorEditor_nodes") || "[]");
-		const currentEdges = JSON.parse(localStorage.getItem("floorEditor_edges") || "[]");
-		const nodeIds = new Set(currentNodes.map((n: any) => n.id));
-
-		const validEdges = currentEdges.filter((edge: any) => {
-			const isValid = nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId);
-			if (!isValid) {
-				logger.warn("Removing orphaned edge", {
-					edgeId: edge.id,
-					fromNodeId: edge.fromNodeId,
-					toNodeId: edge.toNodeId,
-					availableNodeIds: Array.from(nodeIds),
-				});
-			}
-			return isValid;
-		});
-
-		if (validEdges.length !== currentEdges.length) {
-			localStorage.setItem("floorEditor_edges", JSON.stringify(validEdges));
-
-			// ✅ Update React Query cache
-			queryClient.setQueryData(['edges'], validEdges);
-
-			logger.info("Cleaned up orphaned edges", {
-				originalCount: currentEdges.length,
-				cleanedCount: validEdges.length,
-				removedCount: currentEdges.length - validEdges.length,
-			});
-		}
-	}, [queryClient]);
-
-
 	// Load initial sample data and update map when data changes
 	useEffect(() => {
 		if (!mapLoading && map.current) {
-			if (!initialDataLoaded.current) {
-				logger.info("Adding initial sample data to map");
-				// Clean up any orphaned edges first
-				cleanupOrphanedEdges();
-				initialDataLoaded.current = true;
-			}
 			updateMapData(
 				polygons,
 				beacons,
 				nodes,
-				edges,
 				selectedNodeForConnection
 			);
 		}
@@ -705,7 +592,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		polygons,
 		beacons,
 		nodes,
-		edges,
 		selectedNodeForConnection,
 	]);
 
@@ -831,19 +717,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 			});
 
-			// Mouse move event to track coordinates (TEMPORARILY DISABLED to fix infinite re-renders)
-			// mapInstance.on('mousemove', (e) => {
-			//   // Clear previous timeout
-			//   if (coordinateUpdateTimeout.current) {
-			//     clearTimeout(coordinateUpdateTimeout.current);
-			//   }
-			//
-			//   // Throttle coordinate updates to every 100ms
-			//   coordinateUpdateTimeout.current = setTimeout(() => {
-			//     updateCoordinates(e.lngLat.lng, e.lngLat.lat);
-			//   }, 100);
-			// });
-
 			// Click handlers for different tools
 			mapInstance.on("click", (e) => {
 				handleMapClick(e);
@@ -927,10 +800,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handleNodeClick = (lng: number, lat: number) => {
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
 		const clickedNode = nodes.find((node) => {
-			if (!node.visible) return false;
+            if (!node.properties.is_visible) return false;
 			// Use proper Euclidean distance like the working Canvas version
 			const distance = Math.sqrt(
-				(node.x - lng) ** 2 + (node.y - lat) ** 2
+                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[0] - lat) ** 2
 			);
 			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
 		});
@@ -946,18 +819,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			nodesCount: nodes.length,
 			selectedNodeForConnection: currentSelectedNode,
 			lastPlacedNodeId: currentLastPlacedNode,
-			clickedNodeId: clickedNode?.id || "none",
+            clickedNodeId: clickedNode?.properties.id || "none",
 		});
 
 		if (clickedNode) {
 			// Clicked on an existing node
 			if (currentSelectedNode) {
-				if (currentSelectedNode === clickedNode.id) {
+                if (currentSelectedNode === clickedNode.properties.id) {
 					// Clicking on the same node - deselect it
 					setSelectedNodeForConnection(null);
 					selectedNodeForConnectionRef.current = null;
 					logger.userAction("Node deselected", {
-						nodeId: clickedNode.id,
+                        nodeId: clickedNode.properties.id,
 					});
 				} else {
 					// Can't connect a node to itself or create duplicate connections
@@ -967,10 +840,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 			} else {
 				// Select this node for connection
-				setSelectedNodeForConnection(clickedNode.id);
-				selectedNodeForConnectionRef.current = clickedNode.id;
+                setSelectedNodeForConnection(clickedNode.properties.id);
+                selectedNodeForConnectionRef.current = clickedNode.properties.id;
 				logger.userAction("Node selected for connection", {
-					nodeId: clickedNode.id,
+                    nodeId: clickedNode.properties.id,
 				});
 			}
 		} else {
@@ -1024,23 +897,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): number => {
-		const newNode: RouteNode = {
-			id: Date.now(),
-			floorId: floorId,
-			x: lng,
-			y: lat,
-			connections: connectToNodeId ? [connectToNodeId] : [],
-			visible: true,
-		};
+		const newNode = new RouteNodeBuilder()
+			.setFloorId(floorId)
+			.setLocation(lng, lat)
+			.setIsVisible(true)
+			.setConnections(connectToNodeId ? [connectToNodeId] : [])
+			.build();
 
 		logger.info("Adding new node - DETAILED", {
-			newNodeId: newNode.id,
+            newNodeId: newNode.properties.id,
 			newNodeCoords: [lng, lat],
 			connectToNodeId,
 			currentNodesCount: nodes.length,
-			currentEdgesCount: edges.length,
-			currentNodeIds: nodes.map((n) => n.id),
-			currentEdgeIds: edges.map((e) => e.id),
+            currentNodeIds: nodes.map((n) => n.properties.id),
 			lastPlacedNodeIdRef: lastPlacedNodeIdRef.current,
 			willCreateEdge: !!connectToNodeId,
 		});
@@ -1054,10 +923,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		if (connectToNodeId) {
 			newNodes = finalNodes.map((node) =>
-				node.id === connectToNodeId
+                node.properties.id === connectToNodeId
 					? {
 						...node,
-						connections: [...node.connections, newNode.id],
+                        connections: [...node.properties.connections, newNode.properties.id],
 					}
 					: node
 			);
@@ -1066,7 +935,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			logger.info("Updated node connections", {
 				connectToNodeId,
-				newNodeId: newNode.id,
+                newNodeId: newNode.properties.id,
 				totalNodes: newNodes.length,
 			});
 		} else {
@@ -1077,51 +946,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		queryClient.setQueryData(['nodes'], newNodes);
 
-		if (connectToNodeId) {
-			const existingEdges = queryClient.getQueryData<Edge[]>(['edges']) || [];
-
-			const newEdge: Edge = {
-				id: Date.now(), // generates a unique number based on timestamp
-				floorId: floorId,
-				fromNodeId: connectToNodeId,
-				toNodeId: newNode.id,
-				visible: true,
-			};
-
-			const finalEdges = [...existingEdges, newEdge];
-
-			// Save to localStorage if needed (you'll probably remove this soon)
-			saveToStorage(STORAGE_KEYS.EDGES, finalEdges);
-
-			// Logging
-			logger.info("Edge created and saved", {
-				newEdge,
-				totalEdges: finalEdges.length,
-				edgeDetails: {
-					from: connectToNodeId,
-					to: newNode.id,
-					id: newEdge.id,
-				},
-			});
-			logger.userAction("Connected node added", {
-				newNode,
-				connectedToNodeId: connectToNodeId,
-				newEdge,
-			});
-
-			// Update cache
-			queryClient.setQueryData(['edges'], finalEdges);
-		}
-
 		logger.info("Node creation completed", {
-			newNodeId: newNode.id,
+            newNodeId: newNode.properties.id,
 			wasConnected: !!connectToNodeId,
 			connectToNodeId,
 		});
 
 		// DON'T call updateMapData here - let the useEffect handle it when state updates
 
-		return newNode.id;
+        return newNode.properties.id;
 	};
 
 	// Clear all temporary drawing elements from the map
@@ -1182,7 +1015,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 	};
 
-	// Add a line between two points
+	// // Add a line between two points
 	const addPolygonLine = (
 		fromPoint: Point,
 		toPoint: Point,
@@ -1264,7 +1097,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	};
 
-	// Check if the clicked point is close to the first point (to close the polygon)
+	// // Check if the clicked point is close to the first point (to close the polygon)
 	const isCloseToFirstPoint = (
 		lng: number,
 		lat: number,
@@ -1288,7 +1121,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	// Handle polygon point addition with the new flow
 	const addPolygonPoint = (lng: number, lat: number) => {
-		const newPoint: Point = {x: lng, y: lat};
+		const newPoint: Point = {x: lng, y: lat} as Point;
 
 		logger.userAction("🎯 Polygon point clicked", {
 			point: newPoint,
@@ -1333,7 +1166,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			// setPendingPolygonCenter({ lng: centerX, lat: centerY });
 			setPolygonName("");
-			setIsWallMode(false);
+            // setIsWallMode(false);
 			setShowPolygonDialog(true);
 
 			logger.info("🎉 Showing polygon dialog", {
@@ -1383,7 +1216,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			from: activeTool,
 			to: tool,
 			isDrawingPolygon,
-			pendingPoints: pendingPolygonPoints.length,
+			// pendingPoints: pendingPolygonPoints.length,
 		});
 
 		// If switching away from POI tool, clear any polygon drawing state
@@ -1418,7 +1251,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			...prev,
 			{
 				...change,
-				id: Date.now(),
+                id: change.data.id,
 			},
 		]);
 	};
@@ -1429,15 +1262,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handlePolygonSave = () => {
 		if (editingPolygonId) {
 			// Edit
-			const polygon = polygons.find((p) => p.id === editingPolygonId);
+            const polygon = polygons.find((p) => p.properties.id === editingPolygonId);
 			if (polygon) {
-				const updated = {
-					...polygon,
-					name: polygonName,
-					type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
-				};
+                const updated = PolygonBuilder.fromPolygon(polygon).setName(polygonName).build();
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.map(p => (p.id === editingPolygonId ? updated : p))
+					old.map(p => (p.properties.id === editingPolygonId ? updated : p))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1447,16 +1276,17 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			}
 		} else {
 			// Add
-			const newId = Date.now();
-			const newPolygon = {
-				id: newId,
-				floorId: floorId,
-				name: polygonName,
-				points: pendingPolygonPoints,
-				type: isWallMode ? ("wall" as "wall") : ("poi" as "poi"),
-				visible: true,
-				color: "#3b82f6",
-			};
+			const newPolygon = new PolygonBuilder()
+				.setFloorId(floorId)
+				.setName(polygonName)
+				.setDescription("")
+				.setType("Room")
+				.setIsVisible(true)
+				.setColor("#3b82f6")
+                .setCategoryId(null) // or an appropriate value
+				.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
+				.build();
+
 			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, newPolygon]);
 			queueChange({
 				type: CHANGE_TYPES.ADD,
@@ -1466,7 +1296,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 		setShowPolygonDialog(false);
 		setPolygonName("");
-		setIsWallMode(false);
+        // setIsWallMode(false);
 		setEditingPolygonId(null);
 		setPendingPolygonPoints([]);
 	};
@@ -1475,11 +1305,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handleBeaconSave = () => {
 		if (editingBeaconId) {
 			// Edit
-			const beacon = beacons.find((b) => b.id === editingBeaconId);
+            const beacon = beacons.find((b) => b.properties.id === editingBeaconId);
 			if (beacon) {
-				const updated = {...beacon, name: beaconName};
+                const updated = BeaconBuilder.fromBeacon(beacon).setName(beaconName).build();
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.map(b => (b.id === editingBeaconId ? updated : b))
+					old.map(b => (b.properties.id === editingBeaconId ? updated : b))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1490,15 +1320,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		} else {
 			// Add
 			if (pendingBeaconLocation) {
-				const newId = Date.now();
-				const newBeacon = {
-					id: newId,
-					floorId: floorId,
-					name: beaconName,
-					x: pendingBeaconLocation.lng,
-					y: pendingBeaconLocation.lat,
-					visible: true,
-				};
+				const newBeacon = new BeaconBuilder()
+					.setFloorId(floorId)
+					.setName(beaconName)
+					.setGeometry(pendingBeaconLocation.lng, pendingBeaconLocation.lat)
+					.setIsVisible(true)
+					.setIsActive(true)
+					.setBatteryLevel(100)
+					.build();
+
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
 				queueChange({
 					type: CHANGE_TYPES.ADD,
@@ -1517,11 +1347,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const handleNodeSave = () => {
 		if (editingNodeId) {
 			// Edit
-			const node = nodes.find((n) => n.id === editingNodeId);
+            const node = nodes.find((n) => n.properties.id === editingNodeId);
 			if (node) {
 				const updated = {...node, name: nodeName};
 				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
-					old.map(n => (n.id === editingNodeId ? updated : n))
+                    old.map(n => (n.properties.id === editingNodeId ? updated : n))
 				);
 				queueChange({
 					type: CHANGE_TYPES.EDIT,
@@ -1538,7 +1368,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setEditingNodeId(null);
 	};
 
-	// Delete handler
+	// // Delete handler
 	const handleDeleteItem = (
 		type: "polygon" | "beacon" | "node",
 		id: number,
@@ -1549,7 +1379,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		switch (type) {
 			case "polygon":
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.filter(p => p.id !== id)
+					old.filter(p => p.properties.id !== id)
 				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
@@ -1559,7 +1389,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				break;
 			case "beacon":
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.filter(b => b.id !== id)
+					old.filter(b => b.properties.id !== id)
 				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
@@ -1569,12 +1399,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				break;
 			case "node":
 				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
-					old.filter(n => n.id !== id)
+                    old.filter(n => n.properties.id !== id)
 				);
 
-				queryClient.setQueryData<Edge[]>(['edges'], (old = []) =>
-					old.filter(e => e.fromNodeId !== id && e.toNodeId !== id)
-				);
 				queueChange({
 					type: CHANGE_TYPES.DELETE,
 					objectType: OBJECT_TYPES.NODE,
@@ -1610,12 +1437,13 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => {
 					logger.userAction("Current polygons fetched from cache", {count: old.length});
 
-					const newPolygons = old.map(p => {
+					const newPolygons = old.map(polygon => {
+						const p = polygon.properties;
 						if (p.id === id) {
-							const newVisible = !p.visible;
+                            const newVisible = !p.is_visible;
 							logger.userAction("Found matching polygon, toggling visibility", {
 								id,
-								oldVisible: p.visible,
+                                oldVisible: p.is_visible,
 								newVisible
 							});
 
@@ -1662,9 +1490,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								});
 							}
 
-							return {...p, visible: newVisible};
-						}
-						return p;
+                            return PolygonBuilder.fromPolygon(polygon).setIsVisible(newVisible).build();
+                        }
+						return polygon;
 					});
 
 					logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
@@ -1675,8 +1503,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			case "beacon":
 				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
 					old.map(b => {
-						if (b.id === id) {
-							const newVisible = !b.visible;
+						if (b.properties.id === id) {
+                            const newVisible = !b.properties.is_visible;
 
 							// Update map visibility
 							const marker = mapMarkers.current[`beacon-${id}`];
@@ -1688,51 +1516,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 								}
 							}
 
-							return {...b, visible: newVisible};
+                            return BeaconBuilder.fromBeacon(b).setIsVisible(newVisible).build();
 						}
 						return b;
-					})
-				);
-				break;
-
-			case "node": // TODO: should nodes have the functionality to appear and disappear? doesnt make sense tbh.
-				queryClient.setQueryData<RouteNode[]>(['nodes'], (oldNodes = []) =>
-					oldNodes.map(n => {
-						if (n.id === id) {
-							const newVisible = !n.visible;
-
-							// Update map visibility for the node
-							const marker = mapMarkers.current[`node-${id}`];
-							if (marker) {
-								if (newVisible) {
-									marker.addTo(mapInstance);
-								} else {
-									marker.remove();
-								}
-							}
-
-							// Update edges connected to this node
-							edges.forEach(edge => {
-								if (edge.fromNodeId === id || edge.toNodeId === id) {
-									const layerId = mapLayers.current[`edge-${edge.id}`];
-									if (layerId && mapInstance.getLayer(layerId)) {
-										// Find nodes from the *updated* cache, fallback to oldNodes
-										const fromNode = oldNodes.find(node => node.id === edge.fromNodeId);
-										const toNode = oldNodes.find(node => node.id === edge.toNodeId);
-										const shouldShowEdge =
-											fromNode?.visible && toNode?.visible && edge.visible;
-										mapInstance.setLayoutProperty(
-											layerId,
-											"visibility",
-											shouldShowEdge ? "visible" : "none"
-										);
-									}
-								}
-							});
-
-							return {...n, visible: newVisible};
-						}
-						return n;
 					})
 				);
 				break;
@@ -1761,8 +1547,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				} else if (change.type === CHANGE_TYPES.EDIT) {
 					await mutations.update.mutateAsync(change);
 				} else if (change.type === CHANGE_TYPES.DELETE) {
-					const id = typeof change.data.id === 'string' ? parseInt(change.data.id) : change.data.id;
-					await mutations.delete.mutateAsync(id);
+					await mutations.delete.mutateAsync(change.data.id);
 				}
 				// Remove from queue on success
 				newQueue = newQueue.filter((q) => q.id !== change.id);
@@ -1805,11 +1590,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	};
 
-	// Add missing handler functions
+	// // Add missing handler functions
 	const handlePolygonCancel = () => {
 		setShowPolygonDialog(false);
 		setPolygonName("");
-		setIsWallMode(false);
+        // setIsWallMode(false);
 		setEditingPolygonId(null);
 		setPendingPolygonPoints([]);
 		logger.userAction("Polygon dialog cancelled");
@@ -1849,28 +1634,27 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		switch (type) {
 			case "polygon":
-				const polygon = polygons.find((p) => p.id === id);
+                const polygon = polygons.find((p) => p.properties.id === id);
 				if (polygon) {
-					setPolygonName(polygon.name);
-					setIsWallMode(polygon.type === "wall");
+                    setPolygonName(polygon.properties.name);
 					setEditingPolygonId(id);
 					setShowPolygonDialog(true);
 					setSelectedItem({type, id});
 				}
 				break;
 			case "beacon":
-				const beacon = beacons.find((b) => b.id === id);
+                const beacon = beacons.find((b) => b.properties.id === id);
 				if (beacon) {
-					setBeaconName(beacon.name);
+                    setBeaconName(beacon.properties.name);
 					setEditingBeaconId(id);
 					setShowBeaconDialog(true);
 					setSelectedItem({type, id});
 				}
 				break;
 			case "node":
-				const node = nodes.find((n) => n.id === id);
+                const node = nodes.find((n) => n.properties.id === id);
 				if (node) {
-					setNodeName(`Node ${node.id}`);
+                    setNodeName(`Node ${node.properties.id}`);
 					setEditingNodeId(id);
 					setShowNodeDialog(true);
 					setSelectedItem({type, id});
@@ -1973,7 +1757,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						isDrawingPolygonRef.current = false;
 						pendingPolygonPointsRef.current = [];
 						setIsDrawingPolygon(false);
-						// setCurrentPolygonPoints([]);
+						setCurrentPolygonPoints([]);
 						setPendingPolygonPoints([]);
 						clearTempDrawing();
 						setSelectedNodeForConnection(null);
@@ -1986,7 +1770,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						queryClient.setQueryData<Polygon[]>(['polygons'], []);
 						queryClient.setQueryData<Beacon[]>(['beacons'], []);
 						queryClient.setQueryData<RouteNode[]>(['nodes'], []);
-						queryClient.setQueryData<Edge[]>(['edges'], []);
 						queueChange({
 							type: CHANGE_TYPES.DELETE,
 							objectType: OBJECT_TYPES.POLYGON,
@@ -2040,10 +1823,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			<PolygonDialog
 				show={showPolygonDialog}
 				polygonName={polygonName}
-				isWallMode={isWallMode}
+                isWallMode={false}
 				isEditing={!!editingPolygonId}
 				onNameChange={setPolygonName}
-				onWallModeChange={setIsWallMode}
+                onWallModeChange={() => {
+                }}
 				onSave={handlePolygonSave}
 				onCancel={handlePolygonCancel}
 			/>

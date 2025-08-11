@@ -1,35 +1,30 @@
 import {useQuery} from "@tanstack/react-query";
-import {FloorLayoutData} from "../../utils/api_helpers/api_interfaces/floorLayoutData";
-import {poisApi, routeEdgesApi, routeNodesApi} from "../../utils/api";
-
+import {beaconsApi, polygonsApi, routeNodesApi} from "../../utils/api";
+import FloorLayoutData from "../../interfaces/FloorLayoutData";
 
 export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutData> => {
-    const [pois, routeNodes, routeEdges] = await Promise.all([
-        poisApi.getByFloor(floorId.toString()),
+    const [polygons, routeNodes, beacons] = await Promise.all([
+        polygonsApi.getByFloor(floorId.toString()),
         routeNodesApi.getByFloor(floorId.toString()),
-        routeEdgesApi.getByFloor(floorId.toString()),
+        beaconsApi.getByFloor(floorId.toString()),
     ]);
 
-    const nodes = routeNodes.map((node) => ({
-        id: node.id,
-        floorId: node.floorId,
-        x: node.x,
-        y: node.y,
-        type: node.nodeType || "waypoint",
-    }));
-
-    const edges = routeEdges.map((edge) => ({
-        id: edge.id,
-        floorId: edge.floorId,
-        fromNodeId: edge.fromNodeId,
-        toNodeId: edge.toNodeId,
-        weight: edge.weight ?? 1,
-    }));
+    const nodes = routeNodes.map((node) => {
+        return ({
+            geometry: node.geometry,
+            properties: {
+                id: node.properties.id,
+                floor_id: node.properties.floor_id,
+                is_visible: node.properties.is_visible,
+                connections: node.properties.connections,
+            }
+        });
+    });
 
     return {
-        pois,
+        polygons,
         nodes,
-        edges,
+        beacons,
     };
 };
 

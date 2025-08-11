@@ -5,8 +5,8 @@ import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './BeaconForm.css';
-import {BeaconType} from "../../utils/api_helpers/api_interfaces/beaconType";
-import {Beacon} from "../../utils/api_helpers/api_interfaces/beacon";
+import {BeaconType} from "../../interfaces/BeaconType";
+import {Beacon} from "../../interfaces/Beacon";
 
 const logger = createLogger('BeaconForm');
 
@@ -24,13 +24,12 @@ interface BeaconFormData {
   majorId: number | null;
   minorId: number | null;
   beaconTypeId: number | null;
-  x: number;
-  y: number;
-  z: number;
-  isActive: boolean;
+  geometry: {
+    type: "Point";
+    coordinates: [number, number]; // [x, y] as [longitude, latitude]
+  } | null;
   isVisible: boolean;
   batteryLevel: number | null;
-  installationDate: string;
 }
 
 const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpdate, onCancel }) => {
@@ -40,13 +39,9 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
     majorId: null,
     minorId: null,
     beaconTypeId: null,
-    x: 0,
-    y: 0,
-    z: 0,
-    isActive: true,
+    geometry: null,
     isVisible: true,
     batteryLevel: null,
-    installationDate: ''
   });
 
   const [beaconTypes, setBeaconTypes] = useState<BeaconType[]>([]);
@@ -54,7 +49,7 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = !!beacon?.id;
+  const isEditing = !!beacon?.properties.id;
 
   // Load beacon types on component mount
   useEffect(() => {
@@ -64,19 +59,16 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
   // Initialize form data when editing
   useEffect(() => {
     if (beacon) {
+      const b = beacon.properties;
       setFormData({
-        name: beacon.name || '',
-        uuid: beacon.uuid || '',
-        majorId: beacon.majorId || null,
-        minorId: beacon.minorId || null,
-        beaconTypeId: beacon.beaconTypeId || null,
-        x: beacon.x || 0,
-        y: beacon.y || 0,
-        z: beacon.z || 0,
-        isActive: beacon.isActive ?? true,
-        isVisible: beacon.isVisible ?? true,
-        batteryLevel: beacon.batteryLevel || null,
-        installationDate: beacon.installationDate || ''
+        name: b.name || '',
+        uuid: b.uuid || '',
+          majorId: b.major_id || null,
+          minorId: b.minor_id || null,
+          beaconTypeId: b.beacon_type_id || null,
+        geometry: beacon.geometry || null,
+          isVisible: b.is_visible ?? true,
+          batteryLevel: b.battery_level || null,
       });
     }
   }, [beacon]);
@@ -120,28 +112,15 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
       newErrors.minorId = 'Minor ID must be between 0 and 65535';
     }
 
-    // Coordinate validation
-    if (formData.x < -180 || formData.x > 180) {
-      newErrors.x = 'X coordinate must be between -180 and 180';
-    }
-
-    if (formData.y < -90 || formData.y > 90) {
-      newErrors.y = 'Y coordinate must be between -90 and 90';
-    }
-
-    if (formData.z < -1000 || formData.z > 1000) {
-      newErrors.z = 'Z coordinate must be between -1000 and 1000';
-    }
-
     // Battery level validation
     if (formData.batteryLevel !== null && (formData.batteryLevel < 0 || formData.batteryLevel > 100)) {
       newErrors.batteryLevel = 'Battery level must be between 0 and 100';
     }
 
-    // Installation date validation
-    if (formData.installationDate && !/^\d{4}-\d{2}-\d{2}$/.test(formData.installationDate)) {
-      newErrors.installationDate = 'Installation date must be in YYYY-MM-DD format';
-    }
+    // // Installation date validation
+    // if (formData.installationDate && !/^\d{4}-\d{2}-\d{2}$/.test(formData.installationDate)) {
+    //   newErrors.installationDate = 'Installation date must be in YYYY-MM-DD format';
+    // }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -166,43 +145,39 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      const beaconData = {
-        floorId,
-        name: formData.name.trim(),
-        uuid: formData.uuid.trim() || undefined,
-        majorId: formData.majorId || undefined,
-        minorId: formData.minorId || undefined,
-        beaconTypeId: formData.beaconTypeId || undefined,
-        x: formData.x,
-        y: formData.y,
-        z: formData.z,
-        isActive: formData.isActive,
-        isVisible: formData.isVisible,
-        batteryLevel: formData.batteryLevel || undefined,
-        installationDate: formData.installationDate || undefined
-      };
-
-      if (isEditing && beacon?.id) {
-        await onUpdate(beacon.id, beaconData);
-        logger.info('Beacon updated successfully', { beaconId: beacon.id });
-      } else {
-        await onSave(beaconData);
-        logger.info('Beacon created successfully');
-      }
-    } catch (error) {
-      logger.error('Failed to save beacon', error as Error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    //   e.preventDefault();
+    //
+    //   if (!validateForm()) {
+    //     return;
+    //   }
+    //
+    //   setIsSubmitting(true);
+    //
+    //   try {
+    //     const beaconData = {
+    //       floorId,
+    //       name: formData.name.trim(),
+    //       uuid: formData.uuid.trim() || undefined,
+    //       majorId: formData.majorId || undefined,
+    //       minorId: formData.minorId || undefined,
+    //       beaconTypeId: formData.beaconTypeId || undefined,
+    //       geometry: formData.geometry || undefined,
+    //       isVisible: formData.isVisible,
+    //       batteryLevel: formData.batteryLevel || undefined,
+    //     };
+    //
+    //     if (isEditing && beacon?.id) {
+    //       await onUpdate(beacon.id, beaconData);
+    //       logger.info('Beacon updated successfully', { beaconId: beacon.id });
+    //     } else {
+    //       await onSave(beaconData);
+    //       logger.info('Beacon created successfully');
+    //     }
+    //   } catch (error) {
+    //     logger.error('Failed to save beacon', error as Error);
+    //   } finally {
+    //     setIsSubmitting(false);
+    //   }
   };
 
   const handleCancel = () => {
@@ -316,52 +291,52 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
 
         <div className="form-section">
           <h3>Location</h3>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="x">X Coordinate (Longitude) *</label>
-              <Input
-                id="x"
-                name="x"
-                label="X Coordinate"
-                type="number"
-                value={formData.x.toString()}
-                onChange={(e) => handleInputChange('x', parseFloat(e.target.value) || 0)}
-                placeholder="Enter X coordinate"
-                error={errors.x}
-                required
-              />
-            </div>
 
-            <div className="form-group">
-              <label htmlFor="y">Y Coordinate (Latitude) *</label>
-              <Input
-                id="y"
-                name="y"
-                label="Y Coordinate"
-                type="number"
-                value={formData.y.toString()}
-                onChange={(e) => handleInputChange('y', parseFloat(e.target.value) || 0)}
-                placeholder="Enter Y coordinate"
-                error={errors.y}
-                required
-              />
-            </div>
-          </div>
+          {/*<div className="form-row">*/}
+          {/*  <div className="form-group">*/}
+          {/*    <label htmlFor="x">X Coordinate (Longitude) *</label>*/}
+          {/*    <Input*/}
+          {/*      id="x"*/}
+          {/*      name="x"*/}
+          {/*      label="X Coordinate"*/}
+          {/*      type="number"*/}
+          {/*      value={formData.x.toString()}*/}
+          {/*      onChange={(e) => handleInputChange('x', parseFloat(e.target.value) || 0)}*/}
+          {/*      placeholder="Enter X coordinate"*/}
+          {/*      error={errors.x}*/}
+          {/*      required*/}
+          {/*    />*/}
+          {/*  </div>*/}
 
-          <div className="form-group">
-            <label htmlFor="z">Z Coordinate (Height/Elevation)</label>
-            <Input
-              id="z"
-              name="z"
-              label="Z Coordinate"
-              type="number"
-              value={formData.z.toString()}
-              onChange={(e) => handleInputChange('z', parseFloat(e.target.value) || 0)}
-              placeholder="Enter Z coordinate (height in meters)"
-              error={errors.z}
-            />
-          </div>
+          {/*  <div className="form-group">*/}
+          {/*    <label htmlFor="y">Y Coordinate (Latitude) *</label>*/}
+          {/*    <Input*/}
+          {/*      id="y"*/}
+          {/*      name="y"*/}
+          {/*      label="Y Coordinate"*/}
+          {/*      type="number"*/}
+          {/*      value={formData.y.toString()}*/}
+          {/*      onChange={(e) => handleInputChange('y', parseFloat(e.target.value) || 0)}*/}
+          {/*      placeholder="Enter Y coordinate"*/}
+          {/*      error={errors.y}*/}
+          {/*      required*/}
+          {/*    />*/}
+          {/*  </div>*/}
+          {/*</div>*/}
+
+          {/*<div className="form-group">*/}
+          {/*  <label htmlFor="z">Z Coordinate (Height/Elevation)</label>*/}
+          {/*  <Input*/}
+          {/*    id="z"*/}
+          {/*    name="z"*/}
+          {/*    label="Z Coordinate"*/}
+          {/*    type="number"*/}
+          {/*    value={formData.z.toString()}*/}
+          {/*    onChange={(e) => handleInputChange('z', parseFloat(e.target.value) || 0)}*/}
+          {/*    placeholder="Enter Z coordinate (height in meters)"*/}
+          {/*    error={errors.z}*/}
+          {/*  />*/}
+          {/*</div>*/}
 
           <div className="coordinate-help">
             <p>
@@ -391,32 +366,32 @@ const BeaconForm: React.FC<BeaconFormProps> = ({ beacon, floorId, onSave, onUpda
               />
             </div>
 
-            <div className="form-group">
-              <label htmlFor="installationDate">Installation Date</label>
-              <input
-                id="installationDate"
-                type="date"
-                value={formData.installationDate}
-                onChange={(e) => handleInputChange('installationDate', e.target.value)}
-                placeholder="Select installation date"
-                className={errors.installationDate ? 'error' : ''}
-              />
-              {errors.installationDate && <span className="error-message">{errors.installationDate}</span>}
-            </div>
-          </div>
+            {/*  <div className="form-group">*/}
+            {/*    <label htmlFor="installationDate">Installation Date</label>*/}
+            {/*    <input*/}
+            {/*      id="installationDate"*/}
+            {/*      type="date"*/}
+            {/*      value={formData.installationDate}*/}
+            {/*      onChange={(e) => handleInputChange('installationDate', e.target.value)}*/}
+            {/*      placeholder="Select installation date"*/}
+            {/*      className={errors.installationDate ? 'error' : ''}*/}
+            {/*    />*/}
+            {/*    {errors.installationDate && <span className="error-message">{errors.installationDate}</span>}*/}
+            {/*  </div>*/}
+            {/*</div>*/}
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={formData.isActive}
-                  onChange={(e) => handleInputChange('isActive', e.target.checked)}
-                />
-                <span className="checkmark"></span>
-                Active beacon
-              </label>
-            </div>
+            {/*<div className="form-row">*/}
+            {/*  <div className="form-group">*/}
+            {/*    <label className="checkbox-label">*/}
+            {/*      <input*/}
+            {/*        type="checkbox"*/}
+            {/*        checked={formData.isActive}*/}
+            {/*        onChange={(e) => handleInputChange('isActive', e.target.checked)}*/}
+            {/*      />*/}
+            {/*      <span className="checkmark"></span>*/}
+            {/*      Active beacon*/}
+            {/*    </label>*/}
+            {/*  </div>*/}
 
             <div className="form-group">
               <label className="checkbox-label">

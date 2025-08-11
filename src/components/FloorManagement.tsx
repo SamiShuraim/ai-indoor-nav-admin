@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {beaconsApi, beaconTypesApi, poiCategoriesApi, poisApi, routeEdgesApi, routeNodesApi} from '../utils/api';
+import {beaconsApi, beaconTypesApi, poiCategoriesApi, polygonsApi, routeNodesApi} from '../utils/api';
 import {createLogger} from '../utils/logger';
 import Alert from './common/Alert';
 import Button from './common/Button';
@@ -9,12 +9,11 @@ import Header from './common/Header';
 import Input from './common/Input';
 import './FloorManagement.css';
 import {BeaconForm, POIForm, RouteNodeForm} from './forms';
-import {BeaconType} from "../utils/api_helpers/api_interfaces/beaconType";
-import {Beacon} from "../utils/api_helpers/api_interfaces/beacon";
-import {PoiCategory} from "../utils/api_helpers/api_interfaces/poiCategory";
-import {POI} from "../utils/api_helpers/api_interfaces/POI";
-import {RouteNode} from "../utils/api_helpers/api_interfaces/routeNode";
-import {RouteEdge} from "../utils/api_helpers/api_interfaces/routeEdge";
+import {PoiCategory} from "../interfaces/PoiCategory";
+import {RouteNode} from "../interfaces/RouteNode";
+import {Beacon} from "../interfaces/Beacon";
+import {BeaconType} from "../interfaces/BeaconType";
+import {Polygon} from "../interfaces/Polygon";
 
 const logger = createLogger('FloorManagement');
 
@@ -50,10 +49,9 @@ interface AlertMessage {
 interface FloorManagementState {
   activeTab: keyof typeof ENTITY_TYPES;
   entities: {
-    pois: POI[];
+    pois: Polygon[];
     beacons: Beacon[];
     routeNodes: RouteNode[];
-    routeEdges: RouteEdge[];
     poiCategories: PoiCategory[];
     beaconTypes: BeaconType[];
   };
@@ -66,10 +64,9 @@ interface FloorManagementState {
     beaconTypes: boolean;
   };
   editing: {
-    poi: POI | null;
+    poi: Polygon | null;
     beacon: Beacon | null;
     routeNode: RouteNode | null;
-    routeEdge: RouteEdge | null;
     poiCategory: PoiCategory | null;
     beaconType: BeaconType | null;
   };
@@ -85,7 +82,6 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       pois: [],
       beacons: [],
       routeNodes: [],
-      routeEdges: [],
       poiCategories: [],
       beaconTypes: []
     },
@@ -101,7 +97,6 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       poi: null,
       beacon: null,
       routeNode: null,
-      routeEdge: null,
       poiCategory: null,
       beaconType: null
     },
@@ -124,7 +119,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         loadPOIs(),
         loadBeacons(),
         loadRouteNodes(),
-        loadRouteEdges(),
+        // loadRouteEdges(),
         loadPoiCategories(),
         loadBeaconTypes()
       ]);
@@ -140,7 +135,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
   const loadPOIs = async () => {
     setState(prev => ({ ...prev, loading: { ...prev.loading, pois: true } }));
     try {
-      const pois = await poisApi.getByFloor(floorId);
+      const pois = await polygonsApi.getByFloor(floorId);
       setState(prev => ({ 
         ...prev, 
         entities: { ...prev.entities, pois },
@@ -190,23 +185,23 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
     }
   };
 
-  // Load Route Edges
-  const loadRouteEdges = async () => {
-    setState(prev => ({ ...prev, loading: { ...prev.loading, routeEdges: true } }));
-    try {
-      const routeEdges = await routeEdgesApi.getByFloor(floorId);
-      setState(prev => ({ 
-        ...prev, 
-        entities: { ...prev.entities, routeEdges },
-        loading: { ...prev.loading, routeEdges: false }
-      }));
-      logger.info('Route edges loaded successfully', { count: routeEdges.length });
-    } catch (error) {
-      logger.error('Failed to load route edges', error as Error);
-      setState(prev => ({ ...prev, loading: { ...prev.loading, routeEdges: false } }));
-      throw error;
-    }
-  };
+  // // Load Route Edges
+  // const loadRouteEdges = async () => {
+  //   setState(prev => ({ ...prev, loading: { ...prev.loading, routeEdges: true } }));
+  //   try {
+  //     const routeEdges = await routeEdgesApi.getByFloor(floorId);
+  //     setState(prev => ({
+  //       ...prev,
+  //       entities: { ...prev.entities, routeEdges },
+  //       loading: { ...prev.loading, routeEdges: false }
+  //     }));
+  //     logger.info('Route edges loaded successfully', { count: routeEdges.length });
+  //   } catch (error) {
+  //     logger.error('Failed to load route edges', error as Error);
+  //     setState(prev => ({ ...prev, loading: { ...prev.loading, routeEdges: false } }));
+  //     throw error;
+  //   }
+  // };
 
   // Load POI Categories
   const loadPoiCategories = async () => {
@@ -291,32 +286,32 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
   };
 
   // POI CRUD operations
-  const handleCreatePOI = async (poiData: Omit<POI, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreatePOI = async (poiData: Omit<Polygon, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const newPOI = await poisApi.create(poiData);
+      const newPOI = await polygonsApi.create(poiData);
       setState(prev => ({
         ...prev,
         entities: { ...prev.entities, pois: [...prev.entities.pois, newPOI] },
         editing: { ...prev.editing, poi: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'POI created successfully');
-      logger.info('POI created successfully', { poiId: newPOI.id });
+      logger.info('POI created successfully', {poiId: newPOI.properties.id});
     } catch (error) {
       logger.error('Failed to create POI', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create POI');
     }
   };
 
-  const handleUpdatePOI = async (id: number, poiData: Partial<Omit<POI, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  const handleUpdatePOI = async (id: number, poiData: Partial<Omit<Polygon, 'id' | 'createdAt' | 'updatedAt'>>) => {
     try {
-        await poisApi.update(id, poiData);
+      await polygonsApi.update(id, poiData);
 
         setState(prev => ({
             ...prev,
             entities: {
                 ...prev.entities,
                 pois: prev.entities.pois.map(poi =>
-                    poi.id === id ? {...poi, ...poiData} : poi
+                    poi.properties.id === id ? {...poi, ...poiData} : poi
                 )
             },
             editing: {...prev.editing, poi: null}
@@ -332,12 +327,12 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
 
   const handleDeletePOI = async (id: number) => {
     try {
-      await poisApi.delete(id);
+      await polygonsApi.delete(id);
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          pois: prev.entities.pois.filter(poi => poi.id !== id)
+          ...prev.entities,
+          pois: prev.entities.pois.filter(poi => poi.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'POI deleted successfully');
@@ -358,7 +353,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         editing: { ...prev.editing, beacon: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Beacon created successfully');
-      logger.info('Beacon created successfully', { beaconId: newBeacon.id });
+      logger.info('Beacon created successfully', {beaconId: newBeacon.properties.id});
     } catch (error) {
       logger.error('Failed to create beacon', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create beacon');
@@ -373,7 +368,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
             entities: {
                 ...prev.entities,
                 beacons: prev.entities.beacons.map(beacon =>
-                    beacon.id === id ? {...beacon, ...beaconData} : beacon
+                    beacon.properties.id === id ? {...beacon, ...beaconData} : beacon
                 ),
             },
             editing: {...prev.editing, beacon: null},
@@ -392,8 +387,8 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          beacons: prev.entities.beacons.filter(beacon => beacon.id !== id)
+          ...prev.entities,
+          beacons: prev.entities.beacons.filter(beacon => beacon.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Beacon deleted successfully');
@@ -414,7 +409,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         editing: { ...prev.editing, routeNode: null }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Route node created successfully');
-      logger.info('Route node created successfully', { nodeId: newNode.id });
+        logger.info('Route node created successfully', {nodeId: newNode.properties.id});
     } catch (error) {
       logger.error('Failed to create route node', error as Error);
       addAlert(ALERT_TYPES.ERROR, 'Failed to create route node');
@@ -428,7 +423,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
         ...prev,
           entities: {
               ...prev.entities,
-              routeNodes: prev.entities.routeNodes.map(node => node.id === id ? {...node, ...nodeData} : node)
+              routeNodes: prev.entities.routeNodes.map(node => node.properties.id === id ? {...node, ...nodeData} : node)
         },
         editing: { ...prev.editing, routeNode: null }
       }));
@@ -446,8 +441,8 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       setState(prev => ({
         ...prev,
         entities: { 
-          ...prev.entities, 
-          routeNodes: prev.entities.routeNodes.filter(node => node.id !== id)
+          ...prev.entities,
+            routeNodes: prev.entities.routeNodes.filter(node => node.properties.id !== id)
         }
       }));
       addAlert(ALERT_TYPES.SUCCESS, 'Route node deleted successfully');
@@ -458,59 +453,59 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
     }
   };
 
-  // Route Edge CRUD operations
-  const handleCreateRouteEdge = async (edgeData: Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>) => {
-    try {
-      const newEdge = await routeEdgesApi.create(edgeData);
-      setState(prev => ({
-        ...prev,
-        entities: { ...prev.entities, routeEdges: [...prev.entities.routeEdges, newEdge] },
-        editing: { ...prev.editing, routeEdge: null }
-      }));
-      addAlert(ALERT_TYPES.SUCCESS, 'Route edge created successfully');
-      logger.info('Route edge created successfully', { edgeId: newEdge.id });
-    } catch (error) {
-      logger.error('Failed to create route edge', error as Error);
-      addAlert(ALERT_TYPES.ERROR, 'Failed to create route edge');
-    }
-  };
+  // // Route Edge CRUD operations
+  // const handleCreateRouteEdge = async (edgeData: Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>) => {
+  //   try {
+  //     const newEdge = await routeEdgesApi.create(edgeData);
+  //     setState(prev => ({
+  //       ...prev,
+  //       entities: { ...prev.entities, routeEdges: [...prev.entities.routeEdges, newEdge] },
+  //       editing: { ...prev.editing, routeEdge: null }
+  //     }));
+  //     addAlert(ALERT_TYPES.SUCCESS, 'Route edge created successfully');
+  //     logger.info('Route edge created successfully', { edgeId: newEdge.id });
+  //   } catch (error) {
+  //     logger.error('Failed to create route edge', error as Error);
+  //     addAlert(ALERT_TYPES.ERROR, 'Failed to create route edge');
+  //   }
+  // };
 
-  const handleUpdateRouteEdge = async (id: number, edgeData: Partial<Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>>) => {
-    try {
-        await routeEdgesApi.update(id, edgeData);
-      setState(prev => ({
-        ...prev,
-          entities: {
-              ...prev.entities,
-              routeEdges: prev.entities.routeEdges.map(edge => edge.id === id ? {...edge, ...edgeData} : edge)
-        },
-        editing: { ...prev.editing, routeEdge: null }
-      }));
-      addAlert(ALERT_TYPES.SUCCESS, 'Route edge updated successfully');
-      logger.info('Route edge updated successfully', { edgeId: id });
-    } catch (error) {
-      logger.error('Failed to update route edge', error as Error);
-      addAlert(ALERT_TYPES.ERROR, 'Failed to update route edge');
-    }
-  };
+  // const handleUpdateRouteEdge = async (id: number, edgeData: Partial<Omit<RouteEdge, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  //   try {
+  //       await routeEdgesApi.update(id, edgeData);
+  //     setState(prev => ({
+  //       ...prev,
+  //         entities: {
+  //             ...prev.entities,
+  //             routeEdges: prev.entities.routeEdges.map(edge => edge.id === id ? {...edge, ...edgeData} : edge)
+  //       },
+  //       editing: { ...prev.editing, routeEdge: null }
+  //     }));
+  //     addAlert(ALERT_TYPES.SUCCESS, 'Route edge updated successfully');
+  //     logger.info('Route edge updated successfully', { edgeId: id });
+  //   } catch (error) {
+  //     logger.error('Failed to update route edge', error as Error);
+  //     addAlert(ALERT_TYPES.ERROR, 'Failed to update route edge');
+  //   }
+  // };
 
-  const handleDeleteRouteEdge = async (id: number) => {
-    try {
-      await routeEdgesApi.delete(id);
-      setState(prev => ({
-        ...prev,
-        entities: { 
-          ...prev.entities, 
-          routeEdges: prev.entities.routeEdges.filter(edge => edge.id !== id)
-        }
-      }));
-      addAlert(ALERT_TYPES.SUCCESS, 'Route edge deleted successfully');
-      logger.info('Route edge deleted successfully', { edgeId: id });
-    } catch (error) {
-      logger.error('Failed to delete route edge', error as Error);
-      addAlert(ALERT_TYPES.ERROR, 'Failed to delete route edge');
-    }
-  };
+  // const handleDeleteRouteEdge = async (id: number) => {
+  //   try {
+  //     await routeEdgesApi.delete(id);
+  //     setState(prev => ({
+  //       ...prev,
+  //       entities: {
+  //         ...prev.entities,
+  //         routeEdges: prev.entities.routeEdges.filter(edge => edge.id !== id)
+  //       }
+  //     }));
+  //     addAlert(ALERT_TYPES.SUCCESS, 'Route edge deleted successfully');
+  //     logger.info('Route edge deleted successfully', { edgeId: id });
+  //   } catch (error) {
+  //     logger.error('Failed to delete route edge', error as Error);
+  //     addAlert(ALERT_TYPES.ERROR, 'Failed to delete route edge');
+  //   }
+  // };
 
   // Render entity list
   const renderEntityList = () => {
@@ -524,7 +519,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       case ENTITY_TYPES.ROUTE_NODE:
         return renderRouteNodeList();
       case ENTITY_TYPES.ROUTE_EDGE:
-        return renderRouteEdgeList();
+        // return renderRouteEdgeList();
       case ENTITY_TYPES.POI_CATEGORY:
         return renderPoiCategoryList();
       case ENTITY_TYPES.BEACON_TYPE:
@@ -542,7 +537,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
       <div className="entity-list">
         <div className="entity-header">
           <h3>Points of Interest ({filteredPOIs.length})</h3>
-          <Button onClick={() => setState(prev => ({ ...prev, editing: { ...prev.editing, poi: {} as POI } }))}>
+          <Button onClick={() => setState(prev => ({...prev, editing: {...prev.editing, poi: {} as Polygon}}))}>
             Add POI
           </Button>
         </div>
@@ -670,50 +665,50 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
   };
 
   // Render Route Edge list
-  const renderRouteEdgeList = () => {
-    const filteredEdges = getFilteredEntities(state.entities.routeEdges, ['edgeType']);
-    
-    return (
-      <div className="entity-list">
-        <div className="entity-header">
-          <h3>Route Edges ({filteredEdges.length})</h3>
-          <Button onClick={() => setState(prev => ({ ...prev, editing: { ...prev.editing, routeEdge: {} as RouteEdge } }))}>
-            Add Edge
-          </Button>
-        </div>
-        
-        {state.loading.routeEdges ? (
-          <div className="loading">Loading route edges...</div>
-        ) : (
-          <div className="entity-grid">
-            {filteredEdges.map(edge => (
-              <Card key={edge.id} className="entity-card" title={`Edge #${edge.id}`}>
-                <div className="entity-card-header">
-                  <h4>Edge #{edge.id}</h4>
-                  <div className="entity-actions">
-                    <Button size="SMALL" onClick={() => setState(prev => ({ ...prev, editing: { ...prev.editing, routeEdge: edge } }))}>
-                      Edit
-                    </Button>
-                    <Button size="SMALL" variant="DANGER" onClick={() => handleDeleteRouteEdge(edge.id)}>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-                <div className="entity-card-content">
-                  <p><strong>From Node:</strong> #{edge.fromNodeId}</p>
-                  <p><strong>To Node:</strong> #{edge.toNodeId}</p>
-                  <p><strong>Type:</strong> {edge.edgeType || 'walkable'}</p>
-                  <p><strong>Weight:</strong> {edge.weight || 1.0}</p>
-                  <p><strong>Bidirectional:</strong> {edge.isBidirectional ? 'Yes' : 'No'}</p>
-                  <p><strong>Visible:</strong> {edge.isVisible ? 'Yes' : 'No'}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // const renderRouteEdgeList = () => {
+  //   const filteredEdges = getFilteredEntities(state.entities.routeEdges, ['edgeType']);
+  //
+  //   return (
+  //     <div className="entity-list">
+  //       {/*<div className="entity-header">*/}
+  //       {/*  <h3>Route Edges ({filteredEdges.length})</h3>*/}
+  //       {/*  <Button onClick={() => setState(prev => ({ ...prev, editing: { ...prev.editing, routeEdge: {} as RouteEdge } }))}>*/}
+  //       {/*    Add Edge*/}
+  //       {/*  </Button>*/}
+  //       {/*</div>*/}
+  //
+  //       {state.loading.routeEdges ? (
+  //         <div className="loading">Loading route edges...</div>
+  //       ) : (
+  //         <div className="entity-grid">
+  //           {filteredEdges.map(edge => (
+  //             <Card key={edge.id} className="entity-card" title={`Edge #${edge.id}`}>
+  //               <div className="entity-card-header">
+  //                 <h4>Edge #{edge.id}</h4>
+  //                 <div className="entity-actions">
+  //                   <Button size="SMALL" onClick={() => setState(prev => ({ ...prev, editing: { ...prev.editing, routeEdge: edge } }))}>
+  //                     Edit
+  //                   </Button>
+  //                   <Button size="SMALL" variant="DANGER" onClick={() => handleDeleteRouteEdge(edge.id)}>
+  //                     Delete
+  //                   </Button>
+  //                 </div>
+  //               </div>
+  //               <div className="entity-card-content">
+  //                 <p><strong>From Node:</strong> #{edge.fromNodeId}</p>
+  //                 <p><strong>To Node:</strong> #{edge.toNodeId}</p>
+  //                 <p><strong>Type:</strong> {edge.edgeType || 'walkable'}</p>
+  //                 <p><strong>Weight:</strong> {edge.weight || 1.0}</p>
+  //                 <p><strong>Bidirectional:</strong> {edge.isBidirectional ? 'Yes' : 'No'}</p>
+  //                 <p><strong>Visible:</strong> {edge.isVisible ? 'Yes' : 'No'}</p>
+  //               </div>
+  //             </Card>
+  //           ))}
+  //         </div>
+  //       )}
+  //     </div>
+  //   );
+  // };
 
   // Render POI Category list
   const renderPoiCategoryList = () => {

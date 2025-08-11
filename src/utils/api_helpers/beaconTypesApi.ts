@@ -3,7 +3,7 @@ import {BaseApi} from "../abstract_classes/baseApi";
 import {API_ENDPOINTS} from "../../constants/api";
 import {apiRequest} from "./apiRequest";
 import {logger} from "../api";
-import {BeaconType} from "./api_interfaces/beaconType";
+import {BeaconType} from "../../interfaces/BeaconType";
 
 export class BeaconTypesApi extends BaseApi<BeaconType> {
     resourceEndpoint: string = API_ENDPOINTS.BEACON_TYPES;

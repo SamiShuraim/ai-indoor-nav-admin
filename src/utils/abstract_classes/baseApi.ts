@@ -15,7 +15,7 @@ export abstract class BaseApi<T> {
         return apiRequest<T>(`${this.resourceEndpoint}/${id}`);
     }
 
-    create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<T> {
+    create(data: any): Promise<T> {
         logger.info(`Creating new ${this.resourceEndpoint}`, {data});
         return apiRequest<T>(this.resourceEndpoint, {
             method: 'POST',
@@ -23,7 +23,7 @@ export abstract class BaseApi<T> {
         });
     }
 
-    update(id: string | number, data: Partial<Omit<T, 'createdAt' | 'updatedAt'>>): Promise<void> {
+    update(id: string | number, data: any): Promise<void> {
         logger.info(`Updating ${this.resourceEndpoint}`, {id, data});
         const payload = {...data, id: parseInt(id.toString(), 10)};
         return apiRequest<void>(`${this.resourceEndpoint}/${id}`, {

@@ -5,16 +5,16 @@ import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 import './POIForm.css';
-import {PoiCategory} from "../../utils/api_helpers/api_interfaces/poiCategory";
-import {POI} from "../../utils/api_helpers/api_interfaces/POI";
+import {PoiCategory} from "../../interfaces/PoiCategory";
+import {Polygon} from "../../interfaces/Polygon";
 
 const logger = createLogger('POIForm');
 
 interface POIFormProps {
-  poi?: POI | null;
+  poi?: Polygon | null;
   floorId: number;
-  onSave: (poi: Omit<POI, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  onUpdate: (id: number, poi: Partial<Omit<POI, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  onSave: (poi: Omit<Polygon, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onUpdate: (id: number, poi: Partial<Omit<Polygon, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -75,7 +75,7 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditing = !!poi?.id;
+  const isEditing = !!poi?.properties.id;
 
   // Load categories on component mount
   useEffect(() => {
@@ -85,13 +85,14 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
   // Initialize form data when editing
   useEffect(() => {
     if (poi) {
+      const p = poi.properties;
       setFormData({
-        name: poi.name || '',
-        description: poi.description || '',
-        poiType: poi.poiType || 'room',
-        categoryId: poi.categoryId || null,
-        color: poi.color || '#3B82F6',
-        isVisible: poi.isVisible ?? true,
+        name: p.name || '',
+        description: p.description || '',
+        poiType: p.type || 'room',
+          categoryId: p.category_id || null,
+        color: p.color || '#3B82F6',
+          isVisible: p.is_visible ?? true,
         x: 0, // POI coordinates will be handled separately with POI points
         y: 0  // POI coordinates will be handled separately with POI points
       });
@@ -152,39 +153,39 @@ const POIForm: React.FC<POIFormProps> = ({ poi, floorId, onSave, onUpdate, onCan
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      const poiData = {
-        floorId,
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        poiType: formData.poiType,
-        categoryId: formData.categoryId || undefined,
-        color: formData.color,
-        isVisible: formData.isVisible,
-        x: formData.x,
-        y: formData.y
-      };
-
-      if (isEditing && poi?.id) {
-        await onUpdate(poi.id, poiData);
-        logger.info('POI updated successfully', { poiId: poi.id });
-      } else {
-        await onSave(poiData);
-        logger.info('POI created successfully');
-      }
-    } catch (error) {
-      logger.error('Failed to save POI', error as Error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    //   e.preventDefault();
+    //
+    //   if (!validateForm()) {
+    //     return;
+    //   }
+    //
+    //   setIsSubmitting(true);
+    //
+    //   try {
+    //     const poiData = {
+    //       floorId,
+    //       name: formData.name.trim(),
+    //       description: formData.description.trim() || undefined,
+    //       poiType: formData.poiType,
+    //       categoryId: formData.categoryId || undefined,
+    //       color: formData.color,
+    //       isVisible: formData.isVisible,
+    //       x: formData.x,
+    //       y: formData.y
+    //     };
+    //
+    //     if (isEditing && poi?.id) {
+    //       await onUpdate(poi.id, poiData);
+    //       logger.info('POI updated successfully', { poiId: poi.id });
+    //     } else {
+    //       await onSave(poiData);
+    //       logger.info('POI created successfully');
+    //     }
+    //   } catch (error) {
+    //     logger.error('Failed to save POI', error as Error);
+    //   } finally {
+    //     setIsSubmitting(false);
+    //   }
   };
 
   const handleCancel = () => {

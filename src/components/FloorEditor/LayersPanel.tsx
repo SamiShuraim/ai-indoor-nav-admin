@@ -1,9 +1,9 @@
 import React from 'react';
 import {UI_MESSAGES} from '../../constants/ui';
 import {createLogger} from '../../utils/logger';
-import {Polygon} from "./interfaces/Polygon";
-import {Beacon} from "./interfaces/Beacon";
-import {RouteNode} from "./interfaces/RouteNode";
+import {Polygon} from "../../interfaces/Polygon";
+import {Beacon} from "../../interfaces/Beacon";
+import {RouteNode} from "../../interfaces/RouteNode";
 
 const logger = createLogger('LayersPanel');
 
@@ -86,35 +86,35 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
           <div className="layer-group">
             <h4>Polygons ({filteredData.polygons.length})</h4>
             {filteredData.polygons.map(polygon => (
-              <div 
-                key={polygon.id} 
-                className={`layer-item ${selectedItem?.type === 'polygon' && selectedItem?.id === polygon.id ? 'selected' : ''}`}
-                onClick={() => onLayerItemClick('polygon', polygon.id)}
+              <div
+                  key={polygon.properties.id}
+                  className={`layer-item ${selectedItem?.type === 'polygon' && selectedItem?.id === polygon.properties.id ? 'selected' : ''}`}
+                  onClick={() => onLayerItemClick('polygon', polygon.properties.id)}
               >
                 <button
                   className="visibility-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleVisibility('polygon', polygon.id);
+                    onToggleVisibility('polygon', polygon.properties.id);
                   }}
-                  title={polygon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={polygon.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {polygon.visible ? '👁️' : '🚫'}
+                    {polygon.properties.is_visible ? '👁️' : '🚫'}
                 </button>
-                <div className="layer-color" style={{ backgroundColor: polygon.color }}></div>
-                <span className="layer-name">{polygon.name}</span>
-                <span className="layer-type">({polygon.type})</span>
+                <div className="layer-color" style={{backgroundColor: polygon.properties.color}}></div>
+                <span className="layer-name">{polygon.properties.name}</span>
+                <span className="layer-type">({polygon.properties.type})</span>
                 <div className="layer-actions">
                   <button
                     className="layer-action-button edit-button"
-                    onClick={(e) => onEditItem('polygon', polygon.id, e)}
+                    onClick={(e) => onEditItem('polygon', polygon.properties.id, e)}
                     title="Edit polygon"
                   >
                     ✏️
                   </button>
                   <button
                     className="layer-action-button delete-button"
-                    onClick={(e) => onDeleteItem('polygon', polygon.id, e)}
+                    onClick={(e) => onDeleteItem('polygon', polygon.properties.id, e)}
                     title="Delete polygon"
                   >
                     ❌
@@ -130,34 +130,34 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
           <div className="layer-group">
             <h4>Beacons ({filteredData.beacons.length})</h4>
             {filteredData.beacons.map(beacon => (
-              <div 
-                key={beacon.id} 
-                className={`layer-item ${selectedItem?.type === 'beacon' && selectedItem?.id === beacon.id ? 'selected' : ''}`}
-                onClick={() => onLayerItemClick('beacon', beacon.id)}
+              <div
+                  key={beacon.properties.id}
+                  className={`layer-item ${selectedItem?.type === 'beacon' && selectedItem?.id === beacon.properties.id ? 'selected' : ''}`}
+                  onClick={() => onLayerItemClick('beacon', beacon.properties.id)}
               >
                 <button
                   className="visibility-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleVisibility('beacon', beacon.id);
+                    onToggleVisibility('beacon', beacon.properties.id);
                   }}
-                  title={beacon.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={beacon.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {beacon.visible ? '👁️' : '🚫'}
+                    {beacon.properties.is_visible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color beacon-color"></div>
-                <span className="layer-name">{beacon.name}</span>
+                <span className="layer-name">{beacon.properties.name}</span>
                 <div className="layer-actions">
                   <button
                     className="layer-action-button edit-button"
-                    onClick={(e) => onEditItem('beacon', beacon.id, e)}
+                    onClick={(e) => onEditItem('beacon', beacon.properties.id, e)}
                     title="Edit beacon"
                   >
                     ✏️
                   </button>
                   <button
                     className="layer-action-button delete-button"
-                    onClick={(e) => onDeleteItem('beacon', beacon.id, e)}
+                    onClick={(e) => onDeleteItem('beacon', beacon.properties.id, e)}
                     title="Delete beacon"
                   >
                     ❌
@@ -173,35 +173,35 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
           <div className="layer-group">
             <h4>Route Nodes ({filteredData.nodes.length})</h4>
             {filteredData.nodes.map(node => (
-              <div 
-                key={node.id} 
-                className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.id ? 'selected' : ''}`}
-                onClick={() => onLayerItemClick('node', node.id)}
+              <div
+                  key={node.properties.id}
+                  className={`layer-item ${selectedItem?.type === 'node' && selectedItem?.id === node.properties.id ? 'selected' : ''}`}
+                  onClick={() => onLayerItemClick('node', node.properties.id)}
               >
                 <button
                   className="visibility-toggle"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleVisibility('node', node.id);
+                      onToggleVisibility('node', node.properties.id);
                   }}
-                  title={node.visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
+                  title={node.properties.is_visible ? UI_MESSAGES.FLOOR_EDITOR_LAYER_VISIBLE : UI_MESSAGES.FLOOR_EDITOR_LAYER_HIDDEN}
                 >
-                  {node.visible ? '👁️' : '🚫'}
+                    {node.properties.is_visible ? '👁️' : '🚫'}
                 </button>
                 <div className="layer-color node-color"></div>
-                <span className="layer-name">Node {node.id}</span>
-                <span className="layer-connections">({node.connections.length} connections)</span>
+                  <span className="layer-name">Node {node.properties.id}</span>
+                  <span className="layer-connections">({node.properties.connections.length} connections)</span>
                 <div className="layer-actions">
                   <button
                     className="layer-action-button edit-button"
-                    onClick={(e) => onEditItem('node', node.id, e)}
+                    onClick={(e) => onEditItem('node', node.properties.id, e)}
                     title="Edit node"
                   >
                     ✏️
                   </button>
                   <button
                     className="layer-action-button delete-button"
-                    onClick={(e) => onDeleteItem('node', node.id, e)}
+                    onClick={(e) => onDeleteItem('node', node.properties.id, e)}
                     title="Delete node"
                   >
                     ❌
