@@ -428,6 +428,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			const renderedEdges = new Set<string>(); // Prevent duplicate lines
 
+			logger.info("=== RENDERING CONNECTIONS ===", {
+				totalNodes: currentNodes.length,
+				nodeDetails: currentNodes.map(n => ({
+					id: n.properties.id,
+					connections: n.properties.connections,
+					visible: n.properties.is_visible,
+					hasGeometry: !!n.geometry
+				}))
+			});
+
 			(currentNodes || []).forEach((node) => {
                 if (!node.properties.is_visible || !node.geometry) return;
 
@@ -444,6 +454,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						fromNodeId: node.properties.id,
 						lookingForId: connectedNodeId,
 						foundNode: !!targetNode,
+						targetNodeId: targetNode?.properties.id,
 						availableNodeIds: currentNodes.map(n => n.properties.id)
 					});
 
@@ -1588,9 +1599,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				};
 
 				// Save the node and get the real ID back
+				// Temporarily disable query invalidation to prevent refetching
+				const originalInvalidateQueries = queryClient.invalidateQueries;
+				queryClient.invalidateQueries = () => Promise.resolve();
+				
 				const savedNode = await routeNodesMutations.create.mutateAsync({
 					data: nodeDataWithoutConnections
 				});
+				
+				// Restore query invalidation
+				queryClient.invalidateQueries = originalInvalidateQueries;
 
 				const realId = savedNode.properties.id;
 
@@ -1658,6 +1676,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			node.properties.connections && node.properties.connections.length > 0
 		);
 
+		// Temporarily disable query invalidation to prevent refetching during connection updates
+		const originalInvalidateQueries = queryClient.invalidateQueries;
+		queryClient.invalidateQueries = () => Promise.resolve();
+
 		for (const node of nodesToUpdate) {
 			try {
 				await routeNodesMutations.update.mutateAsync({
@@ -1673,6 +1695,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				});
 			}
 		}
+
+		// Restore query invalidation
+		queryClient.invalidateQueries = originalInvalidateQueries;
 	};
 
 	const handleSave = async () => {
@@ -1744,6 +1769,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 
 		if (newQueue.length === 0) {
+			// Final refresh to sync with backend after all updates are complete
+			await queryClient.invalidateQueries({queryKey: ['nodes']});
+			
 			setSaveStatus("success");
 			setTimeout(() => setSaveStatus("idle"), 2000);
 		} else {
