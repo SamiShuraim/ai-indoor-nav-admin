@@ -1698,11 +1698,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				});
 
 				// Send the full GeoJSON structure for update (what PopulateFromJson expects)
+				// Don't include ID in properties - BaseApi.update will add it at root level
 				const updateData = {
 					type: "Feature",
 					geometry: node.geometry,
 					properties: {
-						id: node.properties.id,
 						floor_id: node.properties.floor_id,
 						is_visible: node.properties.is_visible,
 						connections: node.properties.connections
@@ -1711,9 +1711,23 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 				logger.info("Sending GeoJSON update data", { updateData });
 
-				await routeNodesMutations.update.mutateAsync({
-					data: updateData
+				// Bypass BaseApi.update to avoid ID corruption - call API directly
+				const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5090';
+				const token = localStorage.getItem('jwtToken');
+				
+				const response = await fetch(`${apiUrl}/api/RouteNode/${node.properties.id}`, {
+					method: 'PUT',
+					headers: {
+						'Content-Type': 'application/json',
+						...(token && { 'Authorization': `Bearer ${token}` })
+					},
+					body: JSON.stringify(updateData)
 				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					throw new Error(`HTTP ${response.status}: ${errorText}`);
+				}
 				logger.info("Updated node connections", { 
 					nodeId: node.properties.id, 
 					connections: node.properties.connections 
