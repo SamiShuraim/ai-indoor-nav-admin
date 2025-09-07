@@ -1697,16 +1697,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					connections: node.properties.connections
 				});
 
-				// Send the full GeoJSON structure for update (what PopulateFromJson expects)
-				// Don't include ID in properties - BaseApi.update will add it at root level
+				// Try sending properties with flattened coordinates like creation
 				const updateData = {
-					type: "Feature",
-					geometry: node.geometry,
-					properties: {
-						floor_id: node.properties.floor_id,
-						is_visible: node.properties.is_visible,
-						connections: node.properties.connections
-					}
+					floor_id: node.properties.floor_id,
+					is_visible: node.properties.is_visible,
+					connections: node.properties.connections,
+					// Include flattened coordinate data
+					...(node.geometry && node.geometry.coordinates && {
+						longitude: node.geometry.coordinates[0],
+						latitude: node.geometry.coordinates[1]
+					})
 				};
 
 				logger.info("Sending GeoJSON update data", { updateData });
