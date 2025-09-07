@@ -964,6 +964,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryClient.setQueryData(['nodes'], newNodes);
 
 		// Queue the new node for saving to the backend
+		// Send the full RouteNode object like polygons and beacons do
+		logger.info("Queueing route node for creation", {
+			floorId,
+			nodeFloorId: newNode.properties.floor_id,
+			newNode,
+			coordinates: newNode.geometry!.coordinates
+		});
+		
 		queueChange({
 			type: CHANGE_TYPES.ADD,
 			objectType: OBJECT_TYPES.NODE,
