@@ -1680,9 +1680,28 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Update node connections after all temp IDs have been resolved
 	const updateNodeConnections = async () => {
 		const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+		
+		// Only update nodes that have connections with REAL IDs (positive numbers)
 		const nodesToUpdate = currentNodes.filter(node => 
-			node.properties.connections && node.properties.connections.length > 0
+			node.properties.connections && 
+			node.properties.connections.length > 0 &&
+			node.properties.id > 0 && // Only real IDs
+			node.properties.connections.every(connId => connId > 0) // Only real connection IDs
 		);
+
+		logger.info("Nodes ready for connection updates", {
+			totalNodes: currentNodes.length,
+			nodesToUpdate: nodesToUpdate.length,
+			nodeDetails: nodesToUpdate.map(n => ({
+				id: n.properties.id,
+				connections: n.properties.connections
+			}))
+		});
+
+		if (nodesToUpdate.length === 0) {
+			logger.info("No nodes ready for connection updates - all temp IDs not yet resolved");
+			return;
+		}
 
 		// Temporarily disable query invalidation to prevent refetching during connection updates
 		const originalInvalidateQueries = queryClient.invalidateQueries;
@@ -1690,18 +1709,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		for (const node of nodesToUpdate) {
 			try {
-				logger.info("About to update node - DETAILED DATA", {
+				logger.info("About to update node connections", {
 					nodeId: node.properties.id,
-					fullNodeData: node,
-					nodeDataString: JSON.stringify(node),
 					connections: node.properties.connections
 				});
 
-				// Try sending properties with flattened coordinates like creation
+				// Send only properties with flattened coordinates
 				const updateData = {
 					floor_id: node.properties.floor_id,
 					is_visible: node.properties.is_visible,
-					connections: node.properties.connections,
+					connections: node.properties.connections, // Now all real IDs
 					// Include flattened coordinate data
 					...(node.geometry && node.geometry.coordinates && {
 						longitude: node.geometry.coordinates[0],
@@ -1709,7 +1726,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					})
 				};
 
-				logger.info("Sending GeoJSON update data", { updateData });
+				logger.info("Sending connection update with REAL IDs", { updateData });
 
 				// Bypass BaseApi.update to avoid ID corruption - call API directly
 				const apiUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5090';
@@ -1728,7 +1745,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					const errorText = await response.text();
 					throw new Error(`HTTP ${response.status}: ${errorText}`);
 				}
-				logger.info("Updated node connections", { 
+				logger.info("Successfully updated node connections", { 
 					nodeId: node.properties.id, 
 					connections: node.properties.connections 
 				});
