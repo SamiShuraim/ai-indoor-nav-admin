@@ -309,7 +309,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			mapSources.current = {};
 
 			// Add polygons as filled areas
-			currentPolygons.forEach((p) => {
+			(currentPolygons || []).forEach((p) => {
 				const polygon = p.properties;
                 if (polygon.is_visible && p.geometry.coordinates[0].length >= 3) {
 					const coordinates = p.geometry.coordinates;
@@ -379,7 +379,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			});
 
 			// Add beacons
-			currentBeacons.forEach((b) => {
+			(currentBeacons || []).forEach((b) => {
 				let beacon = b.properties;
                 if (beacon.is_visible) {
 					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
@@ -395,11 +395,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			// Add nodes
 			logger.info("Processing nodes for rendering", {
-				totalNodes: currentNodes.length,
-                visibleNodes: currentNodes.filter((n) => n.properties.is_visible).length,
+				totalNodes: (currentNodes || []).length,
+                visibleNodes: (currentNodes || []).filter((n) => n.properties.is_visible).length,
 			});
 
-			currentNodes.forEach((node) => {
+			(currentNodes || []).forEach((node) => {
 				logger.info("Processing node", {
                     nodeId: node.properties.id,
                     visible: node.properties.is_visible,
@@ -428,11 +428,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			const renderedEdges = new Set<string>(); // Prevent duplicate lines
 
-			currentNodes.forEach((node) => {
+			(currentNodes || []).forEach((node) => {
                 if (!node.properties.is_visible || !node.geometry) return;
 
-                node.properties.connections.forEach((connectedNodeId) => {
-                    const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
+                (node.properties.connections || []).forEach((connectedNodeId) => {
+                    const targetNode = (currentNodes || []).find(n => n.properties.id === connectedNodeId);
 
 					if (
 						!targetNode ||
@@ -996,7 +996,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		logger.info("Clearing temporary drawing elements");
 
 		// Remove temporary markers
-		tempDrawingMarkers.current.forEach((marker) => marker.remove());
+		(tempDrawingMarkers.current || []).forEach((marker) => marker.remove());
 		tempDrawingMarkers.current = [];
 
 		// Remove temporary lines
