@@ -20,40 +20,15 @@ import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
 import {RouteNode, RouteNodeBuilder} from "../interfaces/RouteNode";
 import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
-import {ChangeQueueItem} from "../interfaces/ChangeQueueItem";
 import {CHANGE_TYPES} from "./FloorEditor/enums/CHANGE_TYPES";
 import {OBJECT_TYPES} from "./FloorEditor/enums/OBJECT_TYPES";
-import {STORAGE_KEYS} from "./FloorEditor/enums/STORAGE_KEYS";
 import {API_URL_KEYS} from "./FloorEditor/enums/API_URL_KEYS";
 import {useEntityMutations} from "./FloorEditor/useEntityMutations";
 import {Floor} from "../interfaces/Floor";
 
 const logger = createLogger("FloorEditor");
 
-const loadQueueFromStorage = (): ChangeQueueItem[] => {
-	try {
-		const stored = localStorage.getItem(STORAGE_KEYS.CHANGE_QUEUE);
-		return stored ? JSON.parse(stored) : [];
-	} catch (error) {
-		logger.warn(
-			"Failed to load change queue from localStorage",
-			error as Error
-		);
-		return [];
-	}
-};
-
-const saveQueueToStorage = (queue: ChangeQueueItem[]): void => {
-	try {
-		localStorage.setItem(STORAGE_KEYS.CHANGE_QUEUE, JSON.stringify(queue));
-		logger.info("Saved change queue to localStorage");
-	} catch (error) {
-		logger.error(
-			"Failed to save change queue to localStorage",
-			error as Error
-		);
-	}
-};
+// Queue storage functions removed - no longer needed since changes save immediately
 
 // // Restore local storage utilities for polygons, beacons, nodes, edges
 // const loadFromStorage = (key: string, defaultValue: any): any => {
@@ -81,17 +56,7 @@ const loadFromApi = async (API: BaseApi<any>): Promise<any[]> => {
 	}
 };
 
-const saveToStorage = (key: string, value: any): void => {
-	try {
-		localStorage.setItem(key, JSON.stringify(value));
-		logger.info(`Saved to localStorage: ${key}`);
-	} catch (error) {
-		logger.error(
-			`Failed to save to localStorage key: ${key}`,
-			error as Error
-		);
-	}
-};
+// saveToStorage function removed - no longer needed since changes save immediately to backend
 
 function convertPointsToCoordinates(points: Point[]): number[][][] {
 	return [points.map(p => [p.x, p.y])];
@@ -219,22 +184,12 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const [nodeName, setNodeName] = useState("");
 	const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
 
-	// Change queue state
-	const [changeQueue, setChangeQueue] = useState<ChangeQueueItem[]>(() =>
-		loadQueueFromStorage()
-	);
-	const [saveStatus, setSaveStatus] = useState<
-		"idle" | "saving" | "success" | "error"
-	>("idle");
-	const [saveError, setSaveError] = useState<string | null>(null);
+	// Queue system removed - all changes now save immediately
 
 	const poisMutations = useEntityMutations('pois', polygonsApi);
 	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
 	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
-	// Sync queue to local storage
-	useEffect(() => {
-		saveQueueToStorage(changeQueue);
-	}, [changeQueue]);
+	// Queue system removed - no need to sync to local storage
 
 	useEffect(() => {
 		logger.info("FloorEditor component mounted", {floorId});
@@ -797,7 +752,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
 	};
 
-	const handleNodeClick = (lng: number, lat: number) => {
+	const handleNodeClick = async (lng: number, lat: number) => {
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
 		const clickedNode = nodes.find((node) => {
             if (!node.properties.is_visible) return false;
@@ -859,44 +814,51 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				"nodes.length === 0": nodes.length === 0,
 			});
 
-			if (currentSelectedNode) {
-				// Have a selected node - create new node and connect it (first connection after selecting)
-				logger.info("Creating first connected node", {
-					selectedNodeForConnection: currentSelectedNode,
-				});
-				const newNodeId = addNewNode(lng, lat, currentSelectedNode);
+			try {
+				if (currentSelectedNode) {
+					// Have a selected node - create new node and connect it (first connection after selecting)
+					logger.info("Creating first connected node", {
+						selectedNodeForConnection: currentSelectedNode,
+					});
+					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
+					setSelectedNodeForConnection(null);
+					selectedNodeForConnectionRef.current = null;
+					setLastPlacedNodeId(newNodeId);
+					lastPlacedNodeIdRef.current = newNodeId;
+				} else if (currentLastPlacedNode) {
+					// Chain mode - connect to the last placed node
+					logger.info("Creating chained node", {
+						lastPlacedNodeId: currentLastPlacedNode,
+					});
+					const newNodeId = await addNewNode(lng, lat, currentLastPlacedNode);
+					setLastPlacedNodeId(newNodeId);
+					lastPlacedNodeIdRef.current = newNodeId;
+				} else if (nodes.length === 0) {
+					// No nodes exist - create first isolated node (Canvas logic)
+					logger.info("Creating first isolated node");
+					const newNodeId = await addNewNode(lng, lat, null);
+					setLastPlacedNodeId(newNodeId);
+					lastPlacedNodeIdRef.current = newNodeId;
+				} else {
+					// Canvas logic: Can't create node if nodes exist but none selected
+					logger.info(
+						"Cannot create node - select existing node first or clear all nodes"
+					);
+				}
+			} catch (error) {
+				logger.error("Failed to create node during click handling", error as Error);
+				// Reset state on error
 				setSelectedNodeForConnection(null);
 				selectedNodeForConnectionRef.current = null;
-				setLastPlacedNodeId(newNodeId);
-				lastPlacedNodeIdRef.current = newNodeId;
-			} else if (currentLastPlacedNode) {
-				// Chain mode - connect to the last placed node
-				logger.info("Creating chained node", {
-					lastPlacedNodeId: currentLastPlacedNode,
-				});
-				const newNodeId = addNewNode(lng, lat, currentLastPlacedNode);
-				setLastPlacedNodeId(newNodeId);
-				lastPlacedNodeIdRef.current = newNodeId;
-			} else if (nodes.length === 0) {
-				// No nodes exist - create first isolated node (Canvas logic)
-				logger.info("Creating first isolated node");
-				const newNodeId = addNewNode(lng, lat, null);
-				setLastPlacedNodeId(newNodeId);
-				lastPlacedNodeIdRef.current = newNodeId;
-			} else {
-				// Canvas logic: Can't create node if nodes exist but none selected
-				logger.info(
-					"Cannot create node - select existing node first or clear all nodes"
-				);
 			}
 		}
 	};
 
-	const addNewNode = (
+	const addNewNode = async (
 		lng: number,
 		lat: number,
 		connectToNodeId: number | null
-	): number => {
+	): Promise<number> => {
 		const newNode = new RouteNodeBuilder()
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
@@ -914,47 +876,63 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			willCreateEdge: !!connectToNodeId,
 		});
 
-		// CRITICAL FIX: Update state atomically to prevent race conditions
-		// Use functional updates to ensure we're working with the latest state
-		const updatedNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
-		const finalNodes = [...updatedNodes, newNode];
-
-		let newNodes: RouteNode[];
-
-		if (connectToNodeId) {
-			newNodes = finalNodes.map((node) =>
-                node.properties.id === connectToNodeId
-					? {
-						...node,
-                        connections: [...node.properties.connections, newNode.properties.id],
-					}
-					: node
-			);
-
-			saveToStorage(STORAGE_KEYS.NODES, newNodes);
-
-			logger.info("Updated node connections", {
-				connectToNodeId,
-                newNodeId: newNode.properties.id,
-				totalNodes: newNodes.length,
+		try {
+			// Save new node to backend immediately
+			const savedNode = await routeNodesMutations.create.mutateAsync({
+				type: CHANGE_TYPES.ADD,
+				objectType: OBJECT_TYPES.NODE,
+				data: newNode,
 			});
-		} else {
-			newNodes = finalNodes;
-			saveToStorage(STORAGE_KEYS.NODES, newNodes);
-			logger.userAction("Isolated node added", {newNode});
+
+			// If connecting to existing node, update that node's connections
+			if (connectToNodeId) {
+				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
+				if (existingNode) {
+					const updatedExistingNode = {
+						...existingNode,
+						properties: {
+							...existingNode.properties,
+							connections: [...existingNode.properties.connections, savedNode.properties.id]
+						}
+					};
+					
+					// Save the updated connection to backend
+					await routeNodesMutations.update.mutateAsync({
+						type: CHANGE_TYPES.EDIT,
+						objectType: OBJECT_TYPES.NODE,
+						data: updatedExistingNode,
+					});
+
+					// Update local state with both nodes
+					queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) => 
+						[...old.map(node => 
+							node.properties.id === connectToNodeId ? updatedExistingNode : node
+						), savedNode]
+					);
+
+					logger.info("Updated node connections", {
+						connectToNodeId,
+						newNodeId: savedNode.properties.id,
+					});
+				}
+			} else {
+				// Just add the isolated node
+				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) => [...old, savedNode]);
+				logger.userAction("Isolated node added", {newNode: savedNode});
+			}
+
+			logger.info("Node creation completed successfully", {
+				newNodeId: savedNode.properties.id,
+				wasConnected: !!connectToNodeId,
+				connectToNodeId,
+			});
+
+			return savedNode.properties.id;
+		} catch (error) {
+			logger.error("Failed to create node", error as Error);
+			// Return a temporary ID or throw the error
+			throw error;
 		}
-
-		queryClient.setQueryData(['nodes'], newNodes);
-
-		logger.info("Node creation completed", {
-            newNodeId: newNode.properties.id,
-			wasConnected: !!connectToNodeId,
-			connectToNodeId,
-		});
-
-		// DON'T call updateMapData here - let the useEffect handle it when state updates
-
-        return newNode.properties.id;
 	};
 
 	// Clear all temporary drawing elements from the map
@@ -1245,37 +1223,34 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setSelectedItem(null);
 	};
 
-	// Add to change queue helper
-	const queueChange = (change: Omit<ChangeQueueItem, "id">) => {
-		setChangeQueue((prev) => [
-			...prev,
-			{
-				...change,
-                id: change.data.id,
-			},
-		]);
-	};
+	// Queue system removed - all changes now save immediately to backend
 
 	// --- Update handlers ---
 
-	// Polygon Save (add or edit)
-	const handlePolygonSave = () => {
+	// Polygon Save (add or edit) - immediate save to backend
+	const handlePolygonSave = async () => {
 		if (editingPolygonId) {
 			// Edit
             const polygon = polygons.find((p) => p.properties.id === editingPolygonId);
 			if (polygon) {
                 const updated = PolygonBuilder.fromPolygon(polygon).setName(polygonName).build();
-				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.map(p => (p.properties.id === editingPolygonId ? updated : p))
-				);
-				queueChange({
-					type: CHANGE_TYPES.EDIT,
-					objectType: OBJECT_TYPES.POLYGON,
-					data: updated,
-				});
+				try {
+					await poisMutations.update.mutateAsync({
+						type: CHANGE_TYPES.EDIT,
+						objectType: OBJECT_TYPES.POLYGON,
+						data: updated,
+					});
+					queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+						old.map(p => (p.properties.id === editingPolygonId ? updated : p))
+					);
+					logger.info("POI updated successfully", { polygonId: editingPolygonId });
+				} catch (error) {
+					logger.error("Failed to update POI", error as Error);
+					// Optionally show user error message
+				}
 			}
 		} else {
-			// Add
+			// Add - immediate save to backend
 			const newPolygon = new PolygonBuilder()
 				.setFloorId(floorId)
 				.setName(polygonName)
@@ -1287,12 +1262,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
 				.build();
 
-			queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, newPolygon]);
-			queueChange({
-				type: CHANGE_TYPES.ADD,
-				objectType: OBJECT_TYPES.POLYGON,
-				data: newPolygon,
-			});
+			try {
+				const savedPolygon = await poisMutations.create.mutateAsync({
+					type: CHANGE_TYPES.ADD,
+					objectType: OBJECT_TYPES.POLYGON,
+					data: newPolygon,
+				});
+				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) => [...old, savedPolygon]);
+				logger.info("POI created successfully", { polygonId: savedPolygon.properties.id });
+			} catch (error) {
+				logger.error("Failed to create POI", error as Error);
+				// Optionally show user error message
+			}
 		}
 		setShowPolygonDialog(false);
 		setPolygonName("");
@@ -1301,24 +1282,30 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setPendingPolygonPoints([]);
 	};
 
-	// Beacon Save (add or edit)
-	const handleBeaconSave = () => {
+	// Beacon Save (add or edit) - immediate save to backend
+	const handleBeaconSave = async () => {
 		if (editingBeaconId) {
 			// Edit
             const beacon = beacons.find((b) => b.properties.id === editingBeaconId);
 			if (beacon) {
                 const updated = BeaconBuilder.fromBeacon(beacon).setName(beaconName).build();
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.map(b => (b.properties.id === editingBeaconId ? updated : b))
-				);
-				queueChange({
-					type: CHANGE_TYPES.EDIT,
-					objectType: OBJECT_TYPES.BEACON,
-					data: updated,
-				});
+				try {
+					await beaconsMutations.update.mutateAsync({
+						type: CHANGE_TYPES.EDIT,
+						objectType: OBJECT_TYPES.BEACON,
+						data: updated,
+					});
+					queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+						old.map(b => (b.properties.id === editingBeaconId ? updated : b))
+					);
+					logger.info("Beacon updated successfully", { beaconId: editingBeaconId });
+				} catch (error) {
+					logger.error("Failed to update beacon", error as Error);
+					// Optionally show user error message
+				}
 			}
 		} else {
-			// Add
+			// Add - immediate save to backend
 			if (pendingBeaconLocation) {
 				const newBeacon = new BeaconBuilder()
 					.setFloorId(floorId)
@@ -1329,12 +1316,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					.setBatteryLevel(100)
 					.build();
 
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, newBeacon]);
-				queueChange({
-					type: CHANGE_TYPES.ADD,
-					objectType: OBJECT_TYPES.BEACON,
-					data: newBeacon,
-				});
+				try {
+					const savedBeacon = await beaconsMutations.create.mutateAsync({
+						type: CHANGE_TYPES.ADD,
+						objectType: OBJECT_TYPES.BEACON,
+						data: newBeacon,
+					});
+					queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) => [...old, savedBeacon]);
+					logger.info("Beacon created successfully", { beaconId: savedBeacon.properties.id });
+				} catch (error) {
+					logger.error("Failed to create beacon", error as Error);
+					// Optionally show user error message
+				}
 			}
 		}
 		setShowBeaconDialog(false);
@@ -1343,21 +1336,27 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setEditingBeaconId(null);
 	};
 
-	// Node Save (add or edit) - implement similar logic if you have node editing dialog
-	const handleNodeSave = () => {
+	// Node Save (add or edit) - immediate save to backend
+	const handleNodeSave = async () => {
 		if (editingNodeId) {
 			// Edit
             const node = nodes.find((n) => n.properties.id === editingNodeId);
 			if (node) {
 				const updated = {...node, name: nodeName};
-				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
-                    old.map(n => (n.properties.id === editingNodeId ? updated : n))
-				);
-				queueChange({
-					type: CHANGE_TYPES.EDIT,
-					objectType: OBJECT_TYPES.NODE,
-					data: updated,
-				});
+				try {
+					await routeNodesMutations.update.mutateAsync({
+						type: CHANGE_TYPES.EDIT,
+						objectType: OBJECT_TYPES.NODE,
+						data: updated,
+					});
+					queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
+						old.map(n => (n.properties.id === editingNodeId ? updated : n))
+					);
+					logger.info("Node updated successfully", { nodeId: editingNodeId });
+				} catch (error) {
+					logger.error("Failed to update node", error as Error);
+					// Optionally show user error message
+				}
 			}
 		} else {
 			// Add (if implementing node creation via dialog)
@@ -1368,54 +1367,51 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setEditingNodeId(null);
 	};
 
-	// // Delete handler
-	const handleDeleteItem = (
+	// Delete handler - immediate backend deletion
+	const handleDeleteItem = async (
 		type: "polygon" | "beacon" | "node",
 		id: number,
 		e: React.MouseEvent<HTMLButtonElement>
 	) => {
 		e.stopPropagation();
 		logger.userAction("Delete item clicked", {type, id});
-		switch (type) {
-			case "polygon":
-				queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
-					old.filter(p => p.properties.id !== id)
-				);
-				queueChange({
-					type: CHANGE_TYPES.DELETE,
-					objectType: OBJECT_TYPES.POLYGON,
-					data: {id},
-				});
-				break;
-			case "beacon":
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.filter(b => b.properties.id !== id)
-				);
-				queueChange({
-					type: CHANGE_TYPES.DELETE,
-					objectType: OBJECT_TYPES.BEACON,
-					data: {id},
-				});
-				break;
-			case "node":
-				queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
-                    old.filter(n => n.properties.id !== id)
-				);
-
-				queueChange({
-					type: CHANGE_TYPES.DELETE,
-					objectType: OBJECT_TYPES.NODE,
-					data: {id},
-				});
-				break;
-		}
-		if (selectedItem?.type === type && selectedItem?.id === id) {
-			setSelectedItem(null);
+		
+		try {
+			switch (type) {
+				case "polygon":
+					await poisMutations.delete.mutateAsync(id);
+					queryClient.setQueryData<Polygon[]>(['polygons'], (old = []) =>
+						old.filter(p => p.properties.id !== id)
+					);
+					logger.info("POI deleted successfully", { polygonId: id });
+					break;
+				case "beacon":
+					await beaconsMutations.delete.mutateAsync(id);
+					queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
+						old.filter(b => b.properties.id !== id)
+					);
+					logger.info("Beacon deleted successfully", { beaconId: id });
+					break;
+				case "node":
+					await routeNodesMutations.delete.mutateAsync(id);
+					queryClient.setQueryData<RouteNode[]>(['nodes'], (old = []) =>
+						old.filter(n => n.properties.id !== id)
+					);
+					logger.info("Node deleted successfully", { nodeId: id });
+					break;
+			}
+			
+			if (selectedItem?.type === type && selectedItem?.id === id) {
+				setSelectedItem(null);
+			}
+		} catch (error) {
+			logger.error(`Failed to delete ${type}`, error as Error);
+			// Optionally show user error message
 		}
 	};
 
-	// --- UI: Unsaved changes indicator ---
-	const hasUnsavedChanges = changeQueue.length > 0;
+	// --- UI: No unsaved changes since everything saves immediately ---
+	const hasUnsavedChanges = false; // Always false since changes save immediately
 
 	const toggleLayerVisibility = (
 		type: "polygon" | "beacon" | "node",
@@ -1525,70 +1521,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	};
 
-	const handleSave = async () => {
-		if (changeQueue.length === 0) return;
-		setSaveStatus("saving");
-		setSaveError(null);
-		let newQueue = [...changeQueue];
-
-		const mutationMap = {
-			[OBJECT_TYPES.POLYGON]: poisMutations,
-			[OBJECT_TYPES.BEACON]: beaconsMutations,
-			[OBJECT_TYPES.NODE]: routeNodesMutations,
-		};
-
-		for (const change of changeQueue) {
-			try {
-				const mutations = mutationMap[change.objectType];
-				if (!mutations) throw new Error(`No mutations defined for objectType ${change.objectType}`);
-
-				if (change.type === CHANGE_TYPES.ADD) {
-					await mutations.create.mutateAsync(change);
-				} else if (change.type === CHANGE_TYPES.EDIT) {
-					await mutations.update.mutateAsync(change);
-				} else if (change.type === CHANGE_TYPES.DELETE) {
-					await mutations.delete.mutateAsync(change.data.id);
-				}
-				// Remove from queue on success
-				newQueue = newQueue.filter((q) => q.id !== change.id);
-				setChangeQueue([...newQueue]);
-			} catch (err) {
-				setSaveStatus("error");
-
-				// Provide more helpful error messages
-				let errorMessage: string = UI_MESSAGES.FLOOR_EDITOR_SAVE_ERROR;
-				if (err instanceof Error) {
-					if (err.message.includes("404")) {
-						errorMessage = `${UI_MESSAGES.FLOOR_EDITOR_BACKEND_ERROR} Object not found (404).`;
-					} else if (
-						err.message.includes("Failed to fetch") ||
-						err.message.includes("Network")
-					) {
-						errorMessage = `${UI_MESSAGES.FLOOR_EDITOR_BACKEND_ERROR} Cannot connect to server.`;
-					} else {
-						errorMessage = `${UI_MESSAGES.FLOOR_EDITOR_SAVE_ERROR}: ${err.message}`;
-					}
-				}
-
-				setSaveError(errorMessage);
-				logger.error("Save operation failed", err as Error, {
-					changeId: change.id,
-					changeType: change.type,
-					objectType: change.objectType,
-				});
-
-				// Stop processing further, keep failed and remaining in queue
-				break;
-			}
-		}
-
-		if (newQueue.length === 0) {
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-		} else {
-			setSaveStatus("error");
-		}
-	};
+	// handleSave function removed - all changes now save immediately to backend
 
 	// // Add missing handler functions
 	const handlePolygonCancel = () => {
@@ -1702,38 +1635,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}`}
 				actions={
 					<div className="header-actions">
-						{hasUnsavedChanges && (
-							<span className="unsaved-changes-indicator">
-								{UI_MESSAGES.FLOOR_EDITOR_UNSAVED_CHANGES} (
-								{changeQueue.length})
-							</span>
-						)}
-						{saveStatus === "saving" && (
-							<span className="save-status saving">
-								{UI_MESSAGES.FLOOR_EDITOR_SAVE_IN_PROGRESS}
-							</span>
-						)}
-						{saveStatus === "success" && (
-							<span className="save-status success">
-								{UI_MESSAGES.FLOOR_EDITOR_SAVE_SUCCESS}
-							</span>
-						)}
-						{saveError && (
-							<span className="save-status error">
-								{saveError}
-							</span>
-						)}
-						<Button
-							variant="PRIMARY"
-							onClick={handleSave}
-							disabled={
-								!hasUnsavedChanges || saveStatus === "saving"
-							}
-						>
-							{saveStatus === "saving"
-								? UI_MESSAGES.FLOOR_EDITOR_SAVE_IN_PROGRESS
-								: UI_MESSAGES.FLOOR_EDITOR_SAVE_BUTTON}
-						</Button>
+						{/* Save status UI removed - changes save immediately */}
+						{/* Save button removed - changes save automatically */}
 						<Button
 							variant="SECONDARY"
 							onClick={onBack}
@@ -1765,27 +1668,37 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						lastPlacedNodeIdRef.current = null;
 						logger.userAction("Polygon drawing cancelled");
 					}}
-					onClearAll={() => {
+					onClearAll={async () => {
 						logger.userAction("Clear all button clicked");
-						queryClient.setQueryData<Polygon[]>(['polygons'], []);
-						queryClient.setQueryData<Beacon[]>(['beacons'], []);
-						queryClient.setQueryData<RouteNode[]>(['nodes'], []);
-						queueChange({
-							type: CHANGE_TYPES.DELETE,
-							objectType: OBJECT_TYPES.POLYGON,
-							data: {id: "all"},
-						});
-						queueChange({
-							type: CHANGE_TYPES.DELETE,
-							objectType: OBJECT_TYPES.BEACON,
-							data: {id: "all"},
-						});
-						queueChange({
-							type: CHANGE_TYPES.DELETE,
-							objectType: OBJECT_TYPES.NODE,
-							data: {id: "all"},
-						});
-						logger.info("All data cleared from state and queue");
+						
+						try {
+							// Delete all POIs
+							const currentPolygons = queryClient.getQueryData<Polygon[]>(['polygons']) || [];
+							for (const polygon of currentPolygons) {
+								await poisMutations.delete.mutateAsync(polygon.properties.id);
+							}
+							
+							// Delete all beacons
+							const currentBeacons = queryClient.getQueryData<Beacon[]>(['beacons']) || [];
+							for (const beacon of currentBeacons) {
+								await beaconsMutations.delete.mutateAsync(beacon.properties.id);
+							}
+							
+							// Delete all nodes
+							const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+							for (const node of currentNodes) {
+								await routeNodesMutations.delete.mutateAsync(node.properties.id);
+							}
+							
+							// Clear local state after successful deletions
+							queryClient.setQueryData<Polygon[]>(['polygons'], []);
+							queryClient.setQueryData<Beacon[]>(['beacons'], []);
+							queryClient.setQueryData<RouteNode[]>(['nodes'], []);
+							
+							logger.info("All data cleared from backend and state");
+						} catch (error) {
+							logger.error("Failed to clear all data", error as Error);
+						}
 					}}
 					nodesCount={nodes.length}
 					selectedNodeForConnection={selectedNodeForConnection}
