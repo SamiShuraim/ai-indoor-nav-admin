@@ -897,7 +897,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): number => {
+		// Generate a unique ID for the new node
+		const newNodeId = Date.now() + Math.floor(Math.random() * 1000);
+		
 		const newNode = new RouteNodeBuilder()
+			.setId(newNodeId)
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
 			.setIsVisible(true)
@@ -926,12 +930,25 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
                 node.properties.id === connectToNodeId
 					? {
 						...node,
-                        connections: [...node.properties.connections, newNode.properties.id],
+						properties: {
+							...node.properties,
+							connections: [...node.properties.connections, newNode.properties.id],
+						}
 					}
 					: node
 			);
 
 			saveToStorage(STORAGE_KEYS.NODES, newNodes);
+
+			// Queue the connection update for the connected node
+			const connectedNode = newNodes.find(n => n.properties.id === connectToNodeId);
+			if (connectedNode) {
+				queueChange({
+					type: CHANGE_TYPES.EDIT,
+					objectType: OBJECT_TYPES.NODE,
+					data: connectedNode,
+				});
+			}
 
 			logger.info("Updated node connections", {
 				connectToNodeId,
@@ -945,6 +962,13 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 
 		queryClient.setQueryData(['nodes'], newNodes);
+
+		// Queue the new node for saving to the backend
+		queueChange({
+			type: CHANGE_TYPES.ADD,
+			objectType: OBJECT_TYPES.NODE,
+			data: newNode,
+		});
 
 		logger.info("Node creation completed", {
             newNodeId: newNode.properties.id,
