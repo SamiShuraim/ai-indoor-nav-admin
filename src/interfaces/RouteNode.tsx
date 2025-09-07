@@ -12,7 +12,7 @@ export interface RouteNode {
 }
 
 export class RouteNodeBuilder {
-    private _id!: number;
+    private _id: number = 0;
     private _floorId!: number;
     private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isVisible: boolean = true;

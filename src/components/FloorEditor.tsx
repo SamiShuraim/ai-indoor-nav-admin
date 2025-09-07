@@ -897,15 +897,12 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): number => {
-		// Generate a unique NEGATIVE temporary ID to distinguish from backend IDs
-		const tempNodeId = -(Date.now() + Math.floor(Math.random() * 1000));
-		
+		// Create node with connections immediately - let backend handle ID generation
 		const newNode = new RouteNodeBuilder()
-			.setId(tempNodeId)
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
 			.setIsVisible(true)
-			.setConnections([]) // Don't set connections yet - will be handled after saving
+			.setConnections(connectToNodeId ? [connectToNodeId] : [])
 			.build();
 
 		logger.info("Adding new node - DETAILED", {
@@ -918,46 +915,63 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			willCreateEdge: !!connectToNodeId,
 		});
 
-		// Add the new node to local state
+		// Add the new node to local state and update connections immediately
 		const updatedNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
-		const newNodes = [...updatedNodes, newNode];
+		let newNodes: RouteNode[];
+
+		if (connectToNodeId) {
+			// Update the connected node to include connection back to the new node
+			newNodes = [...updatedNodes, newNode].map((node) =>
+				node.properties.id === connectToNodeId
+					? {
+						...node,
+						properties: {
+							...node.properties,
+							connections: [...(node.properties.connections || []), newNode.properties.id],
+						}
+					}
+					: node
+			);
+
+			logger.info("Updated node connections", {
+				connectToNodeId,
+				newNodeId: newNode.properties.id,
+				totalNodes: newNodes.length,
+			});
+		} else {
+			newNodes = [...updatedNodes, newNode];
+			logger.userAction("Isolated node added", {newNode});
+		}
 
 		queryClient.setQueryData(['nodes'], newNodes);
 		saveToStorage(STORAGE_KEYS.NODES, newNodes);
 
-		// Store connection information separately for processing after backend save
-		if (connectToNodeId) {
-			// Store pending connection info in localStorage for processing after save
-			const pendingConnections = JSON.parse(localStorage.getItem('pendingConnections') || '[]');
-			pendingConnections.push({
-				tempNodeId: newNode.properties.id,
-				connectToNodeId: connectToNodeId,
-				timestamp: Date.now()
-			});
-			localStorage.setItem('pendingConnections', JSON.stringify(pendingConnections));
-			
-			logger.info("Stored pending connection", {
-				tempNodeId: newNode.properties.id,
-				connectToNodeId,
-				totalPendingConnections: pendingConnections.length
-			});
-		} else {
-			logger.userAction("Isolated node added", {newNode});
-		}
-
 		// Queue the new node for saving to the backend
-		// Send the full RouteNode object like polygons and beacons do
-		logger.info("Queueing route node for creation", {
-			floorId,
-			nodeFloorId: newNode.properties.floor_id,
-			newNode,
-			coordinates: newNode.geometry!.coordinates
-		});
-		
 		queueChange({
 			type: CHANGE_TYPES.ADD,
 			objectType: OBJECT_TYPES.NODE,
 			data: newNode,
+		});
+
+		// If connecting to an existing node, queue the update for that node too
+		if (connectToNodeId) {
+			const connectedNode = newNodes.find(n => n.properties.id === connectToNodeId);
+			if (connectedNode) {
+				queueChange({
+					type: CHANGE_TYPES.EDIT,
+					objectType: OBJECT_TYPES.NODE,
+					data: connectedNode,
+				});
+			}
+		}
+
+		logger.info("Queueing route node for creation", {
+			floorId,
+			nodeFloorId: newNode.properties.floor_id,
+			newNode,
+			coordinates: newNode.geometry!.coordinates,
+			connectToNodeId,
+			willUpdateConnectedNode: !!connectToNodeId
 		});
 
 		logger.info("Node creation completed", {
@@ -1539,109 +1553,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	};
 
-	// Process pending connections after nodes have been saved and have real IDs
-	const processPendingConnections = async () => {
-		try {
-			const pendingConnections = JSON.parse(localStorage.getItem('pendingConnections') || '[]');
-			if (pendingConnections.length === 0) return;
-
-			logger.info("Processing pending connections", { count: pendingConnections.length });
-
-			// Refresh nodes data to get the latest with real backend IDs
-			const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
-			
-			// Create a map of temp IDs to real IDs
-			const tempToRealIdMap: { [key: number]: number } = {};
-			
-			// Find nodes with negative (temp) IDs and map them to their real counterparts
-			// This assumes the backend returns the nodes in the same order or we can match by coordinates
-			const tempNodes = currentNodes.filter(n => n.properties.id < 0);
-			const realNodes = currentNodes.filter(n => n.properties.id > 0);
-			
-			// For now, we'll need to match by coordinates since we don't have another way
-			tempNodes.forEach(tempNode => {
-				const matchingRealNode = realNodes.find(realNode => {
-					if (!realNode.geometry || !tempNode.geometry) return false;
-					const [realX, realY] = realNode.geometry.coordinates;
-					const [tempX, tempY] = tempNode.geometry.coordinates;
-					// Match by coordinates with small tolerance
-					return Math.abs(realX - tempX) < 0.0001 && Math.abs(realY - tempY) < 0.0001;
-				});
-				
-				if (matchingRealNode) {
-					tempToRealIdMap[tempNode.properties.id] = matchingRealNode.properties.id;
-				}
-			});
-
-			// Process each pending connection
-			for (const connection of pendingConnections) {
-				const realNodeId = tempToRealIdMap[connection.tempNodeId];
-				const connectToId = connection.connectToNodeId;
-				
-				if (realNodeId && connectToId) {
-					// Update both nodes to have the connection
-					const updatedNodes = currentNodes.map(node => {
-						if (node.properties.id === realNodeId) {
-							// Add connection from new node to existing node
-							return {
-								...node,
-								properties: {
-									...node.properties,
-									connections: [...(node.properties.connections || []), connectToId]
-								}
-							};
-						} else if (node.properties.id === connectToId) {
-							// Add connection from existing node to new node
-							return {
-								...node,
-								properties: {
-									...node.properties,
-									connections: [...(node.properties.connections || []), realNodeId]
-								}
-							};
-						}
-						return node;
-					});
-
-					// Update local state
-					queryClient.setQueryData(['nodes'], updatedNodes);
-					
-					// Queue updates for both nodes
-					const nodeToUpdate1 = updatedNodes.find(n => n.properties.id === realNodeId);
-					const nodeToUpdate2 = updatedNodes.find(n => n.properties.id === connectToId);
-					
-					if (nodeToUpdate1) {
-						queueChange({
-							type: CHANGE_TYPES.EDIT,
-							objectType: OBJECT_TYPES.NODE,
-							data: nodeToUpdate1,
-						});
-					}
-					
-					if (nodeToUpdate2) {
-						queueChange({
-							type: CHANGE_TYPES.EDIT,
-							objectType: OBJECT_TYPES.NODE,
-							data: nodeToUpdate2,
-						});
-					}
-
-					logger.info("Processed connection", {
-						tempNodeId: connection.tempNodeId,
-						realNodeId,
-						connectToId
-					});
-				}
-			}
-
-			// Clear pending connections
-			localStorage.removeItem('pendingConnections');
-			logger.info("Cleared pending connections");
-			
-		} catch (error) {
-			logger.error("Failed to process pending connections", error as Error);
-		}
-	};
 
 	const handleSave = async () => {
 		if (changeQueue.length === 0) return;
@@ -1701,9 +1612,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 
 		if (newQueue.length === 0) {
-			// Process pending connections after all nodes have been saved
-			await processPendingConnections();
-			
 			setSaveStatus("success");
 			setTimeout(() => setSaveStatus("idle"), 2000);
 		} else {
