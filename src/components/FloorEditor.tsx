@@ -1590,19 +1590,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const tempId = nodeChange.data.properties.id;
 				
 				// Create the node without connections first (to avoid temp ID references)
-				// Backend expects flattened format for creation
+				// Backend expects GeoJSON format for creation too
 				const nodeDataWithoutConnections = {
-					floor_id: nodeChange.data.properties.floor_id,
-					is_visible: nodeChange.data.properties.is_visible,
-					connections: [], // Remove connections for creation
-					// Add geometry data flattened
-					...(nodeChange.data.geometry && {
-						longitude: nodeChange.data.geometry.coordinates[0],
-						latitude: nodeChange.data.geometry.coordinates[1]
-					})
+					type: "Feature" as const,
+					geometry: {
+						type: "Point" as const,
+						coordinates: nodeChange.data.geometry?.coordinates || [0, 0]
+					},
+					properties: {
+						floor_id: nodeChange.data.properties.floor_id,
+						is_visible: nodeChange.data.properties.is_visible,
+						connections: [] // Remove connections for creation
+					}
 				};
 
-				logger.info("Sending flattened creation data", { nodeDataWithoutConnections });
+				logger.info("Sending GeoJSON creation data", { nodeDataWithoutConnections });
 
 				// Save the node and get the real ID back
 				// Temporarily disable query invalidation to prevent refetching
