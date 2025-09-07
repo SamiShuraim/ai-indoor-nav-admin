@@ -1590,13 +1590,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const tempId = nodeChange.data.properties.id;
 				
 				// Create the node without connections first (to avoid temp ID references)
+				// Backend expects flattened format for creation
 				const nodeDataWithoutConnections = {
-					...nodeChange.data,
-					properties: {
-						...nodeChange.data.properties,
-						connections: [] // Remove connections for creation
-					}
+					floor_id: nodeChange.data.properties.floor_id,
+					is_visible: nodeChange.data.properties.is_visible,
+					connections: [], // Remove connections for creation
+					// Add geometry data flattened
+					...(nodeChange.data.geometry && {
+						longitude: nodeChange.data.geometry.coordinates[0],
+						latitude: nodeChange.data.geometry.coordinates[1]
+					})
 				};
+
+				logger.info("Sending flattened creation data", { nodeDataWithoutConnections });
 
 				// Save the node and get the real ID back
 				// Temporarily disable query invalidation to prevent refetching
@@ -1689,15 +1695,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					connections: node.properties.connections
 				});
 
-				// Send only the properties for update, not the full GeoJSON structure
+				// Send the full GeoJSON structure for update (what PopulateFromJson expects)
 				const updateData = {
-					id: node.properties.id,
-					floor_id: node.properties.floor_id,
-					is_visible: node.properties.is_visible,
-					connections: node.properties.connections
+					type: "Feature",
+					geometry: node.geometry,
+					properties: {
+						id: node.properties.id,
+						floor_id: node.properties.floor_id,
+						is_visible: node.properties.is_visible,
+						connections: node.properties.connections
+					}
 				};
 
-				logger.info("Sending flattened update data", { updateData });
+				logger.info("Sending GeoJSON update data", { updateData });
 
 				await routeNodesMutations.update.mutateAsync({
 					data: updateData
