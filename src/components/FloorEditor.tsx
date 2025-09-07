@@ -1682,8 +1682,25 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		for (const node of nodesToUpdate) {
 			try {
+				logger.info("About to update node - DETAILED DATA", {
+					nodeId: node.properties.id,
+					fullNodeData: node,
+					nodeDataString: JSON.stringify(node),
+					connections: node.properties.connections
+				});
+
+				// Send only the properties for update, not the full GeoJSON structure
+				const updateData = {
+					id: node.properties.id,
+					floor_id: node.properties.floor_id,
+					is_visible: node.properties.is_visible,
+					connections: node.properties.connections
+				};
+
+				logger.info("Sending flattened update data", { updateData });
+
 				await routeNodesMutations.update.mutateAsync({
-					data: node
+					data: updateData
 				});
 				logger.info("Updated node connections", { 
 					nodeId: node.properties.id, 
