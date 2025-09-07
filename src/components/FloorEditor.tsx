@@ -1820,8 +1820,23 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			[OBJECT_TYPES.NODE]: routeNodesMutations,
 		};
 
-		// First, handle nodes with temporary IDs sequentially
-		await handleNodesWithTempIds(newQueue, mutationMap);
+		// Check if we have nodes with temp IDs that need special handling
+		const hasNodesWithTempIds = newQueue.some(change => 
+			change.objectType === OBJECT_TYPES.NODE && 
+			change.type === CHANGE_TYPES.ADD && 
+			change.data.properties.id < 0
+		);
+
+		logger.info("Save process starting", {
+			totalChanges: newQueue.length,
+			hasNodesWithTempIds,
+			changes: newQueue.map(c => ({ type: c.type, objectType: c.objectType, id: c.data.properties?.id || c.data.id }))
+		});
+
+		if (hasNodesWithTempIds) {
+			// Handle nodes with temporary IDs sequentially
+			await handleNodesWithTempIds(newQueue, mutationMap);
+		}
 
 		// Then handle remaining changes (polygons, beacons, node updates)
 		for (const change of newQueue) {
@@ -1829,6 +1844,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			if (change.objectType === OBJECT_TYPES.NODE && 
 				change.type === CHANGE_TYPES.ADD && 
 				change.data.properties.id < 0) {
+				logger.info("Skipping temp node change - already handled", { tempId: change.data.properties.id });
 				continue;
 			}
 
