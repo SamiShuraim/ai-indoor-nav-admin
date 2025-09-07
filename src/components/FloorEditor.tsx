@@ -1624,31 +1624,58 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 				// Update all nodes in local state: replace tempId with realId in connections
 				const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+				
+				logger.info("BEFORE ID mapping", {
+					tempId,
+					realId,
+					currentNodesCount: currentNodes.length,
+					currentNodeDetails: currentNodes.map(n => ({
+						id: n.properties.id,
+						connections: n.properties.connections
+					}))
+				});
+
 				const updatedNodes = currentNodes.map(node => {
 					if (node.properties.id === tempId) {
 						// This is the node we just saved - update it with real ID and original connections
-						return {
+						const updatedNode = {
 							...savedNode,
 							properties: {
 								...savedNode.properties,
-								connections: nodeChange.data.properties.connections.map((connId: number) => 
-									connId < 0 ? connId : connId // Keep temp IDs for now, they'll be updated later
-								)
+								connections: nodeChange.data.properties.connections // Keep original connections as-is for now
 							}
 						};
+						logger.info("Updating saved node", { tempId, realId, originalConnections: nodeChange.data.properties.connections });
+						return updatedNode;
 					} else if (node.properties.connections && node.properties.connections.includes(tempId)) {
 						// This node has a connection to the node we just saved - update the connection
+						const newConnections = node.properties.connections.map((connId: number) => 
+							connId === tempId ? realId : connId
+						);
+						logger.info("Updating node with connection to saved node", {
+							nodeId: node.properties.id,
+							oldConnections: node.properties.connections,
+							newConnections,
+							tempId,
+							realId
+						});
 						return {
 							...node,
 							properties: {
 								...node.properties,
-								connections: node.properties.connections.map((connId: number) => 
-									connId === tempId ? realId : connId
-								)
+								connections: newConnections
 							}
 						};
 					}
 					return node;
+				});
+
+				logger.info("AFTER ID mapping", {
+					updatedNodesCount: updatedNodes.length,
+					updatedNodeDetails: updatedNodes.map(n => ({
+						id: n.properties.id,
+						connections: n.properties.connections
+					}))
 				});
 
 				// Update local state
