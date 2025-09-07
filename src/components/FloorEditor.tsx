@@ -1681,16 +1681,37 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const updateNodeConnections = async () => {
 		const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
 		
+		logger.info("=== DEBUGGING CONNECTION UPDATES ===", {
+			totalNodes: currentNodes.length,
+			allNodeDetails: currentNodes.map(n => ({
+				id: n.properties.id,
+				connections: n.properties.connections,
+				hasConnections: !!(n.properties.connections && n.properties.connections.length > 0),
+				idIsReal: n.properties.id > 0,
+				allConnectionsReal: n.properties.connections ? n.properties.connections.every(connId => connId > 0) : false
+			}))
+		});
+		
+		// Find nodes that have connections (regardless of ID type for now)
+		const nodesWithConnections = currentNodes.filter(node => 
+			node.properties.connections && node.properties.connections.length > 0
+		);
+
+		logger.info("Nodes with any connections", {
+			count: nodesWithConnections.length,
+			details: nodesWithConnections.map(n => ({
+				id: n.properties.id,
+				connections: n.properties.connections
+			}))
+		});
+
 		// Only update nodes that have connections with REAL IDs (positive numbers)
-		const nodesToUpdate = currentNodes.filter(node => 
-			node.properties.connections && 
-			node.properties.connections.length > 0 &&
+		const nodesToUpdate = nodesWithConnections.filter(node => 
 			node.properties.id > 0 && // Only real IDs
 			node.properties.connections.every(connId => connId > 0) // Only real connection IDs
 		);
 
-		logger.info("Nodes ready for connection updates", {
-			totalNodes: currentNodes.length,
+		logger.info("Nodes ready for connection updates (filtered)", {
 			nodesToUpdate: nodesToUpdate.length,
 			nodeDetails: nodesToUpdate.map(n => ({
 				id: n.properties.id,
@@ -1699,7 +1720,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		if (nodesToUpdate.length === 0) {
-			logger.info("No nodes ready for connection updates - all temp IDs not yet resolved");
+			logger.warn("❌ NO NODES READY FOR CONNECTION UPDATES - this is why connections disappear!");
 			return;
 		}
 
