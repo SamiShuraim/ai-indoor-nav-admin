@@ -431,8 +431,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			(currentNodes || []).forEach((node) => {
                 if (!node.properties.is_visible || !node.geometry) return;
 
+				logger.info("Processing node connections", {
+					nodeId: node.properties.id,
+					connections: node.properties.connections,
+					hasConnections: (node.properties.connections || []).length > 0
+				});
+
                 (node.properties.connections || []).forEach((connectedNodeId) => {
                     const targetNode = (currentNodes || []).find(n => n.properties.id === connectedNodeId);
+
+					logger.info("Looking for connected node", {
+						fromNodeId: node.properties.id,
+						lookingForId: connectedNodeId,
+						foundNode: !!targetNode,
+						availableNodeIds: currentNodes.map(n => n.properties.id)
+					});
 
 					if (
 						!targetNode ||

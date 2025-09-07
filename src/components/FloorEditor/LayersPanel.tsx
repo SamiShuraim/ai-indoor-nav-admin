@@ -34,19 +34,19 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
 }) => {
   logger.debug('LayersPanel rendered', { 
     layerFilter, 
-    polygonsCount: polygons.length, 
-    beaconsCount: beacons.length,
-    nodesCount: nodes.length 
+    polygonsCount: (polygons || []).length, 
+    beaconsCount: (beacons || []).length,
+    nodesCount: (nodes || []).length 
   });
 
   const getFilteredData = () => {
     switch (layerFilter) {
       case 'polygons':
-        return { polygons, beacons: [], nodes: [] };
+        return { polygons: polygons || [], beacons: [], nodes: [] };
       case 'beacons':
-        return { polygons: [], beacons, nodes: [] };
+        return { polygons: [], beacons: beacons || [], nodes: [] };
       case 'nodes':
-        return { polygons: [], beacons: [], nodes };
+        return { polygons: [], beacons: [], nodes: nodes || [] };
     }
   };
 
@@ -190,7 +190,7 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 </button>
                 <div className="layer-color node-color"></div>
                   <span className="layer-name">Node {node.properties.id}</span>
-                  <span className="layer-connections">({node.properties.connections.length} connections)</span>
+                  <span className="layer-connections">({(node.properties.connections || []).length} connections)</span>
                 <div className="layer-actions">
                   <button
                     className="layer-action-button edit-button"
