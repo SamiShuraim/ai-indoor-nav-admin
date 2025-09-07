@@ -910,8 +910,12 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): number => {
-		// Create node with connections immediately - let backend handle ID generation
+		// Generate a unique temporary ID (negative to distinguish from backend IDs)
+		const tempId = -(Date.now() + Math.floor(Math.random() * 1000));
+		
+		// Create node with temporary ID and connections
 		const newNode = new RouteNodeBuilder()
+			.setId(tempId)
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
 			.setIsVisible(true)
@@ -933,14 +937,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		let newNodes: RouteNode[];
 
 		if (connectToNodeId) {
-			// Update the connected node to include connection back to the new node
+			// Update the connected node to include connection back to the new node (using temp ID)
 			newNodes = [...updatedNodes, newNode].map((node) =>
 				node.properties.id === connectToNodeId
 					? {
 						...node,
 						properties: {
 							...node.properties,
-							connections: [...(node.properties.connections || []), newNode.properties.id],
+							connections: [...(node.properties.connections || []), tempId], // Use temp ID
 						}
 					}
 					: node
@@ -948,7 +952,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			logger.info("Updated node connections", {
 				connectToNodeId,
-				newNodeId: newNode.properties.id,
+				newNodeTempId: tempId,
 				totalNodes: newNodes.length,
 			});
 		} else {
@@ -966,17 +970,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			data: newNode,
 		});
 
-		// If connecting to an existing node, queue the update for that node too
-		if (connectToNodeId) {
-			const connectedNode = newNodes.find(n => n.properties.id === connectToNodeId);
-			if (connectedNode) {
-				queueChange({
-					type: CHANGE_TYPES.EDIT,
-					objectType: OBJECT_TYPES.NODE,
-					data: connectedNode,
-				});
-			}
-		}
+		// Don't queue connected node update here - it will be handled in the sequential save process
 
 		logger.info("Queueing route node for creation", {
 			floorId,
@@ -995,7 +989,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 		// DON'T call updateMapData here - let the useEffect handle it when state updates
 
-        return newNode.properties.id;
+        return tempId;
 	};
 
 	// Clear all temporary drawing elements from the map
@@ -1567,6 +1561,120 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 
+	// Handle nodes with temporary IDs sequentially, updating connections as we go
+	const handleNodesWithTempIds = async (newQueue: any[], mutationMap: any) => {
+		// Find all nodes with temporary IDs (negative IDs) that need to be created
+		const tempNodeChanges = newQueue.filter(change => 
+			change.objectType === OBJECT_TYPES.NODE && 
+			change.type === CHANGE_TYPES.ADD && 
+			change.data.properties.id < 0
+		);
+
+		if (tempNodeChanges.length === 0) return;
+
+		logger.info("Processing nodes with temporary IDs", { count: tempNodeChanges.length });
+
+		for (const nodeChange of tempNodeChanges) {
+			try {
+				const tempId = nodeChange.data.properties.id;
+				
+				// Create the node without connections first (to avoid temp ID references)
+				const nodeDataWithoutConnections = {
+					...nodeChange.data,
+					properties: {
+						...nodeChange.data.properties,
+						connections: [] // Remove connections for creation
+					}
+				};
+
+				// Save the node and get the real ID back
+				const savedNode = await routeNodesMutations.create.mutateAsync({
+					data: nodeDataWithoutConnections
+				});
+
+				const realId = savedNode.properties.id;
+
+				logger.info("Node saved with real ID", { tempId, realId });
+
+				// Update all nodes in local state: replace tempId with realId in connections
+				const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+				const updatedNodes = currentNodes.map(node => {
+					if (node.properties.id === tempId) {
+						// This is the node we just saved - update it with real ID and original connections
+						return {
+							...savedNode,
+							properties: {
+								...savedNode.properties,
+								connections: nodeChange.data.properties.connections.map((connId: number) => 
+									connId < 0 ? connId : connId // Keep temp IDs for now, they'll be updated later
+								)
+							}
+						};
+					} else if (node.properties.connections && node.properties.connections.includes(tempId)) {
+						// This node has a connection to the node we just saved - update the connection
+						return {
+							...node,
+							properties: {
+								...node.properties,
+								connections: node.properties.connections.map((connId: number) => 
+									connId === tempId ? realId : connId
+								)
+							}
+						};
+					}
+					return node;
+				});
+
+				// Update local state
+				queryClient.setQueryData(['nodes'], updatedNodes);
+				saveToStorage(STORAGE_KEYS.NODES, updatedNodes);
+
+				// Remove this change from the queue
+				newQueue = newQueue.filter(q => q.id !== nodeChange.id);
+				setChangeQueue([...newQueue]);
+
+				logger.info("Updated all node connections", { 
+					tempId, 
+					realId, 
+					updatedNodesCount: updatedNodes.length 
+				});
+
+			} catch (err) {
+				logger.error("Failed to save node with temp ID", err as Error, { 
+					tempId: nodeChange.data.properties.id 
+				});
+				throw err; // Re-throw to handle in main save function
+			}
+		}
+
+		// After all temp nodes are saved, update any remaining connections
+		await updateNodeConnections();
+	};
+
+	// Update node connections after all temp IDs have been resolved
+	const updateNodeConnections = async () => {
+		const currentNodes = queryClient.getQueryData<RouteNode[]>(['nodes']) || [];
+		const nodesToUpdate = currentNodes.filter(node => 
+			node.properties.connections && node.properties.connections.length > 0
+		);
+
+		for (const node of nodesToUpdate) {
+			try {
+				await routeNodesMutations.update.mutateAsync({
+					data: node
+				});
+				logger.info("Updated node connections", { 
+					nodeId: node.properties.id, 
+					connections: node.properties.connections 
+				});
+			} catch (err) {
+				logger.error("Failed to update node connections", err as Error, { 
+					nodeId: node.properties.id 
+				});
+			}
+		}
+	};
+
 	const handleSave = async () => {
 		if (changeQueue.length === 0) return;
 		setSaveStatus("saving");
@@ -1579,7 +1687,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			[OBJECT_TYPES.NODE]: routeNodesMutations,
 		};
 
-		for (const change of changeQueue) {
+		// First, handle nodes with temporary IDs sequentially
+		await handleNodesWithTempIds(newQueue, mutationMap);
+
+		// Then handle remaining changes (polygons, beacons, node updates)
+		for (const change of newQueue) {
+			// Skip nodes with temp IDs as they were already handled
+			if (change.objectType === OBJECT_TYPES.NODE && 
+				change.type === CHANGE_TYPES.ADD && 
+				change.data.properties.id < 0) {
+				continue;
+			}
+
 			try {
 				const mutations = mutationMap[change.objectType];
 				if (!mutations) throw new Error(`No mutations defined for objectType ${change.objectType}`);
