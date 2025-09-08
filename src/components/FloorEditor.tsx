@@ -899,14 +899,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connected_node_ids: connectToNodeId ? [connectToNodeId] : []
+					...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
 				}
 			};
 
 			logger.info("📤 Creating node with backend field name", { 
 				newNodeData,
 				hasConnection: !!connectToNodeId,
-				connectingTo: connectToNodeId
+				connectingTo: connectToNodeId,
+				exactPayload: JSON.stringify(newNodeData, null, 2)
 			});
 
 			const createdNode = await routeNodesMutations.create.mutateAsync({
@@ -922,7 +923,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			logger.info("✅ Node created successfully", { 
 				newNodeId,
 				createdNode,
-				backendResponse: createdNode
+				backendResponse: createdNode,
+				fullResponse: JSON.stringify(createdNode, null, 2),
+				hasConnections: !!(createdNode?.properties?.connected_node_ids || createdNode?.properties?.connections)
 			});
 
 			// Step 2: Update existing node to connect back (bidirectional)
