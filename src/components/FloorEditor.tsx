@@ -112,7 +112,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				...node,
 				properties: {
 					...node.properties,
-					// Map backend field to frontend field
+					// Backend returns ConnectedNodeIds as connected_node_ids (snake_case)
 					connections: node.properties.connected_node_ids || node.properties.connections || []
 				}
 			}));
@@ -899,7 +899,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connected_node_ids: connectToNodeId ? [connectToNodeId] : []
+					connections: connectToNodeId ? [connectToNodeId] : []
 				}
 			};
 
@@ -938,7 +938,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connected_node_ids: updatedConnections
+							connections: updatedConnections
 						}
 					};
 
