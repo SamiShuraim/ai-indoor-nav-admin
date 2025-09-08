@@ -359,19 +359,20 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
                     visible: node.properties.is_visible,
                     location: node.geometry,
                     connections: node.properties.connections,
-                    isSelected: selectedNodeId === node.properties.id,
+                    isSelectedForConnection: selectedNodeId === node.properties.id,
 				});
 
                 if (node.properties.is_visible) {
-                    const isSelected = selectedNodeId === node.properties.id;
+                    const isSelectedForConnection = selectedNodeId === node.properties.id;
                     mapMarkers.current[`node-${node.properties.id}`] = new Marker({
-						color: isSelected ? "#ef4444" : "#3b82f6",
+						color: isSelectedForConnection ? "#22c55e" : "#3b82f6", // Green for selected, blue for normal
 					})
                         .setLngLat(node.geometry!!.coordinates)
 						.addTo(mapInstance);
 					logger.info("Node marker added to map", {
                         nodeId: node.properties.id,
                         markerKey: `node-${node.properties.id}`,
+                        isSelectedForConnection,
 					});
 				} else {
 					logger.warn("Node not visible, skipping", {
@@ -803,29 +804,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		if (clickedNode) {
-			// Clicked on an existing node
-			if (currentSelectedNode) {
-                if (currentSelectedNode === clickedNode.properties.id) {
-					// Clicking on the same node - deselect it
-					setSelectedNodeForConnection(null);
-					selectedNodeForConnectionRef.current = null;
-					logger.userAction("Node deselected", {
-                        nodeId: clickedNode.properties.id,
-					});
-				} else {
-					// Can't connect a node to itself or create duplicate connections
-					logger.warn(
-						"Cannot connect node to itself or create duplicate connection"
-					);
-				}
-			} else {
-				// Select this node for connection
-                setSelectedNodeForConnection(clickedNode.properties.id);
-                selectedNodeForConnectionRef.current = clickedNode.properties.id;
-				logger.userAction("Node selected for connection", {
-                    nodeId: clickedNode.properties.id,
-				});
-			}
+			// Clicked on an existing node - select it for connection (make marker green)
+			setSelectedNodeForConnection(clickedNode.properties.id);
+			selectedNodeForConnectionRef.current = clickedNode.properties.id;
+			// Clear lastPlacedNodeId when manually selecting a node
+			setLastPlacedNodeId(null);
+			lastPlacedNodeIdRef.current = null;
+			logger.userAction("Node selected for connection", {
+				nodeId: clickedNode.properties.id,
+			});
 		} else {
 			// Clicked on empty space
 			logger.info("Clicked on empty space - DETAILED STATE", {
@@ -841,38 +828,34 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			try {
 				if (currentSelectedNode) {
-					// Have a selected node - create new node and connect it (first connection after selecting)
-					logger.info("Creating first connected node", {
+					// Have a selected node - create new node and connect it
+					logger.info("Creating connected node", {
 						selectedNodeForConnection: currentSelectedNode,
 					});
 					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
-					setSelectedNodeForConnection(null);
-					selectedNodeForConnectionRef.current = null;
-					setLastPlacedNodeId(newNodeId);
-					lastPlacedNodeIdRef.current = newNodeId;
-				} else if (currentLastPlacedNode) {
-					// Chain mode - connect to the last placed node
-					logger.info("Creating chained node", {
-						lastPlacedNodeId: currentLastPlacedNode,
-					});
-					const newNodeId = await addNewNode(lng, lat, currentLastPlacedNode);
-					setLastPlacedNodeId(newNodeId);
-					lastPlacedNodeIdRef.current = newNodeId;
+					// Auto-select the newly placed node (make it green) so next node connects to it
+					setSelectedNodeForConnection(newNodeId);
+					selectedNodeForConnectionRef.current = newNodeId;
+					setLastPlacedNodeId(null);
+					lastPlacedNodeIdRef.current = null;
 				} else if (nodes.length === 0) {
-					// No nodes exist - create first isolated node (Canvas logic)
+					// No nodes exist - create first isolated node
 					logger.info("Creating first isolated node");
 					const newNodeId = await addNewNode(lng, lat, null);
-					setLastPlacedNodeId(newNodeId);
-					lastPlacedNodeIdRef.current = newNodeId;
+					// Auto-select the newly placed node (make it green) so next node connects to it
+					setSelectedNodeForConnection(newNodeId);
+					selectedNodeForConnectionRef.current = newNodeId;
+					setLastPlacedNodeId(null);
+					lastPlacedNodeIdRef.current = null;
 				} else {
-					// Canvas logic: Can't create node if nodes exist but none selected
-					logger.info(
-						"Cannot create node - select existing node first or clear all nodes"
-					);
+					// Nodes exist but none selected - show error to user
+					logger.info("Cannot create node - no previous node selected");
+					// TODO: Show user error message telling them to choose a previous node
+					alert("Please click on an existing node first to connect the new node to it.");
 				}
 			} catch (error) {
 				logger.error("Failed to create node", error as Error);
-				// Could show user error message here
+				alert("Failed to create node. Please try again.");
 			}
 		}
 	};
