@@ -102,6 +102,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				nodeDetails: data.map(n => ({
 					id: n.properties?.id,
 					connections: n.properties?.connections,
+					connected_node_ids: n.properties?.connected_node_ids,
 					connectionsType: typeof n.properties?.connections,
 					allProperties: n.properties
 				}))
@@ -111,7 +112,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				...node,
 				properties: {
 					...node.properties,
-					connections: node.properties.connections || []
+					// Map backend field to frontend field
+					connections: node.properties.connected_node_ids || node.properties.connections || []
 				}
 			}));
 		}
@@ -887,7 +889,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		try {
-			// Step 1: Create the new node WITHOUT connections (backend doesn't support it in create)
+			// Step 1: Create the new node with correct backend field name
 			const newNodeData = {
 				type: "Feature" as const,
 				geometry: {
@@ -897,7 +899,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connections: [] // Backend ignores this anyway
+					connected_node_ids: connectToNodeId ? [connectToNodeId] : [] // Use backend field name!
 				}
 			};
 
@@ -928,7 +930,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connections: updatedExistingConnections
+							connected_node_ids: updatedExistingConnections // Use backend field name!
 						}
 					};
 
@@ -951,7 +953,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							id: newNodeId,
 							floor_id: floorId,
 							is_visible: true,
-							connections: [connectToNodeId]
+							connected_node_ids: [connectToNodeId] // Use backend field name!
 						}
 					};
 
