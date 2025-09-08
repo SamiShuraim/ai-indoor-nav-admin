@@ -879,14 +879,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): Promise<number> => {
-		// Don't set ID locally - let backend generate it
-		const newNode = new RouteNodeBuilder()
-			.setFloorId(floorId)
-			.setLocation(lng, lat)
-			.setIsVisible(true)
-			.setConnections(connectToNodeId ? [connectToNodeId] : [])
-			.build();
-
 		logger.info("Adding new node - IMMEDIATE SAVE", {
 			newNodeCoords: [lng, lat],
 			connectToNodeId,
@@ -897,16 +889,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		try {
-			// Create the Createable format for the API (without ID)
+			// Step 1: Create the node WITHOUT connections first
 			const createableNode = {
 				type: "Feature" as const,
-				geometry: newNode.geometry!,
+				geometry: {
+					type: "Point" as const,
+					coordinates: [lng, lat] as [number, number]
+				},
 				properties: {
-					floor_id: newNode.properties.floor_id,
-					is_visible: newNode.properties.is_visible,
-					connections: newNode.properties.connections
+					floor_id: floorId,
+					is_visible: true,
+					connections: [] // Always start with empty connections
 				}
 			};
+
+			logger.info("Creating node without connections first", { createableNode });
 
 			// Save the new node to backend immediately and get the response
 			const createdNodeResponse = await routeNodesMutations.create.mutateAsync({
@@ -922,11 +919,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			logger.info("New node created in backend successfully", { id: actualNewId });
 
-			// If connecting to existing node, update that node's connections with the REAL ID
+			// Step 2: If connecting to existing node, update BOTH nodes' connections
 			if (connectToNodeId) {
 				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
-					// Ensure connections is always an array
+					logger.info("Setting up bidirectional connections", {
+						newNodeId: actualNewId,
+						existingNodeId: connectToNodeId
+					});
+
+					// Update existing node to include connection to new node
 					const currentConnections = existingNode.properties.connections || [];
 					const updatedExistingNode = {
 						...existingNode,
@@ -936,19 +938,41 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						}
 					};
 
-					// Update the existing node in backend
 					await routeNodesMutations.update.mutateAsync({
 						data: updatedExistingNode
 					});
 
-					logger.info("Updated existing node connections in backend", {
-						connectToNodeId,
-						newNodeId: actualNewId,
+					logger.info("Updated existing node connections", {
+						nodeId: connectToNodeId,
+						newConnections: updatedExistingNode.properties.connections
+					});
+
+					// Update new node to include connection to existing node
+					const newNodeWithConnection = {
+						geometry: {
+							type: "Point" as const,
+							coordinates: [lng, lat] as [number, number]
+						},
+						properties: {
+							id: actualNewId,
+							floor_id: floorId,
+							is_visible: true,
+							connections: [connectToNodeId]
+						}
+					};
+
+					await routeNodesMutations.update.mutateAsync({
+						data: newNodeWithConnection
+					});
+
+					logger.info("Updated new node connections", {
+						nodeId: actualNewId,
+						connections: [connectToNodeId]
 					});
 				}
 			}
 
-			logger.info("Node creation completed successfully", {
+			logger.info("Node creation and connection setup completed successfully", {
 				newNodeId: actualNewId,
 				wasConnected: !!connectToNodeId,
 				connectToNodeId,
