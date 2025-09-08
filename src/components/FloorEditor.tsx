@@ -899,7 +899,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connections: connectToNodeId ? [connectToNodeId] : []
+					connected_node_ids: connectToNodeId ? [connectToNodeId] : []
 				}
 			};
 
@@ -938,7 +938,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connections: updatedConnections
+							connected_node_ids: updatedConnections
 						}
 					};
 
