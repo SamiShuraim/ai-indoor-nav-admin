@@ -4,12 +4,9 @@ type Change<T> = {
     data: T;
 };
 
-export type Createable<T extends { properties: { id?: number | string } }> = {
+export type Createable<T extends { properties: { id?: number | string }, geometry?: any }> = {
     type: 'Feature';
-    geometry: {
-        type: 'Point';
-        coordinates: [number, number];
-    };
+    geometry: T['geometry'];
     properties: Omit<T['properties'], 'id'>;
 };
 
