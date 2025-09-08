@@ -95,6 +95,13 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const {data: nodes = []} = useQuery<RouteNode[]>({
 		queryKey: ['routeNodes'],
 		queryFn: () => routeNodesApi.getAll(),
+		select: (data) => data.map(node => ({
+			...node,
+			properties: {
+				...node.properties,
+				connections: node.properties.connections || []
+			}
+		}))
 	});
 
 	// Route node creation state
@@ -362,6 +369,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			currentNodes.forEach((node) => {
                 if (!node.properties.is_visible || !node.geometry) return;
+
+                // Check if connections exist and is an array
+                if (!node.properties.connections || !Array.isArray(node.properties.connections)) {
+                    return;
+                }
 
                 node.properties.connections.forEach((connectedNodeId) => {
                     const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
@@ -735,7 +747,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
             if (!node.properties.is_visible) return false;
 			// Use proper Euclidean distance like the working Canvas version
 			const distance = Math.sqrt(
-                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[0] - lat) ** 2
+                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
 			);
 			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
 		});
@@ -876,11 +888,13 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			if (connectToNodeId) {
 				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
+					// Ensure connections is always an array
+					const currentConnections = existingNode.properties.connections || [];
 					const updatedExistingNode = {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connections: [...existingNode.properties.connections, newId]
+							connections: [...currentConnections, newId]
 						}
 					};
 
