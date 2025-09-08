@@ -11,8 +11,8 @@ const logger = createLogger('RouteNodeForm');
 interface RouteNodeFormProps {
   routeNode?: RouteNode | null;
   floorId: number;
-  onSave: (routeNode: Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  onUpdate: (id: number, routeNode: Partial<Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  onSave: (routeNode: Omit<RouteNode, 'properties'> & { properties: Omit<RouteNode['properties'], 'id' | 'created_at' | 'updated_at'> }) => Promise<void>;
+  onUpdate: (id: number, routeNode: Partial<Omit<RouteNode, 'properties'> & { properties: Partial<Omit<RouteNode['properties'], 'id' | 'created_at' | 'updated_at'>> }>) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -247,21 +247,21 @@ const RouteNodeForm: React.FC<RouteNodeFormProps> = ({ routeNode, floorId, onSav
             </div>
             <div className="info-item">
               <span className="info-label">Created:</span>
-              {/*<span className="info-value">*/}
-              {/*  {isEditing && routeNode?.createdAt */}
-              {/*    ? new Date(routeNode.createdAt).toLocaleString()*/}
-              {/*    : 'Will be set on creation'*/}
-              {/*  }*/}
-              {/*</span>*/}
+              <span className="info-value">
+                {isEditing && routeNode?.properties.created_at
+                  ? new Date(routeNode.properties.created_at).toLocaleString()
+                  : 'Will be set on creation'
+                }
+              </span>
             </div>
             <div className="info-item">
               <span className="info-label">Last Updated:</span>
-              {/*<span className="info-value">*/}
-              {/*  {isEditing && routeNode?.updatedAt */}
-              {/*    ? new Date(routeNode.updatedAt).toLocaleString()*/}
-              {/*    : 'Will be set on creation'*/}
-              {/*  }*/}
-              {/*</span>*/}
+              <span className="info-value">
+                {isEditing && routeNode?.properties.updated_at
+                  ? new Date(routeNode.properties.updated_at).toLocaleString()
+                  : 'Will be set on creation'
+                }
+              </span>
             </div>
           </div>
         </div>

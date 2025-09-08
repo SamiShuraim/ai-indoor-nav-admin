@@ -8,6 +8,8 @@ export interface RouteNode {
         floor_id: number;
         is_visible: boolean;
         connections: number[]; // IDs of connected RouteNodes
+        created_at: string;
+        updated_at: string;
     }
 }
 
@@ -17,6 +19,8 @@ export class RouteNodeBuilder {
     private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isVisible: boolean = true;
     private _connections: number[] = [];
+    private _createdAt?: string;
+    private _updatedAt?: string;
 
     public setId(id: number): this {
         this._id = id;
@@ -53,7 +57,18 @@ export class RouteNodeBuilder {
         return this;
     }
 
+    public setCreatedAt(createdAt: string): this {
+        this._createdAt = createdAt;
+        return this;
+    }
+
+    public setUpdatedAt(updatedAt: string): this {
+        this._updatedAt = updatedAt;
+        return this;
+    }
+
     public build(): RouteNode {
+        const currentTime = new Date().toISOString();
         return {
             geometry: this._geometry,
             properties: {
@@ -61,6 +76,8 @@ export class RouteNodeBuilder {
                 floor_id: this._floorId,
                 is_visible: this._isVisible,
                 connections: this._connections,
+                created_at: this._createdAt || currentTime,
+                updated_at: this._updatedAt || currentTime,
             }
         };
     }

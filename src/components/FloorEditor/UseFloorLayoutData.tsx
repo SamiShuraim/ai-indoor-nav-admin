@@ -9,17 +9,8 @@ export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutDa
         beaconsApi.getByFloor(floorId.toString()),
     ]);
 
-    const nodes = routeNodes.map((node) => {
-        return ({
-            geometry: node.geometry,
-            properties: {
-                id: node.properties.id,
-                floor_id: node.properties.floor_id,
-                is_visible: node.properties.is_visible,
-                connections: node.properties.connections,
-            }
-        });
-    });
+    // RouteNodes should already match the RouteNode interface with all required fields
+    const nodes = routeNodes;
 
     return {
         polygons,

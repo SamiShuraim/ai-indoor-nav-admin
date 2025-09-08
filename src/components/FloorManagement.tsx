@@ -400,7 +400,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
   };
 
   // Route Node CRUD operations
-  const handleCreateRouteNode = async (nodeData: Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreateRouteNode = async (nodeData: Omit<RouteNode, 'properties'> & { properties: Omit<RouteNode['properties'], 'id' | 'created_at' | 'updated_at'> }) => {
     try {
       const newNode = await routeNodesApi.create(nodeData);
       setState(prev => ({
@@ -416,7 +416,7 @@ const FloorManagement: React.FC<FloorManagementProps> = ({ floorId, onBack }) =>
     }
   };
 
-  const handleUpdateRouteNode = async (id: number, nodeData: Partial<Omit<RouteNode, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  const handleUpdateRouteNode = async (id: number, nodeData: Partial<Omit<RouteNode, 'properties'> & { properties: Partial<Omit<RouteNode['properties'], 'id' | 'created_at' | 'updated_at'>> }>) => {
     try {
         await routeNodesApi.update(id, nodeData);
       setState(prev => ({
