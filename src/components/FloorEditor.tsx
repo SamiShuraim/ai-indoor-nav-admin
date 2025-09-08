@@ -95,13 +95,25 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const {data: nodes = []} = useQuery<RouteNode[]>({
 		queryKey: ['routeNodes'],
 		queryFn: () => routeNodesApi.getAll(),
-		select: (data) => data.map(node => ({
-			...node,
-			properties: {
-				...node.properties,
-				connections: node.properties.connections || []
-			}
-		}))
+		select: (data) => {
+			logger.info("Raw nodes data from backend", { 
+				nodeCount: data.length,
+				sampleNode: data[0],
+				allNodes: data.map(n => ({
+					id: n.properties?.id,
+					connections: n.properties?.connections,
+					hasConnections: !!(n.properties?.connections && n.properties.connections.length > 0)
+				}))
+			});
+			
+			return data.map(node => ({
+				...node,
+				properties: {
+					...node.properties,
+					connections: node.properties.connections || []
+				}
+			}));
+		}
 	});
 
 	// Route node creation state
@@ -367,6 +379,11 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			const renderedEdges = new Set<string>(); // Prevent duplicate lines
 
+			logger.info("Processing connections for all nodes", {
+				totalNodes: currentNodes.length,
+				nodesWithConnections: currentNodes.filter(n => n.properties.connections && n.properties.connections.length > 0).length
+			});
+
 			currentNodes.forEach((node) => {
                 if (!node.properties.is_visible || !node.geometry) return;
 
@@ -375,8 +392,24 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
                     return;
                 }
 
+				if (node.properties.connections.length > 0) {
+					logger.info("Node has connections", {
+						nodeId: node.properties.id,
+						connections: node.properties.connections,
+						connectionsCount: node.properties.connections.length
+					});
+				}
+
                 node.properties.connections.forEach((connectedNodeId) => {
                     const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
+
+					logger.info("Processing connection", {
+						fromNodeId: node.properties.id,
+						toNodeId: connectedNodeId,
+						targetNodeFound: !!targetNode,
+						targetNodeVisible: targetNode?.properties.is_visible,
+						targetNodeHasGeometry: !!targetNode?.geometry
+					});
 
 					if (
 						!targetNode ||
@@ -846,9 +879,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): Promise<number> => {
-		const newId = generateNextId(nodes);
+		// Don't set ID locally - let backend generate it
 		const newNode = new RouteNodeBuilder()
-			.setId(newId)
 			.setFloorId(floorId)
 			.setLocation(lng, lat)
 			.setIsVisible(true)
@@ -856,7 +888,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			.build();
 
 		logger.info("Adding new node - IMMEDIATE SAVE", {
-			newNodeId: newNode.properties.id,
 			newNodeCoords: [lng, lat],
 			connectToNodeId,
 			currentNodesCount: nodes.length,
@@ -866,7 +897,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		try {
-			// Create the Createable format for the API
+			// Create the Createable format for the API (without ID)
 			const createableNode = {
 				type: "Feature" as const,
 				geometry: newNode.geometry!,
@@ -877,14 +908,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				}
 			};
 
-			// Save the new node to backend immediately
-			await routeNodesMutations.create.mutateAsync({
+			// Save the new node to backend immediately and get the response
+			const createdNodeResponse = await routeNodesMutations.create.mutateAsync({
 				data: createableNode
 			});
 
-			logger.info("New node created in backend successfully", { id: newId });
+			// Extract the actual ID from the backend response
+			const actualNewId = createdNodeResponse?.id || createdNodeResponse?.properties?.id;
+			
+			if (!actualNewId) {
+				throw new Error("Backend did not return a valid ID for the created node");
+			}
 
-			// If connecting to existing node, update that node's connections
+			logger.info("New node created in backend successfully", { id: actualNewId });
+
+			// If connecting to existing node, update that node's connections with the REAL ID
 			if (connectToNodeId) {
 				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
@@ -894,7 +932,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connections: [...currentConnections, newId]
+							connections: [...currentConnections, actualNewId]
 						}
 					};
 
@@ -905,18 +943,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 					logger.info("Updated existing node connections in backend", {
 						connectToNodeId,
-						newNodeId: newId,
+						newNodeId: actualNewId,
 					});
 				}
 			}
 
 			logger.info("Node creation completed successfully", {
-				newNodeId: newId,
+				newNodeId: actualNewId,
 				wasConnected: !!connectToNodeId,
 				connectToNodeId,
 			});
 
-			return newId;
+			return actualNewId;
 		} catch (error) {
 			logger.error("Failed to create node", error as Error);
 			throw error; // Re-throw to handle in calling function
