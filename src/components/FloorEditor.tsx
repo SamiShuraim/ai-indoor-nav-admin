@@ -882,14 +882,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): Promise<number> => {
-		logger.info("🎯 CREATING NODE", {
+		logger.info("🎯 CREATING NODE - SIMPLE APPROACH", {
 			coordinates: [lng, lat],
 			connectToNodeId,
 			willConnect: !!connectToNodeId
 		});
 
 		try {
-			// Step 1: Create the new node with correct backend field name
+			// Step 1: Create the new node with connection (if any)
 			const newNodeData = {
 				type: "Feature" as const,
 				geometry: {
@@ -899,11 +899,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connected_node_ids: connectToNodeId ? [connectToNodeId] : [] // Use backend field name!
+					connected_node_ids: connectToNodeId ? [connectToNodeId] : []
 				}
 			};
 
-			logger.info("📤 Creating node (no connections yet)", { newNodeData });
+			logger.info("📤 Creating node with backend field name", { 
+				newNodeData,
+				hasConnection: !!connectToNodeId,
+				connectingTo: connectToNodeId
+			});
 
 			const createdNode = await routeNodesMutations.create.mutateAsync({
 				data: newNodeData
@@ -915,58 +919,40 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				throw new Error("❌ Backend didn't return node ID");
 			}
 
-			logger.info("✅ Node created with ID", { newNodeId });
+			logger.info("✅ Node created successfully", { 
+				newNodeId,
+				createdNode,
+				backendResponse: createdNode
+			});
 
-			// Step 2: If connecting, update BOTH nodes with connections via UPDATE calls
+			// Step 2: Update existing node to connect back (bidirectional)
 			if (connectToNodeId) {
-				logger.info("🔗 Setting up bidirectional connections via UPDATE");
+				logger.info("🔗 Adding bidirectional connection to existing node");
 				
-				// Update existing node to connect to new node
 				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
-					const updatedExistingConnections = [...(existingNode.properties.connections || []), newNodeId];
+					const existingConnections = existingNode.properties.connections || [];
+					const updatedConnections = [...existingConnections, newNodeId];
 					
 					const updatedExistingNode = {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connected_node_ids: updatedExistingConnections // Use backend field name!
+							connected_node_ids: updatedConnections
 						}
 					};
 
-					logger.info("📤 Updating existing node", {
-						nodeId: connectToNodeId,
-						newConnections: updatedExistingConnections
+					logger.info("📤 Updating existing node for bidirectional connection", {
+						existingNodeId: connectToNodeId,
+						currentConnections: existingConnections,
+						newConnections: updatedConnections
 					});
 
 					await routeNodesMutations.update.mutateAsync({
 						data: updatedExistingNode
 					});
 
-					// Update new node to connect to existing node
-					const newNodeWithConnection = {
-						geometry: {
-							type: "Point" as const,
-							coordinates: [lng, lat] as [number, number]
-						},
-						properties: {
-							id: newNodeId,
-							floor_id: floorId,
-							is_visible: true,
-							connected_node_ids: [connectToNodeId] // Use backend field name!
-						}
-					};
-
-					logger.info("📤 Updating new node with connection", {
-						nodeId: newNodeId,
-						connections: [connectToNodeId]
-					});
-
-					await routeNodesMutations.update.mutateAsync({
-						data: newNodeWithConnection
-					});
-
-					logger.info("✅ Both nodes updated with bidirectional connections");
+					logger.info("✅ Bidirectional connection established");
 				}
 			}
 
