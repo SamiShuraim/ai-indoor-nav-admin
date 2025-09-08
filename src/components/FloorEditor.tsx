@@ -96,13 +96,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['routeNodes'],
 		queryFn: () => routeNodesApi.getAll(),
 		select: (data) => {
-			logger.info("Raw nodes data from backend", { 
+			logger.info("🔍 RAW BACKEND DATA", { 
 				nodeCount: data.length,
-				sampleNode: data[0],
-				allNodes: data.map(n => ({
+				fullData: data,
+				nodeDetails: data.map(n => ({
 					id: n.properties?.id,
 					connections: n.properties?.connections,
-					hasConnections: !!(n.properties?.connections && n.properties.connections.length > 0)
+					connectionsType: typeof n.properties?.connections,
+					allProperties: n.properties
 				}))
 			});
 			
@@ -879,18 +880,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		lat: number,
 		connectToNodeId: number | null
 	): Promise<number> => {
-		logger.info("Adding new node - IMMEDIATE SAVE", {
-			newNodeCoords: [lng, lat],
+		logger.info("🎯 CREATING NODE", {
+			coordinates: [lng, lat],
 			connectToNodeId,
-			currentNodesCount: nodes.length,
-			currentNodeIds: nodes.map((n) => n.properties.id),
-			lastPlacedNodeIdRef: lastPlacedNodeIdRef.current,
-			willCreateEdge: !!connectToNodeId,
+			willConnect: !!connectToNodeId
 		});
 
 		try {
-			// Step 1: Create the node WITHOUT connections first
-			const createableNode = {
+			// Step 1: Create the new node
+			const newNodeData = {
 				type: "Feature" as const,
 				geometry: {
 					type: "Point" as const,
@@ -899,89 +897,57 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				properties: {
 					floor_id: floorId,
 					is_visible: true,
-					connections: [] // Always start with empty connections
+					connections: connectToNodeId ? [connectToNodeId] : []
 				}
 			};
 
-			logger.info("Creating node without connections first", { createableNode });
+			logger.info("📤 Sending node to backend", { newNodeData });
 
-			// Save the new node to backend immediately and get the response
-			const createdNodeResponse = await routeNodesMutations.create.mutateAsync({
-				data: createableNode
+			const createdNode = await routeNodesMutations.create.mutateAsync({
+				data: newNodeData
 			});
 
-			// Extract the actual ID from the backend response
-			const actualNewId = createdNodeResponse?.id || createdNodeResponse?.properties?.id;
+			const newNodeId = createdNode?.id || createdNode?.properties?.id;
 			
-			if (!actualNewId) {
-				throw new Error("Backend did not return a valid ID for the created node");
+			if (!newNodeId) {
+				throw new Error("❌ Backend didn't return node ID");
 			}
 
-			logger.info("New node created in backend successfully", { id: actualNewId });
+			logger.info("✅ Node created with ID", { newNodeId });
 
-			// Step 2: If connecting to existing node, update BOTH nodes' connections
+			// Step 2: If connecting, update the existing node to connect back
 			if (connectToNodeId) {
+				logger.info("🔗 Adding bidirectional connection");
+				
 				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
-					logger.info("Setting up bidirectional connections", {
-						newNodeId: actualNewId,
-						existingNodeId: connectToNodeId
-					});
-
-					// Update existing node to include connection to new node
-					const currentConnections = existingNode.properties.connections || [];
+					const updatedConnections = [...(existingNode.properties.connections || []), newNodeId];
+					
 					const updatedExistingNode = {
 						...existingNode,
 						properties: {
 							...existingNode.properties,
-							connections: [...currentConnections, actualNewId]
+							connections: updatedConnections
 						}
 					};
+
+					logger.info("📤 Updating existing node connections", {
+						nodeId: connectToNodeId,
+						newConnections: updatedConnections
+					});
 
 					await routeNodesMutations.update.mutateAsync({
 						data: updatedExistingNode
 					});
 
-					logger.info("Updated existing node connections", {
-						nodeId: connectToNodeId,
-						newConnections: updatedExistingNode.properties.connections
-					});
-
-					// Update new node to include connection to existing node
-					const newNodeWithConnection = {
-						geometry: {
-							type: "Point" as const,
-							coordinates: [lng, lat] as [number, number]
-						},
-						properties: {
-							id: actualNewId,
-							floor_id: floorId,
-							is_visible: true,
-							connections: [connectToNodeId]
-						}
-					};
-
-					await routeNodesMutations.update.mutateAsync({
-						data: newNodeWithConnection
-					});
-
-					logger.info("Updated new node connections", {
-						nodeId: actualNewId,
-						connections: [connectToNodeId]
-					});
+					logger.info("✅ Existing node updated");
 				}
 			}
 
-			logger.info("Node creation and connection setup completed successfully", {
-				newNodeId: actualNewId,
-				wasConnected: !!connectToNodeId,
-				connectToNodeId,
-			});
-
-			return actualNewId;
+			return newNodeId;
 		} catch (error) {
-			logger.error("Failed to create node", error as Error);
-			throw error; // Re-throw to handle in calling function
+			logger.error("❌ Node creation failed", error as Error);
+			throw error;
 		}
 	};
 
