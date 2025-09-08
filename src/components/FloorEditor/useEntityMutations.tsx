@@ -4,12 +4,9 @@ type Change<T> = {
     data: T;
 };
 
-export type Createable<T extends { properties: { id?: number | string } }> = {
+export type Createable<T extends { properties: { id?: number | string }, geometry?: any }> = {
     type: 'Feature';
-    geometry: {
-        type: 'Point';
-        coordinates: [number, number];
-    };
+    geometry: T['geometry'];
     properties: Omit<T['properties'], 'id'>;
 };
 
@@ -31,7 +28,10 @@ export function useEntityMutations<
 
     const create = useMutation({
         mutationFn: async (change: Change<Createable<T>>) => {
-            return api.create(change.data);
+            console.log(`🚀 Creating ${entityKey}:`, change.data);
+            const response = await api.create(change.data);
+            console.log(`✅ Create response for ${entityKey}:`, response);
+            return response;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: [entityKey]});
@@ -47,7 +47,10 @@ export function useEntityMutations<
             if (id === undefined || id === null) {
                 throw new Error(`Missing ID in update for ${entityKey}`);
             }
-            return api.update(Number(id), change.data);
+            console.log(`🔄 Updating ${entityKey} ${id}:`, change.data);
+            const response = await api.update(Number(id), change.data);
+            console.log(`✅ Update response for ${entityKey} ${id}:`, response);
+            return response;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({queryKey: [entityKey]});

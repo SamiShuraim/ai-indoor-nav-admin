@@ -7,7 +7,8 @@ export interface RouteNode {
         id: number;
         floor_id: number;
         is_visible: boolean;
-        connections: number[]; // IDs of connected RouteNodes
+        connections: number[]; // Frontend uses this name
+        connected_node_ids?: number[]; // Backend uses this name
     }
 }
 
