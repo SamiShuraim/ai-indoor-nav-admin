@@ -117,6 +117,35 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const fetchStatus = 'idle';
 	const status = nodesLoading ? 'loading' : 'success';
 	
+	// Refetch nodes when they're created/updated
+	const refetchNodes = async () => {
+		if (!floorId) return;
+		
+		try {
+			logger.info("🔄 REFETCHING NODES", { floorId });
+			const result = await routeNodesApi.getByFloor(floorId.toString());
+			const processedNodes = result.map(node => ({
+				...node,
+				properties: {
+					...node.properties,
+					connections: node.properties.connected_node_ids || node.properties.connections || []
+				}
+			}));
+			setNodes(processedNodes);
+			logger.info("✅ NODES REFETCHED", { floorId, nodesCount: processedNodes.length });
+		} catch (error) {
+			logger.error("❌ REFETCH FAILED", error as Error);
+		}
+	};
+	
+	// Force initial load immediately
+	useEffect(() => {
+		if (floorId) {
+			logger.info("🚀 FORCING INITIAL NODES LOAD", { floorId });
+			refetchNodes();
+		}
+	}, [floorId]); // Run when floorId changes
+	
 	// Debug: Manual fetch function
 	const manualFetchNodes = async () => {
 		logger.info("🔧 MANUAL FETCH TRIGGERED", { floorId });
@@ -1094,6 +1123,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					logger.info("✅ Bidirectional connection established");
 				}
 			}
+
+			// Refetch nodes to update the UI
+			await refetchNodes();
 
 			return newNodeId;
 		} catch (error) {
