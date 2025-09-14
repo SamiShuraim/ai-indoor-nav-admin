@@ -868,6 +868,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					});
 					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
 					// Auto-select the newly placed node (make it green) so next node connects to it
+					logger.info("🔗 AUTO-SELECTING newly created connected node", { 
+						newNodeId, 
+						previouslySelected: currentSelectedNode 
+					});
 					setSelectedNodeForConnection(newNodeId);
 					selectedNodeForConnectionRef.current = newNodeId;
 					setLastPlacedNodeId(null);
@@ -877,6 +881,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					logger.info("Creating first isolated node");
 					const newNodeId = await addNewNode(lng, lat, null);
 					// Auto-select the newly placed node (make it green) so next node connects to it
+					logger.info("🔗 AUTO-SELECTING newly created first node", { 
+						newNodeId 
+					});
 					setSelectedNodeForConnection(newNodeId);
 					selectedNodeForConnectionRef.current = newNodeId;
 					setLastPlacedNodeId(null);
