@@ -36,6 +36,23 @@ function convertPointsToCoordinates(points: Point[]): number[][][] {
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
+	
+	// Debug: Test API directly
+	useEffect(() => {
+		const testApiDirectly = async () => {
+			try {
+				logger.info("🧪 TESTING API DIRECTLY", { floorId });
+				const directResult = await routeNodesApi.getByFloor(floorId.toString());
+				logger.info("🧪 DIRECT API SUCCESS", { floorId, count: directResult.length, data: directResult });
+			} catch (error) {
+				logger.error("🧪 DIRECT API FAILED", error as Error);
+			}
+		};
+		
+		if (floorId) {
+			testApiDirectly();
+		}
+	}, [floorId]);
 
 	const queryClient = useQueryClient();
 
@@ -89,44 +106,102 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['beacons', floorId],
 		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
 	});
-	const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError} = useQuery<RouteNode[]>({
-		queryKey: ['routeNodes', floorId],
-		queryFn: async () => {
-			logger.info("🔄 STARTING NODES QUERY", { floorId, floorIdType: typeof floorId });
-			try {
-				const result = await routeNodesApi.getByFloor(floorId.toString());
-				logger.info("✅ NODES QUERY SUCCESS", { floorId, resultCount: result.length });
-				return result;
-			} catch (error) {
-				logger.error("❌ NODES QUERY FAILED", error as Error);
-				logger.info("Query failed for floorId", { floorId });
-				throw error;
-			}
-		},
-		select: (data) => {
-			logger.info("🔍 RAW BACKEND DATA", { 
-				floorId,
-				nodeCount: data.length,
-				fullData: data,
-				nodeDetails: data.map(n => ({
-					id: n.properties?.id,
-					connections: n.properties?.connections,
-					connected_node_ids: n.properties?.connected_node_ids,
-					connectionsType: typeof n.properties?.connections,
-					allProperties: n.properties
-				}))
-			});
+	// Temporary: Use simple state instead of React Query for debugging
+	const [nodes, setNodes] = useState<RouteNode[]>([]);
+	const [nodesLoading, setNodesLoading] = useState(true);
+	const [nodesError, setNodesError] = useState<Error | null>(null);
+	const [nodesIsError, setNodesIsError] = useState(false);
+	const fetchStatus = 'idle';
+	const status = nodesLoading ? 'loading' : 'success';
+	
+	// Load nodes with simple fetch
+	useEffect(() => {
+		const loadNodes = async () => {
+			if (!floorId) return;
 			
-			return data.map(node => ({
-				...node,
-				properties: {
-					...node.properties,
-					// Backend returns ConnectedNodeIds as connected_node_ids (snake_case)
-					connections: node.properties.connected_node_ids || node.properties.connections || []
-				}
-			}));
-		}
-	});
+			setNodesLoading(true);
+			setNodesIsError(false);
+			setNodesError(null);
+			
+			try {
+				logger.info("🔄 SIMPLE FETCH STARTING", { floorId });
+				const result = await routeNodesApi.getByFloor(floorId.toString());
+				logger.info("✅ SIMPLE FETCH SUCCESS", { floorId, resultCount: result.length });
+				
+				const processedNodes = result.map(node => ({
+					...node,
+					properties: {
+						...node.properties,
+						connections: node.properties.connected_node_ids || node.properties.connections || []
+					}
+				}));
+				
+				setNodes(processedNodes);
+				setNodesLoading(false);
+			} catch (error) {
+				logger.error("❌ SIMPLE FETCH FAILED", error as Error);
+				setNodesError(error as Error);
+				setNodesIsError(true);
+				setNodesLoading(false);
+			}
+		};
+		
+		loadNodes();
+	}, [floorId]);
+
+	// OLD React Query code (commented out for debugging):
+	// const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError, fetchStatus, status} = useQuery<RouteNode[]>({
+	// 	queryKey: ['routeNodes', floorId],
+	// 	enabled: !!floorId, // Only run query if floorId exists
+	// 	queryFn: async () => {
+	// 		logger.info("🔄 STARTING NODES QUERY", { floorId, floorIdType: typeof floorId });
+	// 		try {
+	// 			const result = await routeNodesApi.getByFloor(floorId.toString());
+	// 			logger.info("✅ NODES QUERY SUCCESS", { floorId, resultCount: result.length });
+	// 			return result;
+	// 		} catch (error) {
+	// 			logger.error("❌ NODES QUERY FAILED", error as Error);
+	// 			logger.info("Query failed for floorId", { floorId });
+	// 			throw error;
+	// 		}
+	// 	},
+	// 	select: (data) => {
+	// 		logger.info("🔍 RAW BACKEND DATA", { 
+	// 			floorId,
+	// 			nodeCount: data.length,
+	// 			fullData: data,
+	// 			nodeDetails: data.map(n => ({
+	// 				id: n.properties?.id,
+	// 				connections: n.properties?.connections,
+	// 				connected_node_ids: n.properties?.connected_node_ids,
+	// 				connectionsType: typeof n.properties?.connections,
+	// 				allProperties: n.properties
+	// 			}))
+	// 		});
+	// 		
+	// 		return data.map(node => ({
+	// 			...node,
+	// 			properties: {
+	// 				...node.properties,
+	// 				// Backend returns ConnectedNodeIds as connected_node_ids (snake_case)
+	// 				connections: node.properties.connected_node_ids || node.properties.connections || []
+	// 			}
+	// 		}));
+	// 	}
+	// });
+
+	// Debug: Log query state changes
+	useEffect(() => {
+		logger.info("🔍 NODES QUERY STATE CHANGE", {
+			floorId,
+			nodesLoading,
+			nodesIsError,
+			fetchStatus,
+			status,
+			nodesLength: nodes.length,
+			hasNodes: nodes.length > 0
+		});
+	}, [floorId, nodesLoading, nodesIsError, fetchStatus, status, nodes.length]);
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
@@ -793,6 +868,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			nodesLoading,
 			nodesIsError,
 			nodesError: nodesError?.message,
+			fetchStatus,
+			status,
 			floorId,
 			nodesLength: nodes.length,
 			nodes: nodes.map(n => ({ id: n.properties?.id, coords: n.geometry?.coordinates }))
