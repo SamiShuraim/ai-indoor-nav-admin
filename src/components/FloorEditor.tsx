@@ -39,6 +39,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	
 	// Debug: Test API directly
 	useEffect(() => {
+		logger.info("🧪 DIRECT API TEST USEEFFECT TRIGGERED", { floorId });
 		const testApiDirectly = async () => {
 			try {
 				logger.info("🧪 TESTING API DIRECTLY", { floorId });
@@ -51,6 +52,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		
 		if (floorId) {
 			testApiDirectly();
+		} else {
+			logger.info("🧪 NO FLOOR ID FOR DIRECT TEST", { floorId });
 		}
 	}, [floorId]);
 
@@ -108,23 +111,58 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	});
 	// Temporary: Use simple state instead of React Query for debugging
 	const [nodes, setNodes] = useState<RouteNode[]>([]);
-	const [nodesLoading, setNodesLoading] = useState(true);
+	const [nodesLoading, setNodesLoading] = useState(false); // TEMP: Set to false to allow clicking
 	const [nodesError, setNodesError] = useState<Error | null>(null);
 	const [nodesIsError, setNodesIsError] = useState(false);
 	const fetchStatus = 'idle';
 	const status = nodesLoading ? 'loading' : 'success';
 	
+	// Debug: Manual fetch function
+	const manualFetchNodes = async () => {
+		logger.info("🔧 MANUAL FETCH TRIGGERED", { floorId });
+		setNodesLoading(true);
+		setNodesIsError(false);
+		setNodesError(null);
+		
+		try {
+			const result = await routeNodesApi.getByFloor(floorId.toString());
+			logger.info("🔧 MANUAL FETCH SUCCESS", { floorId, resultCount: result.length });
+			
+			const processedNodes = result.map(node => ({
+				...node,
+				properties: {
+					...node.properties,
+					connections: node.properties.connected_node_ids || node.properties.connections || []
+				}
+			}));
+			
+			setNodes(processedNodes);
+			setNodesLoading(false);
+			logger.info("🔧 MANUAL NODES STATE UPDATED", { floorId, nodesCount: processedNodes.length });
+		} catch (error) {
+			logger.error("🔧 MANUAL FETCH FAILED", error as Error);
+			setNodesError(error as Error);
+			setNodesIsError(true);
+			setNodesLoading(false);
+		}
+	};
+	
 	// Load nodes with simple fetch
 	useEffect(() => {
+		logger.info("🚀 USEEFFECT TRIGGERED", { floorId, floorIdExists: !!floorId });
+		
 		const loadNodes = async () => {
-			if (!floorId) return;
+			if (!floorId) {
+				logger.info("❌ NO FLOOR ID, SKIPPING FETCH", { floorId });
+				return;
+			}
 			
+			logger.info("🔄 SIMPLE FETCH STARTING", { floorId });
 			setNodesLoading(true);
 			setNodesIsError(false);
 			setNodesError(null);
 			
 			try {
-				logger.info("🔄 SIMPLE FETCH STARTING", { floorId });
 				const result = await routeNodesApi.getByFloor(floorId.toString());
 				logger.info("✅ SIMPLE FETCH SUCCESS", { floorId, resultCount: result.length });
 				
@@ -138,6 +176,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				
 				setNodes(processedNodes);
 				setNodesLoading(false);
+				logger.info("✅ NODES STATE UPDATED", { floorId, nodesCount: processedNodes.length });
 			} catch (error) {
 				logger.error("❌ SIMPLE FETCH FAILED", error as Error);
 				setNodesError(error as Error);
