@@ -37,22 +37,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
 	
-	// TEMP: Test the API directly to see if it works
-	useEffect(() => {
-		const testApi = async () => {
-			try {
-				logger.info("🧪 TESTING routeNodesApi.getByFloor DIRECTLY", { floorId });
-				const result = await routeNodesApi.getByFloor(floorId.toString());
-				logger.info("🧪 DIRECT API TEST SUCCESS", { floorId, count: result.length, nodes: result });
-			} catch (error) {
-				logger.error("🧪 DIRECT API TEST FAILED", error as Error);
-			}
-		};
-		
-		if (floorId) {
-			testApi();
-		}
-	}, [floorId]);
 	
 
 	const queryClient = useQueryClient();
@@ -819,7 +803,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
 	};
 
-	const handleNodeClick = async (lng: number, lat: number) => {
+	const handleNodeClick = useCallback(async (lng: number, lat: number) => {
 		// Debug: Always log the current state
 		logger.info("handleNodeClick: Current query state", {
 			nodesLoading,
@@ -830,10 +814,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			nodes: nodes.map(n => ({ id: n.properties?.id, coords: n.geometry?.coordinates }))
 		});
 		
-		// TEMP: Bypass loading guard to test functionality
+		// Guard: Don't process clicks while nodes are loading
 		if (nodesLoading) {
-			logger.info("handleNodeClick: nodes still loading, but proceeding anyway for testing");
-			// Don't return - let it continue
+			logger.info("handleNodeClick: nodes still loading, ignoring click");
+			return;
 		}
 		
 		// Log error state if there's an issue
@@ -927,7 +911,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				alert("Failed to create node. Please try again.");
 			}
 		}
-	};
+	}, [nodes, nodesLoading, nodesIsError, nodesError, floorId, selectedNodeForConnectionRef, lastPlacedNodeIdRef]);
 
 	const addNewNode = async (
 		lng: number,
