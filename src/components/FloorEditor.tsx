@@ -931,8 +931,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				// Keep the tool active for adding multiple nodes
 				break;
 			case "poi":
-				// TODO: Fix addPolygonPoint function
-				logger.info("POI tool clicked - function needs to be implemented");
+				addPolygonPoint(lng, lat);
 				break;
 			case "select":
 				break;
@@ -941,7 +940,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			default:
 				break;
 		}
-	}, [handleNodeClick, addBeacon, activeTool, beacons.length, polygons.length]);
+	}, [handleNodeClick, addBeacon, addPolygonPoint, activeTool, beacons.length, polygons.length]);
 
 	const addNewNode = async (
 		lng: number,
