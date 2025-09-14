@@ -37,6 +37,23 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
 	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
 	
+	// TEMP: Test the API directly to see if it works
+	useEffect(() => {
+		const testApi = async () => {
+			try {
+				logger.info("🧪 TESTING routeNodesApi.getByFloor DIRECTLY", { floorId });
+				const result = await routeNodesApi.getByFloor(floorId.toString());
+				logger.info("🧪 DIRECT API TEST SUCCESS", { floorId, count: result.length, nodes: result });
+			} catch (error) {
+				logger.error("🧪 DIRECT API TEST FAILED", error as Error);
+			}
+		};
+		
+		if (floorId) {
+			testApi();
+		}
+	}, [floorId]);
+	
 
 	const queryClient = useQueryClient();
 
@@ -94,9 +111,22 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['routeNodes', floorId],
 		queryFn: async () => {
 			logger.info("🔄 REACT QUERY STARTING", { floorId, floorIdType: typeof floorId });
-			const result = await routeNodesApi.getByFloor(floorId.toString());
-			logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length });
-			return result;
+			
+			// Add timeout to prevent hanging
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
+			});
+			
+			const apiPromise = routeNodesApi.getByFloor(floorId.toString());
+			
+			try {
+				const result = await Promise.race([apiPromise, timeoutPromise]) as RouteNode[];
+				logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length });
+				return result;
+			} catch (error) {
+				logger.error("❌ REACT QUERY FAILED", error as Error);
+				throw error;
+			}
 		},
 		enabled: !!floorId,
 		staleTime: 0, // Always refetch
@@ -800,10 +830,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			nodes: nodes.map(n => ({ id: n.properties?.id, coords: n.geometry?.coordinates }))
 		});
 		
-		// Guard: Don't process clicks while nodes are loading
+		// TEMP: Bypass loading guard to test functionality
 		if (nodesLoading) {
-			logger.info("handleNodeClick: nodes still loading, ignoring click");
-			return;
+			logger.info("handleNodeClick: nodes still loading, but proceeding anyway for testing");
+			// Don't return - let it continue
 		}
 		
 		// Log error state if there's an issue
