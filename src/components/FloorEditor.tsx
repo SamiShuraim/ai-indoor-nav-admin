@@ -14,7 +14,6 @@ import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
-import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
 import {RouteNode} from "../interfaces/RouteNode";
@@ -36,7 +35,9 @@ function convertPointsToCoordinates(points: Point[]): number[][][] {
 
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
-	logger.info("FloorEditor component starting", {floorId});
+	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
+	
+	
 
 	const queryClient = useQueryClient();
 
@@ -44,7 +45,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['floor', floorId],
 		queryFn: () => floorsApi.getById(floorId),
 	});
-	const {data: floorData} = useFloorLayoutData(floorId, !!floor);
 
 	// Map state
 	const mapContainer = useRef<HTMLDivElement>(null);
@@ -84,39 +84,82 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const activeToolRef = useRef<DrawingTool>("select");
 
 	const {data: polygons = []} = useQuery<Polygon[]>({
-		queryKey: ['pois'],
-		queryFn: () => polygonsApi.getAll(),
+		queryKey: ['pois', floorId],
+		queryFn: () => polygonsApi.getByFloor(floorId.toString()),
 	});
 	const {data: beacons = []} = useQuery<Beacon[]>({
-		queryKey: ['beacons'],
-		queryFn: () => beaconsApi.getAll(),
+		queryKey: ['beacons', floorId],
+		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
 	});
-	const {data: nodes = []} = useQuery<RouteNode[]>({
-		queryKey: ['routeNodes'],
-		queryFn: () => routeNodesApi.getAll(),
+	// Force invalidate cache on mount to ensure fresh data
+	useEffect(() => {
+		queryClient.invalidateQueries({ queryKey: ['routeNodes', floorId] });
+	}, [floorId, queryClient]);
+
+	const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError, refetch: refetchNodes} = useQuery<RouteNode[]>({
+		queryKey: ['routeNodes', floorId],
+		queryFn: async () => {
+			logger.info("🔄 REACT QUERY STARTING", { floorId, floorIdType: typeof floorId, timestamp: new Date().toISOString() });
+			
+			// Add timeout to prevent hanging
+			const timeoutPromise = new Promise((_, reject) => {
+				setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000);
+			});
+			
+			const apiPromise = routeNodesApi.getByFloor(floorId.toString());
+			
+			try {
+				const result = await Promise.race([apiPromise, timeoutPromise]) as RouteNode[];
+				logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length, timestamp: new Date().toISOString() });
+				return result;
+			} catch (error) {
+				logger.error("❌ REACT QUERY FAILED", error as Error);
+				throw error;
+			}
+		},
+		enabled: !!floorId,
+		staleTime: 0, // Always refetch
+		gcTime: 0, // Don't cache
+		retry: 1, // Reduce retries
+		refetchOnMount: true,
+		refetchOnWindowFocus: false,
 		select: (data) => {
-			logger.info("🔍 RAW BACKEND DATA", { 
+			logger.info("🔍 REACT QUERY SELECT", { 
+				floorId,
 				nodeCount: data.length,
-				fullData: data,
-				nodeDetails: data.map(n => ({
-					id: n.properties?.id,
-					connections: n.properties?.connections,
-					connected_node_ids: n.properties?.connected_node_ids,
-					connectionsType: typeof n.properties?.connections,
-					allProperties: n.properties
-				}))
+				nodeIds: data.map(n => n.properties?.id),
+				timestamp: new Date().toISOString()
 			});
 			
 			return data.map(node => ({
 				...node,
 				properties: {
 					...node.properties,
-					// Backend returns ConnectedNodeIds as connected_node_ids (snake_case)
 					connections: node.properties.connected_node_ids || node.properties.connections || []
 				}
 			}));
 		}
 	});
+
+	// Create refs to hold current values to avoid stale closures
+	const nodesRef = useRef<RouteNode[]>([]);
+	const nodesLoadingRef = useRef(true);
+	
+	// Update refs whenever values change
+	useEffect(() => {
+		nodesRef.current = nodes;
+		nodesLoadingRef.current = nodesLoading;
+		
+		logger.info("🔍 NODES QUERY STATE CHANGE", {
+			floorId,
+			nodesLoading,
+			nodesIsError,
+			nodesLength: nodes.length,
+			hasNodes: nodes.length > 0,
+			refNodesLength: nodesRef.current.length,
+			refNodesLoading: nodesLoadingRef.current
+		});
+	}, [floorId, nodesLoading, nodesIsError, nodes.length, nodes]);
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
@@ -727,7 +770,138 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	}, [loading, initializeMap]); // Depend on loading and initializeMap
 
-	const handleMapClick = (e: any) => {
+	const addBeacon = useCallback((lng: number, lat: number) => {
+		// Show beacon name dialog
+		setPendingBeaconLocation({lng, lat});
+		setBeaconName(`Beacon ${beacons.length + 1}`); // Default name
+		setShowBeaconDialog(true);
+
+		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
+	}, [beacons.length]);
+
+	const handleNodeClick = useCallback(async (lng: number, lat: number) => {
+		// Use refs to get current values and avoid stale closures
+		const currentNodes = nodesRef.current;
+		const currentNodesLoading = nodesLoadingRef.current;
+		
+		// Debug: Always log the current state
+		logger.info("handleNodeClick: Current query state", {
+			closureNodesLoading: nodesLoading,
+			refNodesLoading: currentNodesLoading,
+			closureNodesLength: nodes.length,
+			refNodesLength: currentNodes.length,
+			nodesIsError,
+			nodesError: nodesError?.message,
+			floorId
+		});
+		
+		// Guard: Don't process clicks while nodes are loading (use ref value)
+		if (currentNodesLoading) {
+			logger.info("handleNodeClick: nodes still loading (ref), ignoring click");
+			return;
+		}
+		
+		// Log error state if there's an issue
+		if (nodesIsError) {
+			logger.error("handleNodeClick: nodes query failed", nodesError as Error);
+			logger.info("Query error details", { floorId });
+			alert(`Failed to load nodes: ${nodesError?.message}`);
+			return;
+		}
+		
+		// Check if this click is near an existing node (using Canvas-style distance calculation)
+        // @cursor, check this out - now using refs to avoid stale closures
+        console.log("handleNodeClick: ", currentNodes.length, currentNodes);
+		const clickedNode = currentNodes.find((node) => {
+            if (!node.properties.is_visible) return false;
+			// Use proper Euclidean distance like the working Canvas version
+			const distance = Math.sqrt(
+                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
+			);
+
+            console.log("distance", distance);
+			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
+		});
+
+		// Use ref values for current state to avoid stale closures
+		const currentSelectedNode = selectedNodeForConnectionRef.current;
+		const currentLastPlacedNode = lastPlacedNodeIdRef.current;
+
+		// Debug logging to understand what's happening
+		logger.info("Node click detected", {
+			lng,
+			lat,
+			nodesCount: currentNodes.length,
+			selectedNodeForConnection: currentSelectedNode,
+			lastPlacedNodeId: currentLastPlacedNode,
+            clickedNodeId: clickedNode?.properties.id || "none",
+		});
+
+		if (clickedNode) {
+			// Clicked on an existing node - select it for connection (make marker green)
+			setSelectedNodeForConnection(clickedNode.properties.id);
+			selectedNodeForConnectionRef.current = clickedNode.properties.id;
+			// Clear lastPlacedNodeId when manually selecting a node
+			setLastPlacedNodeId(null);
+			lastPlacedNodeIdRef.current = null;
+			logger.userAction("Node selected for connection", {
+				nodeId: clickedNode.properties.id,
+			});
+		} else {
+			// Clicked on empty space
+			logger.info("Clicked on empty space - DETAILED STATE", {
+				lng,
+				lat,
+				nodesLength: currentNodes.length,
+				selectedNodeForConnection: currentSelectedNode,
+				lastPlacedNodeId: currentLastPlacedNode,
+				hasSelectedNode: !!currentSelectedNode,
+				hasLastPlaced: !!currentLastPlacedNode,
+				"nodes.length === 0": currentNodes.length === 0,
+			});
+
+			try {
+				if (currentSelectedNode) {
+					// Have a selected node - create new node and connect it
+					logger.info("Creating connected node", {
+						selectedNodeForConnection: currentSelectedNode,
+					});
+					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
+					// Auto-select the newly placed node (make it green) so next node connects to it
+					logger.info("🔗 AUTO-SELECTING newly created connected node", { 
+						newNodeId, 
+						previouslySelected: currentSelectedNode 
+					});
+					setSelectedNodeForConnection(newNodeId);
+					selectedNodeForConnectionRef.current = newNodeId;
+					setLastPlacedNodeId(null);
+					lastPlacedNodeIdRef.current = null;
+				} else if (currentNodes.length === 0) {
+					// No nodes exist - create first isolated node
+					logger.info("Creating first isolated node");
+					const newNodeId = await addNewNode(lng, lat, null);
+					// Auto-select the newly placed node (make it green) so next node connects to it
+					logger.info("🔗 AUTO-SELECTING newly created first node", { 
+						newNodeId 
+					});
+					setSelectedNodeForConnection(newNodeId);
+					selectedNodeForConnectionRef.current = newNodeId;
+					setLastPlacedNodeId(null);
+					lastPlacedNodeIdRef.current = null;
+				} else {
+					// Nodes exist but none selected - show error to user
+					logger.info("Cannot create node - no previous node selected");
+					// TODO: Show user error message telling them to choose a previous node
+					alert("Please click on an existing node first to connect the new node to it.");
+				}
+			} catch (error) {
+				logger.error("Failed to create node", error as Error);
+				alert("Failed to create node. Please try again.");
+			}
+		}
+	}, [nodesLoading, nodesIsError, nodesError, floorId]);
+
+	const handleMapClick = useCallback((e: any) => {
 		logger.userAction("Map clicked - DETAILED", {
 			hasMap: !!map.current,
 			activeTool,
@@ -735,7 +909,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			lat: e.lngLat.lat,
 			eventType: e.type,
 			currentBeacons: beacons.length,
-			currentNodes: nodes.length,
+			currentNodes: nodesRef.current.length, // Use ref for current value
 			currentPolygons: polygons.length,
 		});
 
@@ -766,102 +940,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			default:
 				break;
 		}
-	};
-
-	const addBeacon = (lng: number, lat: number) => {
-		// Show beacon name dialog
-		setPendingBeaconLocation({lng, lat});
-		setBeaconName(`Beacon ${beacons.length + 1}`); // Default name
-		setShowBeaconDialog(true);
-
-		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
-	};
-
-	const handleNodeClick = async (lng: number, lat: number) => {
-		// Check if this click is near an existing node (using Canvas-style distance calculation)
-        // @cursor, check this out
-        console.log("handleNodeClick: ", nodes.length, nodes);
-		const clickedNode = nodes.find((node) => {
-            if (!node.properties.is_visible) return false;
-			// Use proper Euclidean distance like the working Canvas version
-			const distance = Math.sqrt(
-                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
-			);
-
-            console.log("distance", distance);
-			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
-		});
-
-		// Use ref values for current state to avoid stale closures
-		const currentSelectedNode = selectedNodeForConnectionRef.current;
-		const currentLastPlacedNode = lastPlacedNodeIdRef.current;
-
-		// Debug logging to understand what's happening
-		logger.info("Node click detected", {
-			lng,
-			lat,
-			nodesCount: nodes.length,
-			selectedNodeForConnection: currentSelectedNode,
-			lastPlacedNodeId: currentLastPlacedNode,
-            clickedNodeId: clickedNode?.properties.id || "none",
-		});
-
-		if (clickedNode) {
-			// Clicked on an existing node - select it for connection (make marker green)
-			setSelectedNodeForConnection(clickedNode.properties.id);
-			selectedNodeForConnectionRef.current = clickedNode.properties.id;
-			// Clear lastPlacedNodeId when manually selecting a node
-			setLastPlacedNodeId(null);
-			lastPlacedNodeIdRef.current = null;
-			logger.userAction("Node selected for connection", {
-				nodeId: clickedNode.properties.id,
-			});
-		} else {
-			// Clicked on empty space
-			logger.info("Clicked on empty space - DETAILED STATE", {
-				lng,
-				lat,
-				nodesLength: nodes.length,
-				selectedNodeForConnection: currentSelectedNode,
-				lastPlacedNodeId: currentLastPlacedNode,
-				hasSelectedNode: !!currentSelectedNode,
-				hasLastPlaced: !!currentLastPlacedNode,
-				"nodes.length === 0": nodes.length === 0,
-			});
-
-			try {
-				if (currentSelectedNode) {
-					// Have a selected node - create new node and connect it
-					logger.info("Creating connected node", {
-						selectedNodeForConnection: currentSelectedNode,
-					});
-					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
-					// Auto-select the newly placed node (make it green) so next node connects to it
-					setSelectedNodeForConnection(newNodeId);
-					selectedNodeForConnectionRef.current = newNodeId;
-					setLastPlacedNodeId(null);
-					lastPlacedNodeIdRef.current = null;
-				} else if (nodes.length === 0) {
-					// No nodes exist - create first isolated node
-					logger.info("Creating first isolated node");
-					const newNodeId = await addNewNode(lng, lat, null);
-					// Auto-select the newly placed node (make it green) so next node connects to it
-					setSelectedNodeForConnection(newNodeId);
-					selectedNodeForConnectionRef.current = newNodeId;
-					setLastPlacedNodeId(null);
-					lastPlacedNodeIdRef.current = null;
-				} else {
-					// Nodes exist but none selected - show error to user
-					logger.info("Cannot create node - no previous node selected");
-					// TODO: Show user error message telling them to choose a previous node
-					alert("Please click on an existing node first to connect the new node to it.");
-				}
-			} catch (error) {
-				logger.error("Failed to create node", error as Error);
-				alert("Failed to create node. Please try again.");
-			}
-		}
-	};
+	}, [handleNodeClick, addBeacon, activeTool, beacons.length, polygons.length]);
 
 	const addNewNode = async (
 		lng: number,
@@ -918,7 +997,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			if (connectToNodeId) {
 				logger.info("🔗 Adding bidirectional connection to existing node");
 				
-				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
+				const existingNode = nodesRef.current.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
 					const existingConnections = existingNode.properties.connections || [];
 					const updatedConnections = [...existingConnections, newNodeId];
@@ -944,6 +1023,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					logger.info("✅ Bidirectional connection established");
 				}
 			}
+
+			// Refetch nodes to update the UI
+			await refetchNodes();
 
 			return newNodeId;
 		} catch (error) {
@@ -1115,7 +1197,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	// Handle polygon point addition with the new flow
-	const addPolygonPoint = (lng: number, lat: number) => {
+	const addPolygonPoint = useCallback((lng: number, lat: number) => {
 		const newPoint: Point = {x: lng, y: lat} as Point;
 
 		logger.userAction("🎯 Polygon point clicked", {
@@ -1204,7 +1286,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			point: newPoint,
 			totalPoints: updatedPoints.length,
 		});
-	};
+	}, [activeTool]);
 
 	const handleToolChange = (tool: DrawingTool) => {
 		logger.info("Tool change requested", {
@@ -1656,7 +1738,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		activeTool,
 		loading,
 		mapLoading,
-		hasFloorData: !!floorData,
+		hasFloorData: true, // Now using individual queries
 		coordinates: currentCoordinates,
 	});
 
@@ -1780,6 +1862,28 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						currentCoordinates={currentCoordinates}
 						error={null}
 					/>
+					
+					{/* TEMP: Debug button for React Query */}
+					<button 
+						onClick={() => {
+							logger.info("🔧 MANUAL REFETCH TRIGGERED");
+							refetchNodes();
+						}}
+						style={{
+							position: 'absolute',
+							top: '10px',
+							right: '10px',
+							zIndex: 1000,
+							padding: '10px',
+							backgroundColor: nodesLoading ? 'orange' : (nodes.length > 0 ? 'green' : 'red'),
+							color: 'white',
+							border: 'none',
+							borderRadius: '5px',
+							cursor: 'pointer'
+						}}
+					>
+						{nodesLoading ? `Loading...` : `${nodes.length} nodes`}
+					</button>
 
 					{/* Layers Panel */}
 					<LayersPanel
