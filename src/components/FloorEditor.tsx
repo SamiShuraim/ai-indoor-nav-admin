@@ -98,7 +98,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				logger.info("✅ NODES QUERY SUCCESS", { floorId, resultCount: result.length });
 				return result;
 			} catch (error) {
-				logger.error("❌ NODES QUERY FAILED", { floorId, error });
+				logger.error("❌ NODES QUERY FAILED", error as Error);
+				logger.info("Query failed for floorId", { floorId });
 				throw error;
 			}
 		},
@@ -805,10 +806,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		
 		// Log error state if there's an issue
 		if (nodesIsError) {
-			logger.error("handleNodeClick: nodes query failed", {
-				nodesError: nodesError?.message,
-				floorId
-			});
+			logger.error("handleNodeClick: nodes query failed", nodesError as Error);
+			logger.info("Query error details", { floorId });
 			alert(`Failed to load nodes: ${nodesError?.message}`);
 			return;
 		}
