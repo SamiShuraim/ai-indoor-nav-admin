@@ -940,7 +940,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			default:
 				break;
 		}
-	}, [handleNodeClick, addBeacon, addPolygonPoint, activeTool, beacons.length, polygons.length]);
+	}, [handleNodeClick, addBeacon, activeTool, beacons.length, polygons.length]);
 
 	const addNewNode = async (
 		lng: number,
@@ -1197,7 +1197,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	// Handle polygon point addition with the new flow
-	const addPolygonPoint = (lng: number, lat: number) => {
+	const addPolygonPoint = useCallback((lng: number, lat: number) => {
 		const newPoint: Point = {x: lng, y: lat} as Point;
 
 		logger.userAction("🎯 Polygon point clicked", {
@@ -1286,7 +1286,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			point: newPoint,
 			totalPoints: updatedPoints.length,
 		});
-	};
+	}, [activeTool]);
 
 	const handleToolChange = (tool: DrawingTool) => {
 		logger.info("Tool change requested", {
