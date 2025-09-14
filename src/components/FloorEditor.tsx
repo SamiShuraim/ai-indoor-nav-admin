@@ -14,7 +14,6 @@ import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
-import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
 import {RouteNode} from "../interfaces/RouteNode";
@@ -36,7 +35,7 @@ function convertPointsToCoordinates(points: Point[]): number[][][] {
 
 export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	// Remove the immediate console.log and replace with logger
-	logger.info("FloorEditor component starting", {floorId});
+	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
 
 	const queryClient = useQueryClient();
 
@@ -44,7 +43,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['floor', floorId],
 		queryFn: () => floorsApi.getById(floorId),
 	});
-	const {data: floorData} = useFloorLayoutData(floorId, !!floor);
 
 	// Map state
 	const mapContainer = useRef<HTMLDivElement>(null);
@@ -91,9 +89,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['beacons', floorId],
 		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
 	});
-	const {data: nodes = [], isLoading: nodesLoading} = useQuery<RouteNode[]>({
+	const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError} = useQuery<RouteNode[]>({
 		queryKey: ['routeNodes', floorId],
-		queryFn: () => routeNodesApi.getByFloor(floorId.toString()),
+		queryFn: async () => {
+			logger.info("🔄 STARTING NODES QUERY", { floorId, floorIdType: typeof floorId });
+			try {
+				const result = await routeNodesApi.getByFloor(floorId.toString());
+				logger.info("✅ NODES QUERY SUCCESS", { floorId, resultCount: result.length });
+				return result;
+			} catch (error) {
+				logger.error("❌ NODES QUERY FAILED", { floorId, error });
+				throw error;
+			}
+		},
 		select: (data) => {
 			logger.info("🔍 RAW BACKEND DATA", { 
 				floorId,
@@ -779,9 +787,29 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	const handleNodeClick = async (lng: number, lat: number) => {
+		// Debug: Always log the current state
+		logger.info("handleNodeClick: Current query state", {
+			nodesLoading,
+			nodesIsError,
+			nodesError: nodesError?.message,
+			floorId,
+			nodesLength: nodes.length,
+			nodes: nodes.map(n => ({ id: n.properties?.id, coords: n.geometry?.coordinates }))
+		});
+		
 		// Guard: Don't process clicks while nodes are loading
 		if (nodesLoading) {
 			logger.info("handleNodeClick: nodes still loading, ignoring click");
+			return;
+		}
+		
+		// Log error state if there's an issue
+		if (nodesIsError) {
+			logger.error("handleNodeClick: nodes query failed", {
+				nodesError: nodesError?.message,
+				floorId
+			});
+			alert(`Failed to load nodes: ${nodesError?.message}`);
 			return;
 		}
 		
@@ -1663,7 +1691,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		activeTool,
 		loading,
 		mapLoading,
-		hasFloorData: !!floorData,
+		hasFloorData: true, // Now using individual queries
 		coordinates: currentCoordinates,
 	});
 
