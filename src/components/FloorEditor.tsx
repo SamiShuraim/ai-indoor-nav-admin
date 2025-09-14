@@ -91,21 +91,26 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		queryKey: ['beacons', floorId],
 		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
 	});
+	// Force invalidate cache on mount to ensure fresh data
+	useEffect(() => {
+		queryClient.invalidateQueries({ queryKey: ['routeNodes', floorId] });
+	}, [floorId, queryClient]);
+
 	const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError, refetch: refetchNodes} = useQuery<RouteNode[]>({
 		queryKey: ['routeNodes', floorId],
 		queryFn: async () => {
-			logger.info("🔄 REACT QUERY STARTING", { floorId, floorIdType: typeof floorId });
+			logger.info("🔄 REACT QUERY STARTING", { floorId, floorIdType: typeof floorId, timestamp: new Date().toISOString() });
 			
 			// Add timeout to prevent hanging
 			const timeoutPromise = new Promise((_, reject) => {
-				setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
+				setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000);
 			});
 			
 			const apiPromise = routeNodesApi.getByFloor(floorId.toString());
 			
 			try {
 				const result = await Promise.race([apiPromise, timeoutPromise]) as RouteNode[];
-				logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length });
+				logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length, timestamp: new Date().toISOString() });
 				return result;
 			} catch (error) {
 				logger.error("❌ REACT QUERY FAILED", error as Error);
@@ -115,12 +120,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		enabled: !!floorId,
 		staleTime: 0, // Always refetch
 		gcTime: 0, // Don't cache
-		retry: 2,
+		retry: 1, // Reduce retries
+		refetchOnMount: true,
+		refetchOnWindowFocus: false,
 		select: (data) => {
 			logger.info("🔍 REACT QUERY SELECT", { 
 				floorId,
 				nodeCount: data.length,
-				nodeIds: data.map(n => n.properties?.id)
+				nodeIds: data.map(n => n.properties?.id),
+				timestamp: new Date().toISOString()
 			});
 			
 			return data.map(node => ({
@@ -1833,6 +1841,28 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						currentCoordinates={currentCoordinates}
 						error={null}
 					/>
+					
+					{/* TEMP: Debug button for React Query */}
+					<button 
+						onClick={() => {
+							logger.info("🔧 MANUAL REFETCH TRIGGERED");
+							refetchNodes();
+						}}
+						style={{
+							position: 'absolute',
+							top: '10px',
+							right: '10px',
+							zIndex: 1000,
+							padding: '10px',
+							backgroundColor: nodesLoading ? 'orange' : (nodes.length > 0 ? 'green' : 'red'),
+							color: 'white',
+							border: 'none',
+							borderRadius: '5px',
+							cursor: 'pointer'
+						}}
+					>
+						{nodesLoading ? `Loading...` : `${nodes.length} nodes`}
+					</button>
 
 					{/* Layers Panel */}
 					<LayersPanel
