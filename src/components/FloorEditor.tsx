@@ -141,16 +141,25 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	});
 
-	// Debug: Log query state changes
+	// Create refs to hold current values to avoid stale closures
+	const nodesRef = useRef<RouteNode[]>([]);
+	const nodesLoadingRef = useRef(true);
+	
+	// Update refs whenever values change
 	useEffect(() => {
+		nodesRef.current = nodes;
+		nodesLoadingRef.current = nodesLoading;
+		
 		logger.info("🔍 NODES QUERY STATE CHANGE", {
 			floorId,
 			nodesLoading,
 			nodesIsError,
 			nodesLength: nodes.length,
-			hasNodes: nodes.length > 0
+			hasNodes: nodes.length > 0,
+			refNodesLength: nodesRef.current.length,
+			refNodesLoading: nodesLoadingRef.current
 		});
-	}, [floorId, nodesLoading, nodesIsError, nodes.length]);
+	}, [floorId, nodesLoading, nodesIsError, nodes.length, nodes]);
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
@@ -771,19 +780,24 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	}, [beacons.length]);
 
 	const handleNodeClick = useCallback(async (lng: number, lat: number) => {
+		// Use refs to get current values and avoid stale closures
+		const currentNodes = nodesRef.current;
+		const currentNodesLoading = nodesLoadingRef.current;
+		
 		// Debug: Always log the current state
 		logger.info("handleNodeClick: Current query state", {
-			nodesLoading,
+			closureNodesLoading: nodesLoading,
+			refNodesLoading: currentNodesLoading,
+			closureNodesLength: nodes.length,
+			refNodesLength: currentNodes.length,
 			nodesIsError,
 			nodesError: nodesError?.message,
-			floorId,
-			nodesLength: nodes.length,
-			nodes: nodes.map(n => ({ id: n.properties?.id, coords: n.geometry?.coordinates }))
+			floorId
 		});
 		
-		// Guard: Don't process clicks while nodes are loading
-		if (nodesLoading) {
-			logger.info("handleNodeClick: nodes still loading, ignoring click");
+		// Guard: Don't process clicks while nodes are loading (use ref value)
+		if (currentNodesLoading) {
+			logger.info("handleNodeClick: nodes still loading (ref), ignoring click");
 			return;
 		}
 		
@@ -796,9 +810,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 		
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
-        // @cursor, check this out - nodes should now be floor-specific
-        console.log("handleNodeClick: ", nodes.length, nodes);
-		const clickedNode = nodes.find((node) => {
+        // @cursor, check this out - now using refs to avoid stale closures
+        console.log("handleNodeClick: ", currentNodes.length, currentNodes);
+		const clickedNode = currentNodes.find((node) => {
             if (!node.properties.is_visible) return false;
 			// Use proper Euclidean distance like the working Canvas version
 			const distance = Math.sqrt(
@@ -817,7 +831,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		logger.info("Node click detected", {
 			lng,
 			lat,
-			nodesCount: nodes.length,
+			nodesCount: currentNodes.length,
 			selectedNodeForConnection: currentSelectedNode,
 			lastPlacedNodeId: currentLastPlacedNode,
             clickedNodeId: clickedNode?.properties.id || "none",
@@ -838,12 +852,12 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			logger.info("Clicked on empty space - DETAILED STATE", {
 				lng,
 				lat,
-				nodesLength: nodes.length,
+				nodesLength: currentNodes.length,
 				selectedNodeForConnection: currentSelectedNode,
 				lastPlacedNodeId: currentLastPlacedNode,
 				hasSelectedNode: !!currentSelectedNode,
 				hasLastPlaced: !!currentLastPlacedNode,
-				"nodes.length === 0": nodes.length === 0,
+				"nodes.length === 0": currentNodes.length === 0,
 			});
 
 			try {
@@ -858,7 +872,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					selectedNodeForConnectionRef.current = newNodeId;
 					setLastPlacedNodeId(null);
 					lastPlacedNodeIdRef.current = null;
-				} else if (nodes.length === 0) {
+				} else if (currentNodes.length === 0) {
 					// No nodes exist - create first isolated node
 					logger.info("Creating first isolated node");
 					const newNodeId = await addNewNode(lng, lat, null);
@@ -878,7 +892,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				alert("Failed to create node. Please try again.");
 			}
 		}
-	}, [nodes, nodesLoading, nodesIsError, nodesError, floorId, selectedNodeForConnectionRef, lastPlacedNodeIdRef]);
+	}, [nodesLoading, nodesIsError, nodesError, floorId]);
 
 	const handleMapClick = useCallback((e: any) => {
 		logger.userAction("Map clicked - DETAILED", {
@@ -888,7 +902,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			lat: e.lngLat.lat,
 			eventType: e.type,
 			currentBeacons: beacons.length,
-			currentNodes: nodes.length,
+			currentNodes: nodesRef.current.length, // Use ref for current value
 			currentPolygons: polygons.length,
 		});
 
@@ -920,7 +934,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			default:
 				break;
 		}
-	}, [handleNodeClick, addBeacon, activeTool, beacons.length, nodes.length, polygons.length]);
+	}, [handleNodeClick, addBeacon, activeTool, beacons.length, polygons.length]);
 
 	const addNewNode = async (
 		lng: number,
@@ -977,7 +991,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			if (connectToNodeId) {
 				logger.info("🔗 Adding bidirectional connection to existing node");
 				
-				const existingNode = nodes.find(n => n.properties.id === connectToNodeId);
+				const existingNode = nodesRef.current.find(n => n.properties.id === connectToNodeId);
 				if (existingNode) {
 					const existingConnections = existingNode.properties.connections || [];
 					const updatedConnections = [...existingConnections, newNodeId];
