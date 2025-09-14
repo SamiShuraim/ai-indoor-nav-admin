@@ -761,48 +761,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	}, [loading, initializeMap]); // Depend on loading and initializeMap
 
-	const handleMapClick = useCallback((e: any) => {
-		logger.userAction("Map clicked - DETAILED", {
-			hasMap: !!map.current,
-			activeTool,
-			lng: e.lngLat.lng,
-			lat: e.lngLat.lat,
-			eventType: e.type,
-			currentBeacons: beacons.length,
-			currentNodes: nodes.length,
-			currentPolygons: polygons.length,
-		});
-
-		if (!map.current) {
-			logger.error("Map click failed - no map instance");
-			return;
-		}
-
-		const {lng, lat} = e.lngLat;
-		const currentTool = activeToolRef.current; // Use ref to get current tool
-
-		switch (currentTool) {
-			case "beacons":
-				addBeacon(lng, lat);
-				// Keep the tool active for adding multiple beacons
-				break;
-			case "nodes":
-				handleNodeClick(lng, lat);
-				// Keep the tool active for adding multiple nodes
-				break;
-			case "poi":
-				// TODO: Fix addPolygonPoint function
-				logger.info("POI tool clicked - function needs to be implemented");
-				break;
-			case "select":
-				break;
-			case "pan":
-				break;
-			default:
-				break;
-		}
-	}, [handleNodeClick, addBeacon, activeTool, beacons.length, nodes.length, polygons.length]);
-
 	const addBeacon = useCallback((lng: number, lat: number) => {
 		// Show beacon name dialog
 		setPendingBeaconLocation({lng, lat});
@@ -921,6 +879,48 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			}
 		}
 	}, [nodes, nodesLoading, nodesIsError, nodesError, floorId, selectedNodeForConnectionRef, lastPlacedNodeIdRef]);
+
+	const handleMapClick = useCallback((e: any) => {
+		logger.userAction("Map clicked - DETAILED", {
+			hasMap: !!map.current,
+			activeTool,
+			lng: e.lngLat.lng,
+			lat: e.lngLat.lat,
+			eventType: e.type,
+			currentBeacons: beacons.length,
+			currentNodes: nodes.length,
+			currentPolygons: polygons.length,
+		});
+
+		if (!map.current) {
+			logger.error("Map click failed - no map instance");
+			return;
+		}
+
+		const {lng, lat} = e.lngLat;
+		const currentTool = activeToolRef.current; // Use ref to get current tool
+
+		switch (currentTool) {
+			case "beacons":
+				addBeacon(lng, lat);
+				// Keep the tool active for adding multiple beacons
+				break;
+			case "nodes":
+				handleNodeClick(lng, lat);
+				// Keep the tool active for adding multiple nodes
+				break;
+			case "poi":
+				// TODO: Fix addPolygonPoint function
+				logger.info("POI tool clicked - function needs to be implemented");
+				break;
+			case "select":
+				break;
+			case "pan":
+				break;
+			default:
+				break;
+		}
+	}, [handleNodeClick, addBeacon, activeTool, beacons.length, nodes.length, polygons.length]);
 
 	const addNewNode = async (
 		lng: number,
