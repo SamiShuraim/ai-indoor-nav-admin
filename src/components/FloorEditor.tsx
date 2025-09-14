@@ -1361,23 +1361,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
 					.build();
 
-				// Create the Createable format for the API
-				const createablePolygon = {
-					type: "Feature" as const,
-					geometry: newPolygon.geometry,
-					properties: {
-						floor_id: newPolygon.properties.floor_id,
-						name: newPolygon.properties.name,
-						description: newPolygon.properties.description,
-						type: newPolygon.properties.type,
-						is_visible: newPolygon.properties.is_visible,
-						color: newPolygon.properties.color,
-						category_id: newPolygon.properties.category_id
-					}
-				};
-
 				await poisMutations.create.mutateAsync({
-					data: createablePolygon
+                    data: newPolygon
 				});
 				logger.info("Polygon created successfully", { name: polygonName });
 			}
@@ -1428,27 +1413,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						.setBatteryLevel(100)
 						.build();
 
-					// Create the Createable format for the API
-					const createableBeacon = {
-						type: "Feature" as const,
-						geometry: newBeacon.geometry!,
-						properties: {
-							floor_id: newBeacon.properties.floor_id,
-							beacon_type_id: newBeacon.properties.beacon_type_id,
-							name: newBeacon.properties.name,
-							uuid: newBeacon.properties.uuid,
-							major_id: newBeacon.properties.major_id,
-							minor_id: newBeacon.properties.minor_id,
-							is_active: newBeacon.properties.is_active,
-							is_visible: newBeacon.properties.is_visible,
-							battery_level: newBeacon.properties.battery_level,
-							last_seen: newBeacon.properties.last_seen,
-							beacon_type: newBeacon.properties.beacon_type
-						}
-					};
-
 					await beaconsMutations.create.mutateAsync({
-						data: createableBeacon
+                        data: newBeacon
 					});
 					logger.info("Beacon created successfully", { name: beaconName });
 				}
@@ -1862,28 +1828,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						currentCoordinates={currentCoordinates}
 						error={null}
 					/>
-					
-					{/* TEMP: Debug button for React Query */}
-					<button 
-						onClick={() => {
-							logger.info("🔧 MANUAL REFETCH TRIGGERED");
-							refetchNodes();
-						}}
-						style={{
-							position: 'absolute',
-							top: '10px',
-							right: '10px',
-							zIndex: 1000,
-							padding: '10px',
-							backgroundColor: nodesLoading ? 'orange' : (nodes.length > 0 ? 'green' : 'red'),
-							color: 'white',
-							border: 'none',
-							borderRadius: '5px',
-							cursor: 'pointer'
-						}}
-					>
-						{nodesLoading ? `Loading...` : `${nodes.length} nodes`}
-					</button>
 
 					{/* Layers Panel */}
 					<LayersPanel

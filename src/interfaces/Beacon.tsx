@@ -1,5 +1,6 @@
 export interface Beacon {
-    geometry?: {
+    type: "Feature";
+    geometry: {
         type: "Point";
         coordinates: [number, number]; // [longitude, latitude]
     } | null;
@@ -128,6 +129,7 @@ export class BeaconBuilder {
 
     public build(): Beacon {
         return {
+            type: "Feature",
             geometry: this._geometry,
             properties: {
                 id: this._id,

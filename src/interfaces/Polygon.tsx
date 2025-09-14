@@ -12,6 +12,7 @@ export interface PolygonProperties {
 }
 
 export interface Polygon {
+    type: "Feature";
     properties: PolygonProperties;
     geometry: {
         type: "Polygon";
@@ -106,6 +107,7 @@ export class PolygonBuilder {
 
     public build(): Polygon {
         return {
+            type: "Feature",
             properties: this._properties,
             geometry: this._geometry,
         };
