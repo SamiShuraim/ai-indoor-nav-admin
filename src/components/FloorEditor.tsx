@@ -84,18 +84,19 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const activeToolRef = useRef<DrawingTool>("select");
 
 	const {data: polygons = []} = useQuery<Polygon[]>({
-		queryKey: ['pois'],
-		queryFn: () => polygonsApi.getAll(),
+		queryKey: ['pois', floorId],
+		queryFn: () => polygonsApi.getByFloor(floorId.toString()),
 	});
 	const {data: beacons = []} = useQuery<Beacon[]>({
-		queryKey: ['beacons'],
-		queryFn: () => beaconsApi.getAll(),
+		queryKey: ['beacons', floorId],
+		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
 	});
-	const {data: nodes = []} = useQuery<RouteNode[]>({
-		queryKey: ['routeNodes'],
-		queryFn: () => routeNodesApi.getAll(),
+	const {data: nodes = [], isLoading: nodesLoading} = useQuery<RouteNode[]>({
+		queryKey: ['routeNodes', floorId],
+		queryFn: () => routeNodesApi.getByFloor(floorId.toString()),
 		select: (data) => {
 			logger.info("🔍 RAW BACKEND DATA", { 
+				floorId,
 				nodeCount: data.length,
 				fullData: data,
 				nodeDetails: data.map(n => ({
@@ -778,8 +779,14 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	};
 
 	const handleNodeClick = async (lng: number, lat: number) => {
+		// Guard: Don't process clicks while nodes are loading
+		if (nodesLoading) {
+			logger.info("handleNodeClick: nodes still loading, ignoring click");
+			return;
+		}
+		
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
-        // @cursor, check this out
+        // @cursor, check this out - nodes should now be floor-specific
         console.log("handleNodeClick: ", nodes.length, nodes);
 		const clickedNode = nodes.find((node) => {
             if (!node.properties.is_visible) return false;
