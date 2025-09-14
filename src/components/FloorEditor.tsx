@@ -12,13 +12,12 @@ import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
-import {BaseApi} from "../utils/abstract_classes/baseApi";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {Button, Container, Header} from "./common";
 import {useFloorLayoutData} from "./FloorEditor/UseFloorLayoutData";
 import {FloorEditorProps} from "../interfaces/FloorEditorProps";
 import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
-import {RouteNode, RouteNodeBuilder} from "../interfaces/RouteNode";
+import {RouteNode} from "../interfaces/RouteNode";
 import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
 import {useEntityMutations} from "./FloorEditor/useEntityMutations";
 import {Floor} from "../interfaces/Floor";
@@ -780,12 +779,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 	const handleNodeClick = async (lng: number, lat: number) => {
 		// Check if this click is near an existing node (using Canvas-style distance calculation)
+        // @cursor, check this out
+        console.log("handleNodeClick: ", nodes.length, nodes);
 		const clickedNode = nodes.find((node) => {
             if (!node.properties.is_visible) return false;
 			// Use proper Euclidean distance like the working Canvas version
 			const distance = Math.sqrt(
                 (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
 			);
+
+            console.log("distance", distance);
 			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
 		});
 
