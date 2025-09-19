@@ -19,6 +19,11 @@ interface DrawingToolbarProps {
   nodesCount: number;
   selectedNodeForConnection: number | null;
   lastPlacedNodeId: number | null;
+  // Bidirectional button state
+  isBidirectionalFixed: boolean;
+  hasNewNodesAdded: boolean;
+  onFixBidirectional: () => void;
+  isFixingBidirectional: boolean;
 }
 
 const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
@@ -30,7 +35,11 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   onClearAll,
   nodesCount,
   selectedNodeForConnection,
-  lastPlacedNodeId
+  lastPlacedNodeId,
+  isBidirectionalFixed,
+  hasNewNodesAdded,
+  onFixBidirectional,
+  isFixingBidirectional
 }) => {
   logger.debug('DrawingToolbar rendered', { activeTool, isDrawingPolygon, pendingPolygonPoints });
 
@@ -102,6 +111,31 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
             Cancel Drawing
           </Button>
         )}
+        
+        {/* Bidirectional Connections Button */}
+        {nodesCount > 0 && (
+          <button
+            className={`tool-button bidirectional-button ${
+              hasNewNodesAdded && !isBidirectionalFixed ? 'needs-fixing' : 
+              isBidirectionalFixed ? 'fixed' : 'neutral'
+            }`}
+            onClick={onFixBidirectional}
+            disabled={isFixingBidirectional}
+            title={
+              hasNewNodesAdded && !isBidirectionalFixed 
+                ? 'Fix bidirectional connections (new nodes added)'
+                : isBidirectionalFixed 
+                ? 'Connections are bidirectional'
+                : 'Make all connections bidirectional'
+            }
+          >
+            <span className="tool-icon">
+              {isFixingBidirectional ? '⏳' : hasNewNodesAdded && !isBidirectionalFixed ? '⚠️' : '✅'}
+            </span>
+            {isFixingBidirectional ? 'Fixing...' : 'Fix Bidirectional'}
+          </button>
+        )}
+        
         <Button variant="DANGER" onClick={onClearAll}>
           {UI_MESSAGES.FLOOR_EDITOR_CLEAR_ALL}
         </Button>
