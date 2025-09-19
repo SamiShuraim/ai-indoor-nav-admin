@@ -49,6 +49,7 @@ export const API_ENDPOINTS = {
   ROUTE_NODES: '/api/RouteNode',
   ROUTE_NODE_BY_ID: (id: string | number) => `/api/RouteNode/${id}`,
   ROUTE_NODES_BY_FLOOR: (floorId: string | number) => `/api/RouteNode?floor=${floorId}`,
+  ROUTE_NODES_FIX_BIDIRECTIONAL: '/api/RouteNode/fixBidirectionalConnections',
   // ROUTE_NODES_BY_TYPE: (nodeType: string) => `/api/RouteNode/type/${nodeType}`,
 } as const;
 
