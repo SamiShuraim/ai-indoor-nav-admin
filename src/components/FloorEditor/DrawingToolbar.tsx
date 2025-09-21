@@ -6,7 +6,7 @@ import {Button} from '../common';
 const logger = createLogger('DrawingToolbar');
 
 // Drawing tool types
-export type DrawingTool = 'select' | 'pan' | 'poi' | 'beacons' | 'nodes';
+export type DrawingTool = 'select' | 'pan' | 'poi' | 'beacons' | 'nodes' | 'elevatorStairs';
 
 interface DrawingToolbarProps {
   activeTool: DrawingTool;
@@ -46,6 +46,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           {activeTool === 'nodes' && nodesCount > 0 && !selectedNodeForConnection && !lastPlacedNodeId && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_INSTRUCTION_SELECT}
           {activeTool === 'nodes' && selectedNodeForConnection && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_SELECTED}
           {activeTool === 'nodes' && !selectedNodeForConnection && lastPlacedNodeId && '🔗 ' + UI_MESSAGES.FLOOR_EDITOR_NODES_CHAINING}
+          {activeTool === 'elevatorStairs' && '🏢 Click on the map to place an elevator or stairs node'}
         </div>
       )}
       
@@ -93,6 +94,15 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         >
           <span className="tool-icon">🔗</span>
           {UI_MESSAGES.FLOOR_EDITOR_TOOL_NODES}
+        </button>
+        
+        <button 
+          className={`tool-button ${activeTool === 'elevatorStairs' ? 'active' : ''}`}
+          onClick={() => onToolChange('elevatorStairs')}
+          title="Add Elevator/Stairs"
+        >
+          <span className="tool-icon">🏢</span>
+          Elevator/Stairs
         </button>
       </div>
 
