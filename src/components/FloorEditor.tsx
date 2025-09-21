@@ -1015,18 +1015,41 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 
 			// Connect all created nodes to each other (vertical connections)
 			if (createdNodeIds.length > 1) {
+				logger.info("Connecting multi-floor nodes", { 
+					createdNodeIds,
+					totalNodes: createdNodeIds.length 
+				});
+				
 				for (let i = 0; i < createdNodeIds.length; i++) {
 					const currentNodeId = createdNodeIds[i];
 					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
 					
-					// Update the node to connect to all other nodes in the multi-floor system
+					logger.info("Connecting node to other floors", {
+						currentNodeId,
+						connectingTo: otherNodeIds
+					});
+					
+					// Create a complete node update with all required properties
 					await routeNodesMutations.update.mutateAsync({
 						data: {
+							type: "Feature" as const,
+							geometry: {
+								type: "Point" as const,
+								coordinates: [lng, lat] as [number, number]
+							},
 							properties: {
 								id: currentNodeId,
+								floor_id: selectedFloors[i], // Use the corresponding floor ID
+								is_visible: true,
+								node_type: nodeType,
 								connected_node_ids: otherNodeIds
 							}
 						}
+					});
+					
+					logger.info("Node connection updated", {
+						nodeId: currentNodeId,
+						connectedTo: otherNodeIds
 					});
 				}
 			}

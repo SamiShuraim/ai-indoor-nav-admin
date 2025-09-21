@@ -16,7 +16,9 @@ export const getFloorLayoutData = async (floorId: number): Promise<FloorLayoutDa
                 id: node.properties.id,
                 floor_id: node.properties.floor_id,
                 is_visible: node.properties.is_visible,
-                connections: node.properties.connections,
+                // Handle both field names for connections (backend vs frontend)
+                connections: node.properties.connections || node.properties.connected_node_ids || [],
+                node_type: node.properties.node_type, // Include node_type for elevator/stairs markers
             }
         });
     });
