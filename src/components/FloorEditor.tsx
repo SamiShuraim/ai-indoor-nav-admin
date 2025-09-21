@@ -908,7 +908,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				});
 				
 				try {
-					// COPY EXACT addNewNode bidirectional connection pattern
+					// Update BOTH connections AND connected_node_ids fields
 					// Update node A to connect to node B
 					const nodeA = nodesRef.current.find(n => n.properties.id === currentSelectedNode);
 					if (nodeA) {
@@ -919,6 +919,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							...nodeA,
 							properties: {
 								...nodeA.properties,
+								connections: updatedConnectionsA,
 								connected_node_ids: updatedConnectionsA
 							}
 						};
@@ -936,6 +937,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						...clickedNode,
 						properties: {
 							...clickedNode.properties,
+							connections: updatedConnectionsB,
 							connected_node_ids: updatedConnectionsB
 						}
 					};
@@ -1124,7 +1126,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				
 				createdNodeIds.push(newNodeId);
 				
-				// EXACT COPY of addNewNode bidirectional connection
+				// Update BOTH connections AND connected_node_ids fields
 				if (connectToNodeId) {
 					logger.info("🔗 Adding bidirectional connection to existing node");
 					
@@ -1137,6 +1139,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							...existingNode,
 							properties: {
 								...existingNode.properties,
+								connections: updatedConnections,
 								connected_node_ids: updatedConnections
 							}
 						};
@@ -1165,7 +1168,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					// Add all other multi-floor nodes
 					const allConnections = [...existingConnections, ...otherNodeIds];
 					
-					// Create fake node structure for update (like addNewNode does)
+					// Update BOTH connections AND connected_node_ids fields
 					const nodeToUpdate = {
 						type: "Feature" as const,
 						geometry: {
@@ -1177,6 +1180,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 							floor_id: selectedFloors[i],
 							is_visible: true,
 							node_type: nodeType,
+							connections: allConnections,
 							connected_node_ids: allConnections
 						}
 					};
