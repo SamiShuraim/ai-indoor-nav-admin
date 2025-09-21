@@ -901,31 +901,47 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		if (clickedNode) {
 			// Clicked on an existing node
 			if (currentSelectedNode && currentSelectedNode !== clickedNode.properties.id) {
-				// We have a different node selected - connect them!
+				// We have a different node selected - connect them! COPY addNewNode pattern
 				logger.userAction("Connecting two existing nodes", {
 					nodeA: currentSelectedNode,
 					nodeB: clickedNode.properties.id
 				});
 				
 				try {
-					// Connect node A to node B
-					await routeNodesMutations.update.mutateAsync({
-						data: {
+					// COPY EXACT addNewNode bidirectional connection pattern
+					// Update node A to connect to node B
+					const nodeA = nodesRef.current.find(n => n.properties.id === currentSelectedNode);
+					if (nodeA) {
+						const existingConnectionsA = nodeA.properties.connections || [];
+						const updatedConnectionsA = [...existingConnectionsA, clickedNode.properties.id];
+						
+						const updatedNodeA = {
+							...nodeA,
 							properties: {
-								id: currentSelectedNode,
-								connected_node_ids: [clickedNode.properties.id]
+								...nodeA.properties,
+								connected_node_ids: updatedConnectionsA
 							}
-						}
-					});
+						};
+
+						await routeNodesMutations.update.mutateAsync({
+							data: updatedNodeA
+						});
+					}
 					
-					// Connect node B to node A (bidirectional)
-					await routeNodesMutations.update.mutateAsync({
-						data: {
-							properties: {
-								id: clickedNode.properties.id,
-								connected_node_ids: [currentSelectedNode]
-							}
+					// Update node B to connect to node A
+					const existingConnectionsB = clickedNode.properties.connections || [];
+					const updatedConnectionsB = [...existingConnectionsB, currentSelectedNode];
+					
+					const updatedNodeB = {
+						...clickedNode,
+						properties: {
+							...clickedNode.properties,
+							connected_node_ids: updatedConnectionsB
 						}
+					};
+
+					await routeNodesMutations.update.mutateAsync({
+						data: updatedNodeB
 					});
 					
 					logger.info("Successfully connected two nodes", {
@@ -1052,7 +1068,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	}, []);
 
-	// Handle multi-floor node creation
+	// Handle multi-floor node creation - COPY EXACT PATTERN FROM addNewNode
 	const handleMultiFloorNodeSave = useCallback(async (nodeType: NodeType, selectedFloors: number[]) => {
 		if (!pendingMultiFloorLocation) {
 			logger.error("No pending location for multi-floor node");
@@ -1073,8 +1089,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			setSaveStatus("saving");
 			const createdNodeIds: number[] = [];
 			
-			// STEP 1: Create nodes on all selected floors (NO CONNECTIONS YET)
+			// STEP 1: Create nodes on all selected floors - COPY addNewNode pattern
 			for (const targetFloorId of selectedFloors) {
+				// Determine connection for this floor
+				let connectToNodeId: number | null = null;
+				if (targetFloorId === floorId && currentSelectedNode) {
+					// On current floor, connect to selected node
+					connectToNodeId = currentSelectedNode;
+				}
+				
+				// EXACT COPY of addNewNode creation
 				const newNodeData = {
 					type: "Feature" as const,
 					geometry: {
@@ -1084,7 +1108,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					properties: {
 						floor_id: targetFloorId,
 						is_visible: true,
-						node_type: nodeType
+						node_type: nodeType,
+						...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
 					}
 				};
 
@@ -1093,73 +1118,86 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				});
 
 				const newNodeId = createdNode?.id || createdNode?.properties?.id;
-				if (newNodeId) {
-					createdNodeIds.push(newNodeId);
+				if (!newNodeId) {
+					throw new Error("❌ Backend didn't return node ID");
 				}
-			}
-
-			logger.info("Created all nodes, now connecting them", { createdNodeIds });
-
-			// STEP 2: Connect to selected node on current floor (if exists)
-			let currentFloorNodeId: number | null = null;
-			if (currentSelectedNode) {
-				// Find the node created on current floor
-				currentFloorNodeId = createdNodeIds[selectedFloors.indexOf(floorId)];
-				if (currentFloorNodeId) {
-					// Connect new node to selected node
-					await routeNodesMutations.update.mutateAsync({
-						data: {
-							properties: {
-								id: currentFloorNodeId,
-								connected_node_ids: [currentSelectedNode]
-							}
-						}
-					});
+				
+				createdNodeIds.push(newNodeId);
+				
+				// EXACT COPY of addNewNode bidirectional connection
+				if (connectToNodeId) {
+					logger.info("🔗 Adding bidirectional connection to existing node");
 					
-					// Connect selected node back to new node
-					await routeNodesMutations.update.mutateAsync({
-						data: {
+					const existingNode = nodesRef.current.find(n => n.properties.id === connectToNodeId);
+					if (existingNode) {
+						const existingConnections = existingNode.properties.connections || [];
+						const updatedConnections = [...existingConnections, newNodeId];
+						
+						const updatedExistingNode = {
+							...existingNode,
 							properties: {
-								id: currentSelectedNode,
-								connected_node_ids: [currentFloorNodeId]
+								...existingNode.properties,
+								connected_node_ids: updatedConnections
 							}
-						}
-					});
+						};
+
+						await routeNodesMutations.update.mutateAsync({
+							data: updatedExistingNode
+						});
+					}
 				}
 			}
 
-			// STEP 3: Connect multi-floor nodes to each other
+			// STEP 2: Connect multi-floor nodes to each other (vertical connections)
 			if (createdNodeIds.length > 1) {
 				for (let i = 0; i < createdNodeIds.length; i++) {
-					const nodeA = createdNodeIds[i];
-					const otherNodes = createdNodeIds.filter(id => id !== nodeA);
+					const currentNodeId = createdNodeIds[i];
+					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
 					
-					// Add connection to selected node if this is the current floor node
-					const connections = [...otherNodes];
-					if (nodeA === currentFloorNodeId && currentSelectedNode) {
-						connections.push(currentSelectedNode);
+					// Get current connections for this node
+					const existingConnections: number[] = [];
+					
+					// If this is on current floor and connected to selected node, include it
+					if (selectedFloors[i] === floorId && currentSelectedNode) {
+						existingConnections.push(currentSelectedNode);
 					}
 					
-					await routeNodesMutations.update.mutateAsync({
-						data: {
-							properties: {
-								id: nodeA,
-								connected_node_ids: connections
-							}
+					// Add all other multi-floor nodes
+					const allConnections = [...existingConnections, ...otherNodeIds];
+					
+					// Create fake node structure for update (like addNewNode does)
+					const nodeToUpdate = {
+						type: "Feature" as const,
+						geometry: {
+							type: "Point" as const,
+							coordinates: [lng, lat] as [number, number]
+						},
+						properties: {
+							id: currentNodeId,
+							floor_id: selectedFloors[i],
+							is_visible: true,
+							node_type: nodeType,
+							connected_node_ids: allConnections
 						}
+					};
+
+					await routeNodesMutations.update.mutateAsync({
+						data: nodeToUpdate
 					});
 				}
 			}
 
 			setSaveStatus("success");
-			logger.info("Multi-floor nodes created and connected successfully", {
+			logger.info("Multi-floor nodes created successfully", {
 				nodeType,
 				createdNodeIds,
 				selectedFloors
 			});
 
 			// Auto-select the newly created node on current floor for chaining
-			if (currentFloorNodeId) {
+			const currentFloorNodeIndex = selectedFloors.indexOf(floorId);
+			if (currentFloorNodeIndex !== -1) {
+				const currentFloorNodeId = createdNodeIds[currentFloorNodeIndex];
 				setSelectedNodeForConnection(currentFloorNodeId);
 				selectedNodeForConnectionRef.current = currentFloorNodeId;
 			}
