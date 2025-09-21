@@ -1494,12 +1494,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setSelectedItem(null);
 	};
 
-	// Helper to generate next available ID for new entities
-	const generateNextId = (entities: any[]): number => {
-		if (entities.length === 0) return 1;
-		return Math.max(...entities.map(e => e.properties?.id || 0)) + 1;
-	};
-
 	// --- Update handlers ---
 
 	// Polygon Save (add or edit) - immediate backend save
@@ -1519,10 +1513,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					logger.info("Polygon updated successfully", { id: editingPolygonId });
 				}
 			} else {
-				// Add new polygon - immediate save to backend
-				const newId = generateNextId(polygons);
+				// Add new polygon - immediate save to backend (let backend generate ID)
 				const newPolygon = new PolygonBuilder()
-					.setId(newId)
 					.setFloorId(floorId)
 					.setName(polygonName)
 					.setDescription("")
@@ -1533,8 +1525,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
 					.build();
 
+				// Remove ID from properties to let backend generate it
+				const { id, ...propertiesWithoutId } = newPolygon.properties;
+				const polygonForCreation = {
+					...newPolygon,
+					properties: propertiesWithoutId
+				};
+
 				await poisMutations.create.mutateAsync({
-                    data: newPolygon
+                    data: polygonForCreation
 				});
 				logger.info("Polygon created successfully", { name: polygonName });
 			}
@@ -1572,11 +1571,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					logger.info("Beacon updated successfully", { id: editingBeaconId });
 				}
 			} else {
-				// Add new beacon - immediate save to backend
+				// Add new beacon - immediate save to backend (let backend generate ID)
 				if (pendingBeaconLocation) {
-					const newId = generateNextId(beacons);
 					const newBeacon = new BeaconBuilder()
-						.setId(newId)
 						.setFloorId(floorId)
 						.setName(beaconName)
 						.setGeometry(pendingBeaconLocation.lng, pendingBeaconLocation.lat)
@@ -1585,8 +1582,15 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						.setBatteryLevel(100)
 						.build();
 
+					// Remove ID from properties to let backend generate it
+					const { id, ...propertiesWithoutId } = newBeacon.properties;
+					const beaconForCreation = {
+						...newBeacon,
+						properties: propertiesWithoutId
+					};
+
 					await beaconsMutations.create.mutateAsync({
-                        data: newBeacon
+                        data: beaconForCreation
 					});
 					logger.info("Beacon created successfully", { name: beaconName });
 				}
