@@ -3,7 +3,7 @@ import "@maptiler/sdk/dist/maptiler-sdk.css";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
 import {UI_MESSAGES} from "../constants/ui";
-import {beaconsApi, floorsApi, polygonsApi, routeNodesApi,} from "../utils/api";
+import {beaconsApi, floorsApi, polygonsApi, routeNodesApi} from "../utils/api";
 import {createLogger} from "../utils/logger";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
@@ -908,43 +908,8 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				});
 				
 				try {
-					// Update BOTH connections AND connected_node_ids fields
-					// Update node A to connect to node B
-					const nodeA = nodesRef.current.find(n => n.properties.id === currentSelectedNode);
-					if (nodeA) {
-						const existingConnectionsA = nodeA.properties.connections || [];
-						const updatedConnectionsA = [...existingConnectionsA, clickedNode.properties.id];
-						
-						const updatedNodeA = {
-							...nodeA,
-							properties: {
-								...nodeA.properties,
-								connections: updatedConnectionsA,
-								connected_node_ids: updatedConnectionsA
-							}
-						};
-
-						await routeNodesMutations.update.mutateAsync({
-							data: updatedNodeA
-						});
-					}
-					
-					// Update node B to connect to node A
-					const existingConnectionsB = clickedNode.properties.connections || [];
-					const updatedConnectionsB = [...existingConnectionsB, currentSelectedNode];
-					
-					const updatedNodeB = {
-						...clickedNode,
-						properties: {
-							...clickedNode.properties,
-							connections: updatedConnectionsB,
-							connected_node_ids: updatedConnectionsB
-						}
-					};
-
-					await routeNodesMutations.update.mutateAsync({
-						data: updatedNodeB
-					});
+					// Use the new addConnection endpoint - much simpler!
+					await routeNodesApi.addConnection(currentSelectedNode, clickedNode.properties.id);
 					
 					logger.info("Successfully connected two nodes", {
 						nodeA: currentSelectedNode,
@@ -1126,28 +1091,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				
 				createdNodeIds.push(newNodeId);
 				
-				// Update BOTH connections AND connected_node_ids fields
+				// Use the new addConnection endpoint for bidirectional connection
 				if (connectToNodeId) {
 					logger.info("🔗 Adding bidirectional connection to existing node");
-					
-					const existingNode = nodesRef.current.find(n => n.properties.id === connectToNodeId);
-					if (existingNode) {
-						const existingConnections = existingNode.properties.connections || [];
-						const updatedConnections = [...existingConnections, newNodeId];
-						
-						const updatedExistingNode = {
-							...existingNode,
-							properties: {
-								...existingNode.properties,
-								connections: updatedConnections,
-								connected_node_ids: updatedConnections
-							}
-						};
-
-						await routeNodesMutations.update.mutateAsync({
-							data: updatedExistingNode
-						});
-					}
+					await routeNodesApi.addConnection(newNodeId, connectToNodeId);
 				}
 			}
 
@@ -1157,37 +1104,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					const currentNodeId = createdNodeIds[i];
 					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
 					
-					// Get current connections for this node
-					const existingConnections: number[] = [];
-					
-					// If this is on current floor and connected to selected node, include it
-					if (selectedFloors[i] === floorId && currentSelectedNode) {
-						existingConnections.push(currentSelectedNode);
+					// Use the new addConnection endpoint for each connection
+					for (const otherNodeId of otherNodeIds) {
+						await routeNodesApi.addConnection(currentNodeId, otherNodeId);
 					}
-					
-					// Add all other multi-floor nodes
-					const allConnections = [...existingConnections, ...otherNodeIds];
-					
-					// Update BOTH connections AND connected_node_ids fields
-					const nodeToUpdate = {
-						type: "Feature" as const,
-						geometry: {
-							type: "Point" as const,
-							coordinates: [lng, lat] as [number, number]
-						},
-						properties: {
-							id: currentNodeId,
-							floor_id: selectedFloors[i],
-							is_visible: true,
-							node_type: nodeType,
-							connections: allConnections,
-							connected_node_ids: allConnections
-						}
-					};
-
-					await routeNodesMutations.update.mutateAsync({
-						data: nodeToUpdate
-					});
 				}
 			}
 
