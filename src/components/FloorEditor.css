@@ -6,6 +6,112 @@
   gap: 16px;
 }
 
+/* Actions Section */
+.actions-section {
+  padding: 16px;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.actions-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.actions-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  min-height: 44px;
+}
+
+.action-button:hover {
+  border-color: #3b82f6;
+  background-color: #f1f5f9;
+  color: #3b82f6;
+}
+
+.action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.action-icon {
+  font-size: 16px;
+}
+
+.action-text {
+  font-weight: 500;
+}
+
+/* Action button specific states */
+.action-button.bidirectional-button.needs-fixing {
+  border-color: #f59e0b;
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.action-button.bidirectional-button.needs-fixing:hover {
+  border-color: #d97706;
+  background-color: #fcd34d;
+  color: #92400e;
+}
+
+.action-button.bidirectional-button.fixed {
+  border-color: #10b981;
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.action-button.bidirectional-button.fixed:hover {
+  border-color: #059669;
+  background-color: #a7f3d0;
+  color: #065f46;
+}
+
+.action-button.bidirectional-button.neutral {
+  border-color: #6b7280;
+  background-color: #f9fafb;
+  color: #374151;
+}
+
+.action-button.bidirectional-button.neutral:hover {
+  border-color: #4b5563;
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.action-button.recalculate-button {
+  border-color: #8b5cf6;
+  background-color: #f3e8ff;
+  color: #6b21a8;
+}
+
+.action-button.recalculate-button:hover {
+  border-color: #7c3aed;
+  background-color: #ede9fe;
+  color: #6b21a8;
+}
+
 .floor-editor-error {
   padding: 16px;
   background-color: #fee2e2;
