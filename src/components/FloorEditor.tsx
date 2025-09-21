@@ -962,11 +962,51 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	}, [nodesLoading, nodesIsError, nodesError, floorId]);
 
-	// Handle elevator/stairs tool click
-	const handleElevatorStairsClick = useCallback((lng: number, lat: number) => {
+	// Handle elevator/stairs tool click - should work like normal nodes
+	const handleElevatorStairsClick = useCallback(async (lng: number, lat: number) => {
+		// Use the same logic as handleNodeClick for consistency
+		const currentNodes = nodesRef.current;
+		const currentNodesLoading = nodesLoadingRef.current;
+		
 		logger.userAction("Elevator/Stairs tool clicked", { lng, lat });
-		setPendingMultiFloorLocation({ lng, lat });
-		setShowMultiFloorNodeDialog(true);
+		
+		// Guard: Don't process clicks while nodes are loading
+		if (currentNodesLoading) {
+			logger.info("handleElevatorStairsClick: nodes still loading, ignoring click");
+			return;
+		}
+		
+		// Check if this click is near an existing node
+		const clickedNode = currentNodes.find((node) => {
+            if (!node.properties.is_visible) return false;
+			const distance = Math.sqrt(
+                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
+			);
+            return distance < 0.00001;
+		});
+
+		const currentSelectedNode = selectedNodeForConnectionRef.current;
+
+		if (clickedNode) {
+			// Clicked on an existing node - select it for connection
+			setSelectedNodeForConnection(clickedNode.properties.id);
+			selectedNodeForConnectionRef.current = clickedNode.properties.id;
+			setLastPlacedNodeId(null);
+			lastPlacedNodeIdRef.current = null;
+			logger.userAction("Node selected for elevator/stairs connection", {
+				nodeId: clickedNode.properties.id,
+			});
+		} else {
+			// Clicked on empty space - check if we can create multi-floor node
+			if (currentSelectedNode || currentNodes.length === 0) {
+				// We have a selected node to connect to, or this is the first node
+				setPendingMultiFloorLocation({ lng, lat });
+				setShowMultiFloorNodeDialog(true);
+			} else {
+				// No node selected - show error like normal nodes
+				alert("Please click on an existing node first to connect the elevator/stairs to it.");
+			}
+		}
 	}, []);
 
 	// Handle multi-floor node creation
@@ -977,18 +1017,29 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 
 		const { lng, lat } = pendingMultiFloorLocation;
+		const currentSelectedNode = selectedNodeForConnectionRef.current;
+		
 		logger.userAction("Creating multi-floor nodes", {
 			nodeType,
 			selectedFloors,
-			location: { lng, lat }
+			location: { lng, lat },
+			connectToNodeId: currentSelectedNode
 		});
 
 		try {
 			setSaveStatus("saving");
 			const createdNodeIds: number[] = [];
+			const nodesByFloor: { [floorId: number]: number } = {};
 			
 			// Create nodes on all selected floors
-			for (const floorId of selectedFloors) {
+			for (const targetFloorId of selectedFloors) {
+				// Determine what to connect to on this floor
+				let connectToNodeId: number | null = null;
+				if (targetFloorId === floorId && currentSelectedNode) {
+					// On current floor, connect to the selected node
+					connectToNodeId = currentSelectedNode;
+				}
+				
 				const newNodeData = {
 					type: "Feature" as const,
 					geometry: {
@@ -996,10 +1047,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 						coordinates: [lng, lat] as [number, number]
 					},
 					properties: {
-						floor_id: floorId,
+						floor_id: targetFloorId,
 						is_visible: true,
 						node_type: nodeType,
-						connected_node_ids: []
+						...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
 					}
 				};
 
@@ -1010,6 +1061,29 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const newNodeId = createdNode?.id || createdNode?.properties?.id;
 				if (newNodeId) {
 					createdNodeIds.push(newNodeId);
+					nodesByFloor[targetFloorId] = newNodeId;
+				}
+			}
+
+			// Connect the selected node back to the new node on current floor (bidirectional)
+			if (currentSelectedNode && nodesByFloor[floorId]) {
+				logger.info("Creating bidirectional connection on current floor", {
+					selectedNode: currentSelectedNode,
+					newNode: nodesByFloor[floorId]
+				});
+				
+				try {
+					// Update the selected node to connect back
+					await routeNodesMutations.update.mutateAsync({
+						data: {
+							properties: {
+								id: currentSelectedNode,
+								connected_node_ids: [nodesByFloor[floorId]]
+							}
+						}
+					});
+				} catch (error) {
+					logger.warn("Failed to create bidirectional connection", error);
 				}
 			}
 
@@ -1020,36 +1094,36 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					totalNodes: createdNodeIds.length 
 				});
 				
-				for (let i = 0; i < createdNodeIds.length; i++) {
-					const currentNodeId = createdNodeIds[i];
+				for (const currentNodeId of createdNodeIds) {
 					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
 					
-					logger.info("Connecting node to other floors", {
-						currentNodeId,
-						connectingTo: otherNodeIds
+					// Get existing connections for this node
+					const currentFloorId = Object.keys(nodesByFloor).find(
+						key => nodesByFloor[parseInt(key)] === currentNodeId
+					);
+					const existingConnections: number[] = [];
+					
+					// Add connection to selected node on current floor
+					if (currentFloorId && parseInt(currentFloorId) === floorId && currentSelectedNode) {
+						existingConnections.push(currentSelectedNode);
+					}
+					
+					// Combine existing connections with other multi-floor nodes
+					const allConnections = [...existingConnections, ...otherNodeIds];
+					
+					logger.info("Updating node connections", {
+						nodeId: currentNodeId,
+						allConnections
 					});
 					
-					// Create a complete node update with all required properties
+					// Update with all connections
 					await routeNodesMutations.update.mutateAsync({
 						data: {
-							type: "Feature" as const,
-							geometry: {
-								type: "Point" as const,
-								coordinates: [lng, lat] as [number, number]
-							},
 							properties: {
 								id: currentNodeId,
-								floor_id: selectedFloors[i], // Use the corresponding floor ID
-								is_visible: true,
-								node_type: nodeType,
-								connected_node_ids: otherNodeIds
+								connected_node_ids: allConnections
 							}
 						}
-					});
-					
-					logger.info("Node connection updated", {
-						nodeId: currentNodeId,
-						connectedTo: otherNodeIds
 					});
 				}
 			}
@@ -1061,14 +1135,21 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				selectedFloors
 			});
 
+			// Auto-select the newly created node on current floor for chaining
+			if (nodesByFloor[floorId]) {
+				setSelectedNodeForConnection(nodesByFloor[floorId]);
+				selectedNodeForConnectionRef.current = nodesByFloor[floorId];
+				logger.info("Auto-selected new multi-floor node for chaining", {
+					newNodeId: nodesByFloor[floorId]
+				});
+			}
+
 			// Close dialog and reset state
 			setShowMultiFloorNodeDialog(false);
 			setPendingMultiFloorLocation(null);
 
-			// Refresh nodes data if we created a node on the current floor
-			if (selectedFloors.includes(floorId)) {
-				refetchNodes();
-			}
+			// Refresh nodes data
+			refetchNodes();
 
 		} catch (error) {
 			logger.error("Failed to create multi-floor nodes", error as Error);
