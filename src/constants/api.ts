@@ -39,6 +39,7 @@ export const API_ENDPOINTS = {
   POIS: '/api/Poi',
   POI_BY_ID: (id: string | number) => `/api/Poi/${id}`,
   POIS_BY_FLOOR: (floorId: string | number) => `/api/Poi?floor=${floorId}`,
+  POIS_RECALCULATE_CLOSEST_NODES: '/api/Poi/recalculateClosestNodes',
   
   // POI Categories
   POI_CATEGORIES: '/api/PoiCategory',

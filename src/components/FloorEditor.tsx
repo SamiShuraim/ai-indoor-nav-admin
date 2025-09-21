@@ -8,6 +8,7 @@ import {createLogger} from "../utils/logger";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
 import DrawingToolbar, {DrawingTool} from "./FloorEditor/DrawingToolbar";
+import ActionsSection from "./FloorEditor/ActionsSection";
 import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
@@ -240,6 +241,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	const [isBidirectionalFixed, setIsBidirectionalFixed] = useState(true);
 	const [hasNewNodesAdded, setHasNewNodesAdded] = useState(false);
 	const [isFixingBidirectional, setIsFixingBidirectional] = useState(false);
+
+	// POI recalculate state
+	const [isRecalculatingPoiNodes, setIsRecalculatingPoiNodes] = useState(false);
 
 	const poisMutations = useEntityMutations('pois', polygonsApi);
 	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
@@ -1519,6 +1523,33 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		}
 	};
 
+	// Recalculate POI closest nodes handler
+	const handleRecalculatePoiNodes = async () => {
+		logger.userAction('Recalculate POI closest nodes clicked', { floorId });
+		setIsRecalculatingPoiNodes(true);
+		setSaveStatus("saving");
+		setSaveError(null);
+
+		try {
+			const result = await polygonsApi.recalculateClosestNodes(floorId);
+			
+			setSaveStatus("success");
+			setTimeout(() => setSaveStatus("idle"), 2000);
+			
+			logger.info('POI closest nodes recalculated successfully', { 
+				floorId, 
+				updatedPois: result.updatedPois,
+				message: result.message 
+			});
+		} catch (error) {
+			logger.error('Failed to recalculate POI closest nodes', error as Error);
+			setSaveStatus("error");
+			setSaveError("Failed to recalculate POI closest nodes: " + (error as Error).message);
+		} finally {
+			setIsRecalculatingPoiNodes(false);
+		}
+	};
+
 	// Delete handler - immediate backend delete
 	const handleDeleteItem = async (
 		type: "polygon" | "beacon" | "node",
@@ -1813,6 +1844,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			{error && <div className="floor-editor-error">{error}</div>}
 
 			<div className="floor-editor-layout">
+				{/* Actions Section */}
+				<ActionsSection
+					nodesCount={nodes.length}
+					isBidirectionalFixed={isBidirectionalFixed}
+					hasNewNodesAdded={hasNewNodesAdded}
+					onFixBidirectional={handleFixBidirectional}
+					isFixingBidirectional={isFixingBidirectional}
+					floorId={floorId}
+					onRecalculatePoiNodes={handleRecalculatePoiNodes}
+					isRecalculatingPoiNodes={isRecalculatingPoiNodes}
+				/>
+
 				{/* Drawing Tools Toolbar */}
 				<DrawingToolbar
 					activeTool={activeTool}
@@ -1864,11 +1907,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					nodesCount={nodes.length}
 					selectedNodeForConnection={selectedNodeForConnection}
 					lastPlacedNodeId={lastPlacedNodeId}
-					// Bidirectional button props
-					isBidirectionalFixed={isBidirectionalFixed}
-					hasNewNodesAdded={hasNewNodesAdded}
-					onFixBidirectional={handleFixBidirectional}
-					isFixingBidirectional={isFixingBidirectional}
 				/>
 
 				{/* Main Content Area */}
