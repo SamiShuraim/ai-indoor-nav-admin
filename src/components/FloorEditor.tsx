@@ -834,7 +834,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			);
 
             console.log("distance", distance);
-			return distance < 0.0001; // Adjust threshold for coordinate space instead of pixel space
+            return distance < 0.00001; // Adjust threshold for coordinate space instead of pixel space
 		});
 
 		// Use ref values for current state to avoid stale closures
