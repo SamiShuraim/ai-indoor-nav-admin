@@ -899,15 +899,58 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		if (clickedNode) {
-			// Clicked on an existing node - select it for connection (make marker green)
-			setSelectedNodeForConnection(clickedNode.properties.id);
-			selectedNodeForConnectionRef.current = clickedNode.properties.id;
-			// Clear lastPlacedNodeId when manually selecting a node
-			setLastPlacedNodeId(null);
-			lastPlacedNodeIdRef.current = null;
-			logger.userAction("Node selected for connection", {
-				nodeId: clickedNode.properties.id,
-			});
+			// Clicked on an existing node
+			if (currentSelectedNode && currentSelectedNode !== clickedNode.properties.id) {
+				// We have a different node selected - connect them!
+				logger.userAction("Connecting two existing nodes", {
+					nodeA: currentSelectedNode,
+					nodeB: clickedNode.properties.id
+				});
+				
+				try {
+					// Connect node A to node B
+					await routeNodesMutations.update.mutateAsync({
+						data: {
+							properties: {
+								id: currentSelectedNode,
+								connected_node_ids: [clickedNode.properties.id]
+							}
+						}
+					});
+					
+					// Connect node B to node A (bidirectional)
+					await routeNodesMutations.update.mutateAsync({
+						data: {
+							properties: {
+								id: clickedNode.properties.id,
+								connected_node_ids: [currentSelectedNode]
+							}
+						}
+					});
+					
+					logger.info("Successfully connected two nodes", {
+						nodeA: currentSelectedNode,
+						nodeB: clickedNode.properties.id
+					});
+					
+					// Refresh nodes to show new connections
+					refetchNodes();
+					
+				} catch (error) {
+					logger.error("Failed to connect nodes", error as Error);
+					alert("Failed to connect nodes. Please try again.");
+				}
+			} else {
+				// Select this node for connection (make marker green)
+				setSelectedNodeForConnection(clickedNode.properties.id);
+				selectedNodeForConnectionRef.current = clickedNode.properties.id;
+				// Clear lastPlacedNodeId when manually selecting a node
+				setLastPlacedNodeId(null);
+				lastPlacedNodeIdRef.current = null;
+				logger.userAction("Node selected for connection", {
+					nodeId: clickedNode.properties.id,
+				});
+			}
 		} else {
 			// Clicked on empty space
 			logger.info("Clicked on empty space - DETAILED STATE", {
@@ -960,7 +1003,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				alert("Failed to create node. Please try again.");
 			}
 		}
-	}, [nodesLoading, nodesIsError, nodesError, floorId]);
+	}, [nodesLoading, nodesIsError, nodesError, floorId, routeNodesMutations, refetchNodes]);
 
 	// Handle elevator/stairs tool click - should work like normal nodes
 	const handleElevatorStairsClick = useCallback(async (lng: number, lat: number) => {
@@ -1029,17 +1072,9 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		try {
 			setSaveStatus("saving");
 			const createdNodeIds: number[] = [];
-			const nodesByFloor: { [floorId: number]: number } = {};
 			
-			// Create nodes on all selected floors
+			// STEP 1: Create nodes on all selected floors (NO CONNECTIONS YET)
 			for (const targetFloorId of selectedFloors) {
-				// Determine what to connect to on this floor
-				let connectToNodeId: number | null = null;
-				if (targetFloorId === floorId && currentSelectedNode) {
-					// On current floor, connect to the selected node
-					connectToNodeId = currentSelectedNode;
-				}
-				
 				const newNodeData = {
 					type: "Feature" as const,
 					geometry: {
@@ -1049,8 +1084,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					properties: {
 						floor_id: targetFloorId,
 						is_visible: true,
-						node_type: nodeType,
-						...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
+						node_type: nodeType
 					}
 				};
 
@@ -1061,67 +1095,56 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				const newNodeId = createdNode?.id || createdNode?.properties?.id;
 				if (newNodeId) {
 					createdNodeIds.push(newNodeId);
-					nodesByFloor[targetFloorId] = newNodeId;
 				}
 			}
 
-			// Connect the selected node back to the new node on current floor (bidirectional)
-			if (currentSelectedNode && nodesByFloor[floorId]) {
-				logger.info("Creating bidirectional connection on current floor", {
-					selectedNode: currentSelectedNode,
-					newNode: nodesByFloor[floorId]
-				});
-				
-				try {
-					// Update the selected node to connect back
+			logger.info("Created all nodes, now connecting them", { createdNodeIds });
+
+			// STEP 2: Connect to selected node on current floor (if exists)
+			let currentFloorNodeId: number | null = null;
+			if (currentSelectedNode) {
+				// Find the node created on current floor
+				currentFloorNodeId = createdNodeIds[selectedFloors.indexOf(floorId)];
+				if (currentFloorNodeId) {
+					// Connect new node to selected node
+					await routeNodesMutations.update.mutateAsync({
+						data: {
+							properties: {
+								id: currentFloorNodeId,
+								connected_node_ids: [currentSelectedNode]
+							}
+						}
+					});
+					
+					// Connect selected node back to new node
 					await routeNodesMutations.update.mutateAsync({
 						data: {
 							properties: {
 								id: currentSelectedNode,
-								connected_node_ids: [nodesByFloor[floorId]]
+								connected_node_ids: [currentFloorNodeId]
 							}
 						}
 					});
-				} catch (error) {
-					logger.warn("Failed to create bidirectional connection", error);
 				}
 			}
 
-			// Connect all created nodes to each other (vertical connections)
+			// STEP 3: Connect multi-floor nodes to each other
 			if (createdNodeIds.length > 1) {
-				logger.info("Connecting multi-floor nodes", { 
-					createdNodeIds,
-					totalNodes: createdNodeIds.length 
-				});
-				
-				for (const currentNodeId of createdNodeIds) {
-					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
+				for (let i = 0; i < createdNodeIds.length; i++) {
+					const nodeA = createdNodeIds[i];
+					const otherNodes = createdNodeIds.filter(id => id !== nodeA);
 					
-					// Get existing connections for this node
-					const currentFloorId = Object.keys(nodesByFloor).find(
-						key => nodesByFloor[parseInt(key)] === currentNodeId
-					);
-					const existingConnections: number[] = [];
-					
-					// Add connection to selected node on current floor
-					if (currentFloorId && parseInt(currentFloorId) === floorId && currentSelectedNode) {
-						existingConnections.push(currentSelectedNode);
+					// Add connection to selected node if this is the current floor node
+					const connections = [...otherNodes];
+					if (nodeA === currentFloorNodeId && currentSelectedNode) {
+						connections.push(currentSelectedNode);
 					}
 					
-					// Combine existing connections with other multi-floor nodes
-					const allConnections = [...existingConnections, ...otherNodeIds];
-					
-					logger.info("Updating node connections", {
-						nodeId: currentNodeId,
-						allConnections
-					});
-					
-					// Update with all connections
 					await routeNodesMutations.update.mutateAsync({
 						data: {
 							properties: {
-								id: currentNodeId,
-								connected_node_ids: allConnections
+								id: nodeA,
+								connected_node_ids: connections
 							}
 						}
 					});
@@ -1129,19 +1152,16 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			}
 
 			setSaveStatus("success");
-			logger.info("Multi-floor nodes created successfully", {
+			logger.info("Multi-floor nodes created and connected successfully", {
 				nodeType,
 				createdNodeIds,
 				selectedFloors
 			});
 
 			// Auto-select the newly created node on current floor for chaining
-			if (nodesByFloor[floorId]) {
-				setSelectedNodeForConnection(nodesByFloor[floorId]);
-				selectedNodeForConnectionRef.current = nodesByFloor[floorId];
-				logger.info("Auto-selected new multi-floor node for chaining", {
-					newNodeId: nodesByFloor[floorId]
-				});
+			if (currentFloorNodeId) {
+				setSelectedNodeForConnection(currentFloorNodeId);
+				selectedNodeForConnectionRef.current = currentFloorNodeId;
 			}
 
 			// Close dialog and reset state
