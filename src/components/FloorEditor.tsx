@@ -1200,7 +1200,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	): boolean => {
 		const deltaLng = Math.abs(lng - firstPoint.x);
 		const deltaLat = Math.abs(lat - firstPoint.y);
-		const maxDelta = 0.0001; // About 10 meters - much easier to click accurately
+        const maxDelta = 0.00001; // About 10 meters - much easier to click accurately
 
 		logger.info("Checking if close to first point", {
 			clickedPoint: {lng, lat},
