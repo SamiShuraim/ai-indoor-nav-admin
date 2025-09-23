@@ -1,4 +1,5 @@
 export interface RouteNode {
+    type: "Feature";
     geometry: {
         type: "Point";
         coordinates: [number, number]; // [x, y] as [longitude, latitude]
@@ -21,6 +22,17 @@ export class RouteNodeBuilder {
     private _connections: number[] = [];
     private _nodeType?: string;
 
+    public static fromRouteNode(node: RouteNode): RouteNodeBuilder {
+        const builder = new RouteNodeBuilder();
+        builder._id = node.properties.id;
+        builder._floorId = node.properties.floor_id;
+        builder._geometry = node.geometry;
+        builder._isVisible = node.properties.is_visible;
+        builder._connections = [...(node.properties.connections || node.properties.connected_node_ids || [])];
+        builder._nodeType = node.properties.node_type;
+        return builder;
+    }
+
     public setId(id: number): this {
         this._id = id;
         return this;
@@ -39,13 +51,18 @@ export class RouteNodeBuilder {
         return this;
     }
 
+    public setGeometry(geometry: { type: "Point"; coordinates: [number, number] } | null): this {
+        this._geometry = geometry;
+        return this;
+    }
+
     public setIsVisible(isVisible: boolean): this {
         this._isVisible = isVisible;
         return this;
     }
 
     public setConnections(connections: number[]): this {
-        this._connections = connections;
+        this._connections = [...connections];
         return this;
     }
 
@@ -56,13 +73,32 @@ export class RouteNodeBuilder {
         return this;
     }
 
-    public setNodeType(nodeType: string): this {
+    public removeConnection(nodeId: number): this {
+        this._connections = this._connections.filter(id => id !== nodeId);
+        return this;
+    }
+
+    public setNodeType(nodeType: string | undefined): this {
         this._nodeType = nodeType;
         return this;
     }
 
+    public validate(): void {
+        if (this._id === undefined || this._id === null) {
+            throw new Error("RouteNode ID is required");
+        }
+        if (this._floorId === undefined || this._floorId === null) {
+            throw new Error("RouteNode floor_id is required");
+        }
+        if (this._geometry && (!Array.isArray(this._geometry.coordinates) || this._geometry.coordinates.length !== 2)) {
+            throw new Error("RouteNode geometry coordinates must be an array of [x, y]");
+        }
+    }
+
     public build(): RouteNode {
+        this.validate();
         return {
+            type: "Feature",
             geometry: this._geometry,
             properties: {
                 id: this._id,

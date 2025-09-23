@@ -105,7 +105,34 @@ export class PolygonBuilder {
         return this;
     }
 
+    public validate(): void {
+        if (!this._properties.name.trim()) {
+            throw new Error("Polygon name is required");
+        }
+        if (this._properties.floor_id === undefined || this._properties.floor_id === null) {
+            throw new Error("Polygon floor_id is required");
+        }
+        if (!this._geometry || !this._geometry.coordinates || this._geometry.coordinates.length === 0) {
+            throw new Error("Polygon geometry is required");
+        }
+        const ring = this._geometry.coordinates[0];
+        if (!ring || ring.length < 3) {
+            throw new Error("Polygon must have at least 3 points");
+        }
+        
+        // Validate coordinate format
+        ring.forEach((point: number[], index: number) => {
+            if (!Array.isArray(point) || point.length !== 2) {
+                throw new Error(`Point ${index + 1} must be [longitude, latitude]`);
+            }
+            if (typeof point[0] !== 'number' || typeof point[1] !== 'number') {
+                throw new Error(`Point ${index + 1} must contain valid numbers`);
+            }
+        });
+    }
+
     public build(): Polygon {
+        this.validate();
         return {
             type: "Feature",
             properties: this._properties,

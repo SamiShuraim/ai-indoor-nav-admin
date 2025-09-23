@@ -127,7 +127,23 @@ export class BeaconBuilder {
         return this;
     }
 
+    public validate(): void {
+        if (!this._name || !this._name.trim()) {
+            throw new Error("Beacon name is required");
+        }
+        if (this._floorId === undefined || this._floorId === null) {
+            throw new Error("Beacon floor_id is required");
+        }
+        if (this._batteryLevel < 0 || this._batteryLevel > 100) {
+            throw new Error("Beacon battery level must be between 0 and 100");
+        }
+        if (this._geometry && (!Array.isArray(this._geometry.coordinates) || this._geometry.coordinates.length !== 2)) {
+            throw new Error("Beacon geometry coordinates must be an array of [lng, lat]");
+        }
+    }
+
     public build(): Beacon {
+        this.validate();
         return {
             type: "Feature",
             geometry: this._geometry,
