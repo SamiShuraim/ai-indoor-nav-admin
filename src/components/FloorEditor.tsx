@@ -170,14 +170,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 	}, [floorId, nodesLoading, nodesIsError, nodes.length, nodes]);
 
-	// Reset bidirectional state when floor changes or nodes are initially loaded
-	useEffect(() => {
-		if (!nodesLoading && !nodesIsError && nodes.length >= 0) {
-			// When nodes are loaded, assume they are in a good state initially
-			setIsBidirectionalFixed(true);
-			setHasNewNodesAdded(false);
-		}
-	}, [floorId, nodesLoading, nodesIsError]);
+	// Bidirectional connections are automatically handled by addConnection endpoint
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
@@ -252,10 +245,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	// Bidirectional connections state
-	const [isBidirectionalFixed, setIsBidirectionalFixed] = useState(true);
-	const [hasNewNodesAdded, setHasNewNodesAdded] = useState(false);
-	const [isFixingBidirectional, setIsFixingBidirectional] = useState(false);
+	// Bidirectional connections are now automatically handled by addConnection endpoint
 
 	// POI recalculate state
 	const [isRecalculatingPoiNodes, setIsRecalculatingPoiNodes] = useState(false);
@@ -1065,7 +1055,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					connectToNodeId = currentSelectedNode;
 				}
 				
-				// EXACT COPY of addNewNode creation
+				// Create node (connection will be added separately via addConnection)
 				const newNodeData = {
 					type: "Feature" as const,
 					geometry: {
@@ -1075,8 +1065,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 					properties: {
 						floor_id: targetFloorId,
 						is_visible: true,
-						node_type: nodeType,
-						...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
+						node_type: nodeType
 					}
 				};
 
@@ -1202,7 +1191,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 
 		try {
-			// Step 1: Create the new node with connection (if any)
+			// Step 1: Create the new node (connection will be added separately via addConnection)
 			const newNodeData = {
 				type: "Feature" as const,
 				geometry: {
@@ -1211,8 +1200,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				},
 				properties: {
 					floor_id: floorId,
-					is_visible: true,
-					...(connectToNodeId ? { connected_node_ids: [connectToNodeId] } : {})
+					is_visible: true
 				}
 			};
 
@@ -1241,43 +1229,18 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 				hasConnections: !!(createdNode?.properties?.connected_node_ids || createdNode?.properties?.connections)
 			});
 
-			// Step 2: Update existing node to connect back (bidirectional)
+			// Step 2: Use the new addConnection endpoint for bidirectional connection
 			if (connectToNodeId) {
-				logger.info("🔗 Adding bidirectional connection to existing node");
-				
-				const existingNode = nodesRef.current.find(n => n.properties.id === connectToNodeId);
-				if (existingNode) {
-					const existingConnections = existingNode.properties.connections || [];
-					const updatedConnections = [...existingConnections, newNodeId];
-					
-					const updatedExistingNode = {
-						...existingNode,
-						properties: {
-							...existingNode.properties,
-							connected_node_ids: updatedConnections
-						}
-					};
-
-					logger.info("📤 Updating existing node for bidirectional connection", {
-						existingNodeId: connectToNodeId,
-						currentConnections: existingConnections,
-						newConnections: updatedConnections
-					});
-
-					await routeNodesMutations.update.mutateAsync({
-						data: updatedExistingNode
-					});
-
-					logger.info("✅ Bidirectional connection established");
-				}
+				logger.info("🔗 Adding bidirectional connection using addConnection endpoint");
+				await routeNodesApi.addConnection(newNodeId, connectToNodeId);
+				logger.info("✅ Bidirectional connection established");
 			}
 
 			// Refetch nodes to update the UI
 			await refetchNodes();
 
-			// Mark that new nodes have been added and connections may need fixing
-			setHasNewNodesAdded(true);
-			setIsBidirectionalFixed(false);
+			// Since addConnection automatically creates bidirectional connections,
+			// we don't need to mark connections as needing fixing
 
 			return newNodeId;
 		} catch (error) {
@@ -1733,35 +1696,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setEditingNodeId(null);
 	};
 
-	// Fix bidirectional connections handler
-	const handleFixBidirectional = async () => {
-		logger.userAction('Fix bidirectional connections clicked', { floorId });
-		setIsFixingBidirectional(true);
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			await routeNodesApi.fixBidirectionalConnections(floorId);
-			
-			// Update state to reflect that connections are now fixed
-			setIsBidirectionalFixed(true);
-			setHasNewNodesAdded(false);
-			
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-			
-			// Refresh the nodes data to get updated connections
-			refetchNodes();
-			
-			logger.info('Bidirectional connections fixed successfully', { floorId });
-		} catch (error) {
-			logger.error('Failed to fix bidirectional connections', error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to fix bidirectional connections: " + (error as Error).message);
-		} finally {
-			setIsFixingBidirectional(false);
-		}
-	};
+	// Fix bidirectional connections handler removed - no longer needed with addConnection endpoint
 
 	// Recalculate POI closest nodes handler
 	const handleRecalculatePoiNodes = async () => {
@@ -2086,11 +2021,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			<div className="floor-editor-layout">
 				{/* Actions Section */}
 				<ActionsSection
-					nodesCount={nodes.length}
-					isBidirectionalFixed={isBidirectionalFixed}
-					hasNewNodesAdded={hasNewNodesAdded}
-					onFixBidirectional={handleFixBidirectional}
-					isFixingBidirectional={isFixingBidirectional}
 					floorId={floorId}
 					onRecalculatePoiNodes={handleRecalculatePoiNodes}
 					isRecalculatingPoiNodes={isRecalculatingPoiNodes}
