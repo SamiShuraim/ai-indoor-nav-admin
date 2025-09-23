@@ -46,7 +46,15 @@ export function useMapState() {
 
     const clearMapRefs = useCallback(() => {
         // Clear existing markers and layers
-        Object.values(mapMarkers.current).forEach((marker) => marker.remove());
+        Object.values(mapMarkers.current).forEach((marker) => {
+            if (marker && typeof marker.remove === 'function') {
+                try {
+                    marker.remove();
+                } catch (error) {
+                    console.warn('Error removing marker:', error);
+                }
+            }
+        });
         mapMarkers.current = {};
         mapLayers.current = {};
         mapSources.current = {};
@@ -56,7 +64,15 @@ export function useMapState() {
         if (!map) return;
 
         // Remove temporary markers
-        tempDrawingMarkers.current.forEach((marker) => marker.remove());
+        tempDrawingMarkers.current.forEach((marker) => {
+            if (marker && typeof marker.remove === 'function') {
+                try {
+                    marker.remove();
+                } catch (error) {
+                    console.warn('Error removing temp marker:', error);
+                }
+            }
+        });
         tempDrawingMarkers.current = [];
 
         // Remove temporary lines

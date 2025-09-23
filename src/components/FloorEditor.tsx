@@ -114,8 +114,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
     useEffect(() => {
         nodesRef.current = nodes;
         nodesLoadingRef.current = nodesLoading;
-        drawingState.updateRefs();
-    }, [nodes, nodesLoading, drawingState]);
+    }, [nodes, nodesLoading]);
 
     // Entity mutations
     const poisMutations = useEntityMutations('pois', polygonsApi);
@@ -204,42 +203,51 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
 
     // Map data update
     const updateMapData = useCallback(() => {
-        if (!map.current || mapState.mapLoading) return;
+        if (!map.current || mapState.mapLoading || !mapState.mapLoadedSuccessfully) return;
 
         logger.info("Updating map data");
-        clearMapData(map.current, {
-            mapMarkers: mapState.mapMarkers,
-            mapLayers: mapState.mapLayers,
-            mapSources: mapState.mapSources
-        });
+        try {
+            clearMapData(map.current, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            });
+        } catch (error) {
+            console.warn('Error clearing map data:', error);
+            return;
+        }
 
         const selectedItemId = drawingState.selectedItem?.type === "polygon" ? drawingState.selectedItem.id :
                               drawingState.selectedItem?.type === "beacon" ? drawingState.selectedItem.id :
                               drawingState.selectedItem?.type === "node" ? drawingState.selectedItem.id : undefined;
 
-        renderPolygons(map.current, polygons, {
-            mapMarkers: mapState.mapMarkers,
-            mapLayers: mapState.mapLayers,
-            mapSources: mapState.mapSources
-        }, selectedItemId);
+        try {
+            renderPolygons(map.current, polygons, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, selectedItemId);
 
-        renderBeacons(map.current, beacons, {
-            mapMarkers: mapState.mapMarkers,
-            mapLayers: mapState.mapLayers,
-            mapSources: mapState.mapSources
-        }, selectedItemId);
+            renderBeacons(map.current, beacons, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, selectedItemId);
 
-        renderRouteNodes(map.current, nodes, {
-            mapMarkers: mapState.mapMarkers,
-            mapLayers: mapState.mapLayers,
-            mapSources: mapState.mapSources
-        }, drawingState.selectedNodeForConnection, selectedItemId);
+            renderRouteNodes(map.current, nodes, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, drawingState.selectedNodeForConnection, selectedItemId);
 
-        renderConnections(map.current, nodes, {
-            mapMarkers: mapState.mapMarkers,
-            mapLayers: mapState.mapLayers,
-            mapSources: mapState.mapSources
-        });
+            renderConnections(map.current, nodes, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            });
+        } catch (error) {
+            console.error('Error rendering map data:', error);
+        }
     }, [mapState, drawingState, polygons, beacons, nodes]);
 
     // Click handlers
@@ -602,17 +610,23 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
     }, [loading, initializeMap]);
 
     useEffect(() => {
-        updateMapData();
-    }, [updateMapData, polygons, beacons, nodes, drawingState.selectedNodeForConnection]);
+        if (mapState.mapLoadedSuccessfully && !mapState.mapLoading) {
+            updateMapData();
+        }
+    }, [polygons, beacons, nodes, drawingState.selectedNodeForConnection, mapState.mapLoadedSuccessfully, mapState.mapLoading, updateMapData]);
 
     useEffect(() => {
         return () => {
             mapState.cleanup();
             if (map.current) {
-                map.current.remove();
+                try {
+                    map.current.remove();
+                } catch (error) {
+                    console.warn('Error removing map:', error);
+                }
             }
         };
-    }, [mapState]);
+    }, []); // Empty dependency array - only cleanup on unmount
 
     if (loading) {
         return (

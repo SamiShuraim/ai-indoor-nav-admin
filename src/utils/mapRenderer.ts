@@ -253,21 +253,37 @@ export function renderConnections(
  */
 export function clearMapData(map: Map, refs: MapRenderingRefs) {
     // Clear existing markers and layers
-    Object.values(refs.mapMarkers.current).forEach((marker) => marker.remove());
+    Object.values(refs.mapMarkers.current).forEach((marker) => {
+        if (marker && typeof marker.remove === 'function') {
+            try {
+                marker.remove();
+            } catch (error) {
+                console.warn('Error removing marker:', error);
+            }
+        }
+    });
     refs.mapMarkers.current = {};
 
     // Remove layers
     Object.values(refs.mapLayers.current).forEach((layerId) => {
-        if (map.getLayer(layerId)) {
-            map.removeLayer(layerId);
+        try {
+            if (map.getLayer(layerId)) {
+                map.removeLayer(layerId);
+            }
+        } catch (error) {
+            console.warn('Error removing layer:', layerId, error);
         }
     });
     refs.mapLayers.current = {};
 
     // Remove sources
     Object.values(refs.mapSources.current).forEach((sourceId) => {
-        if (map.getSource(sourceId)) {
-            map.removeSource(sourceId);
+        try {
+            if (map.getSource(sourceId)) {
+                map.removeSource(sourceId);
+            }
+        } catch (error) {
+            console.warn('Error removing source:', sourceId, error);
         }
     });
     refs.mapSources.current = {};

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Point } from "@maptiler/sdk";
 import { DrawingTool } from "../components/FloorEditor/DrawingToolbar";
 
@@ -42,8 +42,8 @@ export function useDrawingState() {
         id: number;
     } | null>(null);
 
-    // Update refs when state changes
-    const updateRefs = useCallback(() => {
+    // Update refs when state changes - using useEffect instead of callback to avoid unnecessary re-renders
+    useEffect(() => {
         activeToolRef.current = activeTool;
         pendingPolygonPointsRef.current = pendingPolygonPoints;
         isDrawingPolygonRef.current = isDrawingPolygon;
@@ -119,7 +119,6 @@ export function useDrawingState() {
         lastPlacedNodeIdRef,
         
         // Methods
-        updateRefs,
         handleToolChange,
         resetPolygonDrawing,
         resetNodeSelection
