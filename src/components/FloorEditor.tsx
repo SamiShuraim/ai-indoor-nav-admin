@@ -545,9 +545,48 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
 
     // Layer visibility toggle
     const toggleLayerVisibility = (type: "polygon" | "beacon" | "node", id: number) => {
-        // Implementation similar to original but using new state management
         logger.userAction("Layer visibility toggled", { type, id });
-        // Update query cache and map visibility
+
+        switch (type) {
+            case "polygon":
+                queryClient.setQueryData<Polygon[]>(['pois', floorId], (old = []) => {
+                    return old.map(polygon => {
+                        if (polygon.properties.id === id) {
+                            const newVisible = !polygon.properties.is_visible;
+                            logger.userAction("Polygon visibility toggled", { id, newVisible });
+                            return PolygonBuilder.fromPolygon(polygon).setIsVisible(newVisible).build();
+                        }
+                        return polygon;
+                    });
+                });
+                break;
+
+            case "beacon":
+                queryClient.setQueryData<Beacon[]>(['beacons', floorId], (old = []) => {
+                    return old.map(beacon => {
+                        if (beacon.properties.id === id) {
+                            const newVisible = !beacon.properties.is_visible;
+                            logger.userAction("Beacon visibility toggled", { id, newVisible });
+                            return BeaconBuilder.fromBeacon(beacon).setIsVisible(newVisible).build();
+                        }
+                        return beacon;
+                    });
+                });
+                break;
+
+            case "node":
+                queryClient.setQueryData<RouteNode[]>(['routeNodes', floorId], (old = []) => {
+                    return old.map(node => {
+                        if (node.properties.id === id) {
+                            const newVisible = !node.properties.is_visible;
+                            logger.userAction("Node visibility toggled", { id, newVisible });
+                            return RouteNodeBuilder.fromRouteNode(node).setIsVisible(newVisible).build();
+                        }
+                        return node;
+                    });
+                });
+                break;
+        }
     };
 
     // Edit handler
@@ -581,8 +620,58 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
 
     // Layer item click handler
     const handleLayerItemClick = (type: "polygon" | "beacon" | "node", id: number) => {
+        logger.userAction("Layer item clicked", { type, id });
+        
+        // Set the selected item for highlighting
         drawingState.setSelectedItem({ type, id });
         drawingState.setActiveTool("select");
+        
+        // Center the map on the selected item if possible
+        if (map.current) {
+            try {
+                let coordinates: [number, number] | null = null;
+                
+                switch (type) {
+                    case "polygon":
+                        const polygon = polygons.find(p => p.properties.id === id);
+                        if (polygon && polygon.geometry.coordinates[0].length > 0) {
+                            // Calculate center of polygon
+                            const ring = polygon.geometry.coordinates[0];
+                            const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+                            const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+                            coordinates = [centerX, centerY];
+                        }
+                        break;
+                        
+                    case "beacon":
+                        const beacon = beacons.find(b => b.properties.id === id);
+                        if (beacon && beacon.geometry) {
+                            coordinates = beacon.geometry.coordinates;
+                        }
+                        break;
+                        
+                    case "node":
+                        const node = nodes.find(n => n.properties.id === id);
+                        if (node && node.geometry) {
+                            coordinates = node.geometry.coordinates;
+                        }
+                        break;
+                }
+                
+                // Pan to the item's location with smooth animation
+                if (coordinates) {
+                    map.current.flyTo({
+                        center: coordinates,
+                        zoom: Math.max(map.current.getZoom(), 18), // Ensure good zoom level
+                        duration: 1000 // 1 second animation
+                    });
+                    
+                    logger.userAction("Map centered on selected item", { type, id, coordinates });
+                }
+            } catch (error) {
+                logger.error("Error centering map on selected item", error as Error);
+            }
+        }
     };
 
     // POI recalculation handler

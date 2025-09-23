@@ -140,16 +140,19 @@ export function renderRouteNodes(
             if (nodeType === 'elevator' || nodeType === 'stairs') {
                 markerElement = document.createElement('div');
                 markerElement.className = 'custom-node-marker';
+                const backgroundColor = isSelectedItem ? '#ef4444' : 
+                                      isSelectedForConnection ? '#22c55e' : '#3b82f6';
+                const scale = isSelectedItem ? 1.2 : 1.0;
                 markerElement.style.cssText = `
-                    width: 24px;
-                    height: 24px;
-                    background-color: ${isSelectedForConnection ? '#22c55e' : '#3b82f6'};
+                    width: ${24 * scale}px;
+                    height: ${24 * scale}px;
+                    background-color: ${backgroundColor};
                     border: 2px solid white;
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 12px;
+                    font-size: ${12 * scale}px;
                     font-weight: bold;
                     color: white;
                     cursor: pointer;
