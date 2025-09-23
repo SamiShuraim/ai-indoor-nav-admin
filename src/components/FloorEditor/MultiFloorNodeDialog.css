@@ -1,0 +1,135 @@
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.dialog-content h2 {
+  margin: 0 0 20px 0;
+  color: #333;
+}
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-section h3 {
+  margin: 0 0 12px 0;
+  color: #555;
+  font-size: 16px;
+}
+
+.form-description {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 12px 16px;
+  border: 2px solid #e5e5e5;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.radio-label:hover {
+  border-color: #3b82f6;
+  background-color: #f8faff;
+}
+
+.radio-label input[type="radio"]:checked + .radio-icon {
+  transform: scale(1.1);
+}
+
+.radio-label input[type="radio"] {
+  margin: 0;
+}
+
+.radio-icon {
+  font-size: 20px;
+  transition: transform 0.2s ease;
+}
+
+.floor-selection {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.floor-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.floor-checkbox:hover {
+  background-color: #f8f9fa;
+}
+
+.floor-checkbox input[type="checkbox"] {
+  margin: 0;
+}
+
+.floor-checkbox input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.checkmark {
+  /* Custom checkbox styling can be added here if needed */
+}
+
+.floor-info {
+  flex: 1;
+}
+
+.current-floor {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.dialog-buttons button {
+  min-width: 100px;
+}

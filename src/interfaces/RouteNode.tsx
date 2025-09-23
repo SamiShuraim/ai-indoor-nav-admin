@@ -9,6 +9,7 @@ export interface RouteNode {
         is_visible: boolean;
         connections: number[]; // Frontend uses this name
         connected_node_ids?: number[]; // Backend uses this name
+        node_type?: string; // Node type (elevator, stairs, waypoint, etc.)
     }
 }
 
@@ -18,6 +19,7 @@ export class RouteNodeBuilder {
     private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isVisible: boolean = true;
     private _connections: number[] = [];
+    private _nodeType?: string;
 
     public setId(id: number): this {
         this._id = id;
@@ -54,6 +56,11 @@ export class RouteNodeBuilder {
         return this;
     }
 
+    public setNodeType(nodeType: string): this {
+        this._nodeType = nodeType;
+        return this;
+    }
+
     public build(): RouteNode {
         return {
             geometry: this._geometry,
@@ -62,6 +69,7 @@ export class RouteNodeBuilder {
                 floor_id: this._floorId,
                 is_visible: this._isVisible,
                 connections: this._connections,
+                ...(this._nodeType && { node_type: this._nodeType }),
             }
         };
     }
