@@ -170,14 +170,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		});
 	}, [floorId, nodesLoading, nodesIsError, nodes.length, nodes]);
 
-	// Reset bidirectional state when floor changes or nodes are initially loaded
-	useEffect(() => {
-		if (!nodesLoading && !nodesIsError && nodes.length >= 0) {
-			// When nodes are loaded, assume they are in a good state initially
-			setIsBidirectionalFixed(true);
-			setHasNewNodesAdded(false);
-		}
-	}, [floorId, nodesLoading, nodesIsError]);
+	// Bidirectional connections are automatically handled by addConnection endpoint
 
 	// Route node creation state
 	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
@@ -252,10 +245,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 	>("idle");
 	const [saveError, setSaveError] = useState<string | null>(null);
 
-	// Bidirectional connections state
-	const [isBidirectionalFixed, setIsBidirectionalFixed] = useState(true);
-	const [hasNewNodesAdded, setHasNewNodesAdded] = useState(false);
-	const [isFixingBidirectional, setIsFixingBidirectional] = useState(false);
+	// Bidirectional connections are now automatically handled by addConnection endpoint
 
 	// POI recalculate state
 	const [isRecalculatingPoiNodes, setIsRecalculatingPoiNodes] = useState(false);
@@ -1706,35 +1696,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 		setEditingNodeId(null);
 	};
 
-	// Fix bidirectional connections handler
-	const handleFixBidirectional = async () => {
-		logger.userAction('Fix bidirectional connections clicked', { floorId });
-		setIsFixingBidirectional(true);
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			await routeNodesApi.fixBidirectionalConnections(floorId);
-			
-			// Update state to reflect that connections are now fixed
-			setIsBidirectionalFixed(true);
-			setHasNewNodesAdded(false);
-			
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-			
-			// Refresh the nodes data to get updated connections
-			refetchNodes();
-			
-			logger.info('Bidirectional connections fixed successfully', { floorId });
-		} catch (error) {
-			logger.error('Failed to fix bidirectional connections', error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to fix bidirectional connections: " + (error as Error).message);
-		} finally {
-			setIsFixingBidirectional(false);
-		}
-	};
+	// Fix bidirectional connections handler removed - no longer needed with addConnection endpoint
 
 	// Recalculate POI closest nodes handler
 	const handleRecalculatePoiNodes = async () => {
@@ -2059,11 +2021,6 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
 			<div className="floor-editor-layout">
 				{/* Actions Section */}
 				<ActionsSection
-					nodesCount={nodes.length}
-					isBidirectionalFixed={isBidirectionalFixed}
-					hasNewNodesAdded={hasNewNodesAdded}
-					onFixBidirectional={handleFixBidirectional}
-					isFixingBidirectional={isFixingBidirectional}
 					floorId={floorId}
 					onRecalculatePoiNodes={handleRecalculatePoiNodes}
 					isRecalculatingPoiNodes={isRecalculatingPoiNodes}
