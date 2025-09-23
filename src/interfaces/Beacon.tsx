@@ -24,7 +24,7 @@ export interface Beacon {
 
 export class BeaconBuilder {
     private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
-    private _id!: number;
+    private _id?: number;
     private _floorId!: number;
     private _beaconTypeId: number | null = null;
     private _name!: string;
@@ -36,6 +36,7 @@ export class BeaconBuilder {
     private _batteryLevel: number = 100;
     private _lastSeen: string | null = null;
     private _beaconType: { name: string } | null = null;
+    private _isCreating: boolean = true;
 
     public constructor() {
         return this;
@@ -56,11 +57,13 @@ export class BeaconBuilder {
         res._batteryLevel = beacon.properties.battery_level;
         res._lastSeen = beacon.properties.last_seen ?? null;
         res._geometry = beacon.geometry ?? null;
+        res._isCreating = false; // This is an existing object
         return res;
     }
     
     public setId(id: number): this {
         this._id = id;
+        this._isCreating = false; // If we're setting an ID, this is an existing object
         return this;
     }
 
@@ -128,6 +131,10 @@ export class BeaconBuilder {
     }
 
     public validate(): void {
+        // Only validate ID for existing objects (updates), not for new objects (creates)
+        if (!this._isCreating && (this._id === undefined || this._id === null)) {
+            throw new Error("Beacon ID is required for updates");
+        }
         if (!this._name || !this._name.trim()) {
             throw new Error("Beacon name is required");
         }
@@ -148,7 +155,7 @@ export class BeaconBuilder {
             type: "Feature",
             geometry: this._geometry,
             properties: {
-                id: this._id,
+                ...(this._id !== undefined && { id: this._id }), // Only include ID if it exists
                 floor_id: this._floorId,
                 beacon_type_id: this._beaconTypeId,
                 name: this._name,
@@ -160,7 +167,7 @@ export class BeaconBuilder {
                 battery_level: this._batteryLevel,
                 last_seen: this._lastSeen,
                 beacon_type: this._beaconType,
-            },
+            } as any, // Type assertion needed because id is now optional
         };
     }
 }

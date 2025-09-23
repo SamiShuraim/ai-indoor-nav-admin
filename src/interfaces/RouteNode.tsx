@@ -15,12 +15,13 @@ export interface RouteNode {
 }
 
 export class RouteNodeBuilder {
-    private _id!: number;
+    private _id?: number;
     private _floorId!: number;
     private _geometry: { type: "Point"; coordinates: [number, number] } | null = null;
     private _isVisible: boolean = true;
     private _connections: number[] = [];
     private _nodeType?: string;
+    private _isCreating: boolean = true; // Flag to indicate if we're creating a new object
 
     public static fromRouteNode(node: RouteNode): RouteNodeBuilder {
         const builder = new RouteNodeBuilder();
@@ -30,11 +31,13 @@ export class RouteNodeBuilder {
         builder._isVisible = node.properties.is_visible;
         builder._connections = [...(node.properties.connections || node.properties.connected_node_ids || [])];
         builder._nodeType = node.properties.node_type;
+        builder._isCreating = false; // This is an existing object
         return builder;
     }
 
     public setId(id: number): this {
         this._id = id;
+        this._isCreating = false; // If we're setting an ID, this is an existing object
         return this;
     }
 
@@ -84,8 +87,9 @@ export class RouteNodeBuilder {
     }
 
     public validate(): void {
-        if (this._id === undefined || this._id === null) {
-            throw new Error("RouteNode ID is required");
+        // Only validate ID for existing objects (updates), not for new objects (creates)
+        if (!this._isCreating && (this._id === undefined || this._id === null)) {
+            throw new Error("RouteNode ID is required for updates");
         }
         if (this._floorId === undefined || this._floorId === null) {
             throw new Error("RouteNode floor_id is required");
@@ -101,12 +105,12 @@ export class RouteNodeBuilder {
             type: "Feature",
             geometry: this._geometry,
             properties: {
-                id: this._id,
+                ...(this._id !== undefined && { id: this._id }), // Only include ID if it exists
                 floor_id: this._floorId,
                 is_visible: this._isVisible,
                 connections: this._connections,
                 ...(this._nodeType && { node_type: this._nodeType }),
-            }
+            } as any // Type assertion needed because id is now optional
         };
     }
 }

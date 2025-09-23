@@ -21,8 +21,7 @@ export interface Polygon {
 }
 
 export class PolygonBuilder {
-    private _properties: PolygonProperties = {
-        id: 0,
+    private _properties: Partial<PolygonProperties> & { floor_id: number } = {
         floor_id: 0,
         name: "",
         description: "",
@@ -35,6 +34,7 @@ export class PolygonBuilder {
         type: "Polygon";
         coordinates: number[][][];
     };
+    private _isCreating: boolean = true;
 
     public static fromPolygon(polygon: Polygon): PolygonBuilder {
         let res = new PolygonBuilder();
@@ -47,11 +47,13 @@ export class PolygonBuilder {
         res.setColor(polygon.properties.color);
         res.setCategoryId(polygon.properties.category_id);
         res.setGeometry(polygon.geometry.coordinates);
+        res._isCreating = false; // This is an existing object
         return res;
     }
 
     public setId(id: number): this {
         this._properties.id = id;
+        this._isCreating = false; // If we're setting an ID, this is an existing object
         return this;
     }
 
@@ -106,7 +108,11 @@ export class PolygonBuilder {
     }
 
     public validate(): void {
-        if (!this._properties.name.trim()) {
+        // Only validate ID for existing objects (updates), not for new objects (creates)
+        if (!this._isCreating && (this._properties.id === undefined || this._properties.id === null)) {
+            throw new Error("Polygon ID is required for updates");
+        }
+        if (!this._properties.name || !this._properties.name.trim()) {
             throw new Error("Polygon name is required");
         }
         if (this._properties.floor_id === undefined || this._properties.floor_id === null) {
@@ -135,7 +141,10 @@ export class PolygonBuilder {
         this.validate();
         return {
             type: "Feature",
-            properties: this._properties,
+            properties: {
+                ...this._properties,
+                ...(this._properties.id !== undefined && { id: this._properties.id }), // Only include ID if it exists
+            } as PolygonProperties,
             geometry: this._geometry,
         };
     }

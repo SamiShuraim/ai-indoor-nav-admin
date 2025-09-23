@@ -13,13 +13,14 @@ export interface Floor {
 }
 
 export class FloorBuilder {
-    private _id!: number;
+    private _id?: number;
     private _name!: string;
     private _floorNumber!: number;
     private _buildingId!: number;
     private _building?: Building;
     private _nodes?: RouteNode[];
     private _polygons?: Polygon[];
+    private _isCreating: boolean = true;
 
     public static fromFloor(floor: Floor): FloorBuilder {
         const builder = new FloorBuilder();
@@ -30,11 +31,13 @@ export class FloorBuilder {
         builder._building = floor.building;
         builder._nodes = floor.nodes ? [...floor.nodes] : undefined;
         builder._polygons = floor.polygons ? [...floor.polygons] : undefined;
+        builder._isCreating = false; // This is an existing object
         return builder;
     }
 
     public setId(id: number): this {
         this._id = id;
+        this._isCreating = false; // If we're setting an ID, this is an existing object
         return this;
     }
 
@@ -69,8 +72,9 @@ export class FloorBuilder {
     }
 
     public validate(): void {
-        if (this._id === undefined || this._id === null) {
-            throw new Error("Floor ID is required");
+        // Only validate ID for existing objects (updates), not for new objects (creates)
+        if (!this._isCreating && (this._id === undefined || this._id === null)) {
+            throw new Error("Floor ID is required for updates");
         }
         if (!this._name || !this._name.trim()) {
             throw new Error("Floor name is required");
@@ -86,13 +90,13 @@ export class FloorBuilder {
     public build(): Floor {
         this.validate();
         return {
-            id: this._id,
+            ...(this._id !== undefined && { id: this._id }),
             name: this._name,
             floorNumber: this._floorNumber,
             buildingId: this._buildingId,
             building: this._building,
             nodes: this._nodes,
             polygons: this._polygons,
-        };
+        } as Floor;
     }
 }
