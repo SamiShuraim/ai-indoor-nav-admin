@@ -42,11 +42,17 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
   const getFilteredData = () => {
     switch (layerFilter) {
       case 'polygons':
-        return { polygons, beacons: [], nodes: [] };
+        // Sort polygons in descending order by ID for consistency
+        const sortedPolygons = [...polygons].sort((a, b) => b.properties.id - a.properties.id);
+        return { polygons: sortedPolygons, beacons: [], nodes: [] };
       case 'beacons':
-        return { polygons: [], beacons, nodes: [] };
+        // Sort beacons in descending order by ID for consistency
+        const sortedBeacons = [...beacons].sort((a, b) => b.properties.id - a.properties.id);
+        return { polygons: [], beacons: sortedBeacons, nodes: [] };
       case 'nodes':
-        return { polygons: [], beacons: [], nodes };
+        // Sort nodes in descending order by ID
+        const sortedNodes = [...nodes].sort((a, b) => b.properties.id - a.properties.id);
+        return { polygons: [], beacons: [], nodes: sortedNodes };
     }
   };
 

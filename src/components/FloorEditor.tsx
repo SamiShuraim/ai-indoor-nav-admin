@@ -1,2152 +1,851 @@
-import {config, Map, Marker, Point, Popup} from "@maptiler/sdk";
+import { config, Map, Marker, Point } from "@maptiler/sdk";
+import { MapClickEvent } from "../types/common";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
-import React, {useCallback, useEffect, useRef, useState} from "react";
-import {MAPTILER_API_KEY, MAPTILER_STYLE_URL} from "../constants/api";
-import {UI_MESSAGES} from "../constants/ui";
-import {beaconsApi, floorsApi, polygonsApi, routeNodesApi} from "../utils/api";
-import {createLogger} from "../utils/logger";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { MAPTILER_API_KEY, MAPTILER_STYLE_URL } from "../constants/api";
+import { UI_MESSAGES } from "../constants/ui";
+import { beaconsApi, floorsApi, polygonsApi, routeNodesApi } from "../utils/api";
+import { createLogger } from "../utils/logger";
+import { convertPointsToCoordinates, isCloseToFirstPoint, findNodeNearCoordinates } from "../utils/mapUtils";
+import { renderPolygons, renderBeacons, renderRouteNodes, renderConnections, clearMapData } from "../utils/mapRenderer";
+import { useMapState } from "../hooks/useMapState";
+import { useDrawingState } from "../hooks/useDrawingState";
+import { useDialogState } from "../hooks/useDialogState";
 import "./FloorEditor.css";
 import BeaconDialog from "./FloorEditor/BeaconDialog";
-import DrawingToolbar, {DrawingTool} from "./FloorEditor/DrawingToolbar";
+import DrawingToolbar from "./FloorEditor/DrawingToolbar";
 import ActionsSection from "./FloorEditor/ActionsSection";
 import LayersPanel from "./FloorEditor/LayersPanel";
 import MapContainer from "./FloorEditor/MapContainer";
 import PolygonDialog from "./FloorEditor/PolygonDialog";
 import RouteNodeDialog from "./FloorEditor/RouteNodeDialog";
 import MultiFloorNodeDialog, { NodeType } from "./FloorEditor/MultiFloorNodeDialog";
-import {useQuery, useQueryClient} from "@tanstack/react-query";
-import {Button, Container, Header} from "./common";
-import {FloorEditorProps} from "../interfaces/FloorEditorProps";
-import {Polygon, PolygonBuilder} from "../interfaces/Polygon";
-import {RouteNode} from "../interfaces/RouteNode";
-import {Beacon, BeaconBuilder} from "../interfaces/Beacon";
-import {useEntityMutations} from "./FloorEditor/useEntityMutations";
-import {Floor} from "../interfaces/Floor";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Container, Header } from "./common";
+import { FloorEditorProps } from "../interfaces/FloorEditorProps";
+import { Polygon, PolygonBuilder } from "../interfaces/Polygon";
+import { RouteNode, RouteNodeBuilder } from "../interfaces/RouteNode";
+import { Beacon, BeaconBuilder } from "../interfaces/Beacon";
+import { useEntityMutations } from "./FloorEditor/useEntityMutations";
+import { Floor } from "../interfaces/Floor";
 
 const logger = createLogger("FloorEditor");
 
-// Queue system removed - now using immediate backend saves
+export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => {
+    logger.info("FloorEditor component starting", { floorId, floorIdType: typeof floorId });
 
-// Removed loadFromApi - using direct API calls in queries
+    const queryClient = useQueryClient();
+    const mapContainer = useRef<HTMLDivElement>(null);
+    const map = useRef<Map | null>(null);
 
-// Local storage removed - using immediate backend saves
+    // Custom hooks for state management
+    const mapState = useMapState();
+    const drawingState = useDrawingState();
+    const dialogState = useDialogState();
 
-function convertPointsToCoordinates(points: Point[]): number[][][] {
-	return [points.map(p => [p.x, p.y])];
-}
+    // Additional state
+    const [layerFilter, setLayerFilter] = useState<"polygons" | "beacons" | "nodes">("polygons");
+    const [isRecalculatingPoiNodes, setIsRecalculatingPoiNodes] = useState(false);
 
-export const FloorEditor: React.FC<FloorEditorProps> = ({floorId, onBack}) => {
-	// Remove the immediate console.log and replace with logger
-	logger.info("FloorEditor component starting", {floorId, floorIdType: typeof floorId});
-	
-	
+    // Refs for avoiding stale closures
+    const nodesRef = useRef<RouteNode[]>([]);
+    const nodesLoadingRef = useRef(true);
 
-	const queryClient = useQueryClient();
+    // Data queries
+    const { data: floor, isLoading: loading, isError: error } = useQuery<Floor>({
+        queryKey: ['floor', floorId],
+        queryFn: () => floorsApi.getById(floorId),
+    });
 
-	const {data: floor, isLoading: loading, isError: error} = useQuery<Floor>({
-		queryKey: ['floor', floorId],
-		queryFn: () => floorsApi.getById(floorId),
-	});
+    const { data: buildingFloors = [] } = useQuery<Floor[]>({
+        queryKey: ['buildingFloors', floor?.buildingId],
+        queryFn: () => floorsApi.getByBuilding(floor!.buildingId),
+        enabled: !!floor?.buildingId,
+    });
 
-	// Query for all floors in the building (for multi-floor node creation)
-	const {data: buildingFloors = []} = useQuery<Floor[]>({
-		queryKey: ['buildingFloors', floor?.buildingId],
-		queryFn: () => floorsApi.getByBuilding(floor!.buildingId),
-		enabled: !!floor?.buildingId,
-	});
+    const { data: polygons = [] } = useQuery<Polygon[]>({
+        queryKey: ['pois', floorId],
+        queryFn: () => polygonsApi.getByFloor(floorId.toString()),
+    });
 
-	// Map state
-	const mapContainer = useRef<HTMLDivElement>(null);
-	const map = useRef<Map | null>(null);
-	const [mapLoading, setMapLoading] = useState(true);
-	const [currentCoordinates, setCurrentCoordinates] = useState<{
-		lng: number;
-		lat: number;
-	} | null>(null);
-	const [mapLoadedSuccessfully, setMapLoadedSuccessfully] = useState(false);
+    const { data: beacons = [] } = useQuery<Beacon[]>({
+        queryKey: ['beacons', floorId],
+        queryFn: () => beaconsApi.getByFloor(floorId.toString()),
+    });
 
-	// Map markers and layers tracking
-	const mapMarkers = useRef<{ [key: string]: any }>({});
-	const mapLayers = useRef<{ [key: string]: string }>({});
-	const mapSources = useRef<{ [key: string]: string }>({});
+    const { data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError, refetch: refetchNodes } = useQuery<RouteNode[]>({
+        queryKey: ['routeNodes', floorId],
+        queryFn: async () => {
+            logger.info("🔄 REACT QUERY STARTING", { floorId, timestamp: new Date().toISOString() });
+            
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000);
+            });
+            
+            const apiPromise = routeNodesApi.getByFloor(floorId.toString());
+            
+            try {
+                const result = await Promise.race([apiPromise, timeoutPromise]) as RouteNode[];
+                logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length });
+                return result;
+            } catch (error) {
+                logger.error("❌ REACT QUERY FAILED", error as Error);
+                throw error;
+            }
+        },
+        enabled: !!floorId,
+        staleTime: 0,
+        gcTime: 0,
+        retry: 1,
+        refetchOnMount: true,
+        refetchOnWindowFocus: false,
+        select: (data) => {
+            return data.map(node => ({
+                ...node,
+                properties: {
+                    ...node.properties,
+                    connections: node.properties.connected_node_ids || node.properties.connections || []
+                }
+            }));
+        }
+    });
 
-	// Temporary drawing markers for polygon creation
-	const tempDrawingMarkers = useRef<any[]>([]);
-	const tempDrawingLines = useRef<{ [key: string]: string }>({});
+    // Update refs to avoid stale closures
+    useEffect(() => {
+        nodesRef.current = nodes;
+        nodesLoadingRef.current = nodesLoading;
+    }, [nodes, nodesLoading]);
 
-	// Timeout reference for cleanup
-	const mapLoadTimeout = useRef<NodeJS.Timeout | null>(null);
+    // Entity mutations
+    const poisMutations = useEntityMutations('pois', polygonsApi);
+    const beaconsMutations = useEntityMutations('beacons', beaconsApi);
+    const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
 
-	// Throttle coordinate updates to prevent infinite re-renders
-	const coordinateUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+    // Map initialization
+    const initializeMap = useCallback(() => {
+        if (!mapContainer.current) {
+            logger.warn("Map container not available");
+            return;
+        }
 
-	// Memoized coordinate update function
-	const updateCoordinates = useCallback((lng: number, lat: number) => {
-		setCurrentCoordinates({
-			lng: Number(lng.toFixed(6)),
-			lat: Number(lat.toFixed(6)),
-		});
-	}, []);
+        try {
+            logger.info("Initializing map");
+            config.apiKey = MAPTILER_API_KEY;
 
-	// Drawing state
-	const [activeTool, setActiveTool] = useState<DrawingTool>("select");
-	const activeToolRef = useRef<DrawingTool>("select");
+            if (!MAPTILER_API_KEY) {
+                throw new Error("MapTiler API key is not set");
+            }
 
-	const {data: polygons = []} = useQuery<Polygon[]>({
-		queryKey: ['pois', floorId],
-		queryFn: () => polygonsApi.getByFloor(floorId.toString()),
-	});
-	const {data: beacons = []} = useQuery<Beacon[]>({
-		queryKey: ['beacons', floorId],
-		queryFn: () => beaconsApi.getByFloor(floorId.toString()),
-	});
-	// Force invalidate cache on mount to ensure fresh data
-	useEffect(() => {
-		queryClient.invalidateQueries({ queryKey: ['routeNodes', floorId] });
-	}, [floorId, queryClient]);
+            const mapInstance = new Map({
+                container: mapContainer.current,
+                style: MAPTILER_STYLE_URL,
+                center: [50.142335, 26.313387],
+                zoom: 18,
+            });
 
-	const {data: nodes = [], isLoading: nodesLoading, error: nodesError, isError: nodesIsError, refetch: refetchNodes} = useQuery<RouteNode[]>({
-		queryKey: ['routeNodes', floorId],
-		queryFn: async () => {
-			logger.info("🔄 REACT QUERY STARTING", { floorId, floorIdType: typeof floorId, timestamp: new Date().toISOString() });
-			
-			// Add timeout to prevent hanging
-			const timeoutPromise = new Promise((_, reject) => {
-				setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000);
-			});
-			
-			const apiPromise = routeNodesApi.getByFloor(floorId.toString());
-			
-			try {
-				const result = await Promise.race([apiPromise, timeoutPromise]) as RouteNode[];
-				logger.info("✅ REACT QUERY SUCCESS", { floorId, resultCount: result.length, timestamp: new Date().toISOString() });
-				return result;
-			} catch (error) {
-				logger.error("❌ REACT QUERY FAILED", error as Error);
-				throw error;
-			}
-		},
-		enabled: !!floorId,
-		staleTime: 0, // Always refetch
-		gcTime: 0, // Don't cache
-		retry: 1, // Reduce retries
-		refetchOnMount: true,
-		refetchOnWindowFocus: false,
-		select: (data) => {
-			logger.info("🔍 REACT QUERY SELECT", { 
-				floorId,
-				nodeCount: data.length,
-				nodeIds: data.map(n => n.properties?.id),
-				timestamp: new Date().toISOString()
-			});
-			
-			return data.map(node => ({
-				...node,
-				properties: {
-					...node.properties,
-					connections: node.properties.connected_node_ids || node.properties.connections || []
-				}
-			}));
-		}
-	});
+            map.current = mapInstance;
 
-	// Create refs to hold current values to avoid stale closures
-	const nodesRef = useRef<RouteNode[]>([]);
-	const nodesLoadingRef = useRef(true);
-	
-	// Update refs whenever values change
-	useEffect(() => {
-		nodesRef.current = nodes;
-		nodesLoadingRef.current = nodesLoading;
-		
-		logger.info("🔍 NODES QUERY STATE CHANGE", {
-			floorId,
-			nodesLoading,
-			nodesIsError,
-			nodesLength: nodes.length,
-			hasNodes: nodes.length > 0,
-			refNodesLength: nodesRef.current.length,
-			refNodesLoading: nodesLoadingRef.current
-		});
-	}, [floorId, nodesLoading, nodesIsError, nodes.length, nodes]);
+            mapInstance.on("load", () => {
+                if (mapState.mapLoadTimeout.current) {
+                    clearTimeout(mapState.mapLoadTimeout.current);
+                    mapState.mapLoadTimeout.current = null;
+                }
+                mapState.setMapLoading(false);
+                mapState.setMapLoadedSuccessfully(true);
+                logger.info("Map loaded successfully");
+            });
 
-	// Bidirectional connections are automatically handled by addConnection endpoint
+            mapInstance.on("error", (e) => {
+                if (!mapState.mapLoadedSuccessfully) {
+                    logger.error("Map error during initial load", new Error(e.error?.message || "Map error"));
+                    mapState.setMapLoading(false);
+                }
+            });
 
-	// Route node creation state
-	const [selectedNodeForConnection, setSelectedNodeForConnection] = useState<
-		number | null
-	>(null);
-	const selectedNodeForConnectionRef = useRef<number | null>(0);
-	const [lastPlacedNodeId, setLastPlacedNodeId] = useState<number | null>(
-		0
-	);
-	const lastPlacedNodeIdRef = useRef<number | null>(null);
+            mapInstance.on("click", handleMapClick);
 
-	// Selection state
-	const [selectedItem, setSelectedItem] = useState<{
-		type: "polygon" | "beacon" | "node";
-		id: number;
-	} | null>(null);
+            mapState.mapLoadTimeout.current = setTimeout(() => {
+                if (mapState.mapLoading) {
+                    logger.error("Map loading timeout");
+                    mapState.setMapLoading(false);
+                }
+                mapState.mapLoadTimeout.current = null;
+            }, 30000);
 
-	// Layer filter state
-	const [layerFilter, setLayerFilter] = useState<
-		"polygons" | "beacons" | "nodes"
-	>("polygons");
+        } catch (error) {
+            logger.error("Failed to initialize map", error as Error);
+            mapState.setMapLoading(false);
+        }
+    }, [mapState]);
 
-	// Polygon dialog state
-	const [showPolygonDialog, setShowPolygonDialog] = useState(false);
-	const [polygonName, setPolygonName] = useState("");
-    // const [isWallMode, setIsWallMode] = useState(false);
+    // Map click handler
+    const handleMapClick = useCallback((e: MapClickEvent) => {
+        if (!map.current) return;
 
-	// Beacon dialog state
-	const [showBeaconDialog, setShowBeaconDialog] = useState(false);
-	const [beaconName, setBeaconName] = useState("");
-	const [pendingBeaconLocation, setPendingBeaconLocation] = useState<{
-		lng: number;
-		lat: number;
-	} | null>(null);
+        const { lng, lat } = e.lngLat;
+        const currentTool = drawingState.activeToolRef.current;
 
-	// Polygon drawing state
-	const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-	const [currentPolygonPoints, setCurrentPolygonPoints] = useState<Point[]>(
-		[]
-	);
-	const [pendingPolygonPoints, setPendingPolygonPoints] = useState<Point[]>(
-		[]
-	);
-	const [pendingPolygonCenter, setPendingPolygonCenter] = useState<{
-		lng: number;
-		lat: number;
-	} | null>(null);
+        switch (currentTool) {
+            case "beacons":
+                handleBeaconClick(lng, lat);
+                break;
+            case "nodes":
+                handleNodeClick(lng, lat);
+                break;
+            case "elevatorStairs":
+                handleElevatorStairsClick(lng, lat);
+                break;
+            case "poi":
+                handlePolygonClick(lng, lat);
+                break;
+        }
+    }, [drawingState]);
 
-	// Use refs to prevent state loss during re-renders
-	const pendingPolygonPointsRef = useRef<Point[]>([]);
-	const isDrawingPolygonRef = useRef<boolean>(false);
-	const [editingPolygonId, setEditingPolygonId] = useState<number | null>(
-		null
-	);
+    // Map data update
+    const updateMapData = useCallback(() => {
+        if (!map.current || mapState.mapLoading || !mapState.mapLoadedSuccessfully) return;
 
-	// Add missing state
-	const [editingBeaconId, setEditingBeaconId] = useState<number | null>(null);
-	const [showNodeDialog, setShowNodeDialog] = useState(false);
-	const [nodeName, setNodeName] = useState("");
-	const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
+        logger.info("Updating map data");
+        try {
+            clearMapData(map.current, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            });
+        } catch (error) {
+            console.warn('Error clearing map data:', error);
+            return;
+        }
 
-	// Multi-floor node dialog state
-	const [showMultiFloorNodeDialog, setShowMultiFloorNodeDialog] = useState(false);
-	const [pendingMultiFloorLocation, setPendingMultiFloorLocation] = useState<{
-		lng: number;
-		lat: number;
-	} | null>(null);
+        const selectedItemId = drawingState.selectedItem?.type === "polygon" ? drawingState.selectedItem.id :
+                              drawingState.selectedItem?.type === "beacon" ? drawingState.selectedItem.id :
+                              drawingState.selectedItem?.type === "node" ? drawingState.selectedItem.id : undefined;
 
-	// Save status for immediate operations
-	const [saveStatus, setSaveStatus] = useState<
-		"idle" | "saving" | "success" | "error"
-	>("idle");
-	const [saveError, setSaveError] = useState<string | null>(null);
+        try {
+            renderPolygons(map.current, polygons, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, selectedItemId);
 
-	// Bidirectional connections are now automatically handled by addConnection endpoint
+            renderBeacons(map.current, beacons, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, selectedItemId);
 
-	// POI recalculate state
-	const [isRecalculatingPoiNodes, setIsRecalculatingPoiNodes] = useState(false);
+            renderRouteNodes(map.current, nodes, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            }, drawingState.selectedNodeForConnection, selectedItemId);
 
-	const poisMutations = useEntityMutations('pois', polygonsApi);
-	const beaconsMutations = useEntityMutations('beacons', beaconsApi);
-	const routeNodesMutations = useEntityMutations('routeNodes', routeNodesApi);
-	// Queue system removed
+            renderConnections(map.current, nodes, {
+                mapMarkers: mapState.mapMarkers,
+                mapLayers: mapState.mapLayers,
+                mapSources: mapState.mapSources
+            });
+        } catch (error) {
+            console.error('Error rendering map data:', error);
+        }
+    }, [mapState, drawingState, polygons, beacons, nodes]);
 
-	useEffect(() => {
-		logger.info("FloorEditor component mounted", {floorId});
+    // Click handlers
+    const handleBeaconClick = useCallback((lng: number, lat: number) => {
+        dialogState.openBeaconDialog(`Beacon ${beacons.length + 1}`, { lng, lat });
+    }, [beacons.length, dialogState]);
 
-		return () => {
-			logger.info("FloorEditor component unmounted");
+    const handleNodeClick = useCallback(async (lng: number, lat: number) => {
+        const currentNodes = nodesRef.current;
+        const currentNodesLoading = nodesLoadingRef.current;
+        
+        if (currentNodesLoading) {
+            logger.info("Nodes still loading, ignoring click");
+            return;
+        }
+        
+        const clickedNode = findNodeNearCoordinates(currentNodes, lng, lat);
+        const currentSelectedNode = drawingState.selectedNodeForConnectionRef.current;
 
-			// Clean up timeouts
-			if (mapLoadTimeout.current) {
-				clearTimeout(mapLoadTimeout.current);
-				mapLoadTimeout.current = null;
-			}
+        if (clickedNode) {
+            if (currentSelectedNode && currentSelectedNode !== clickedNode.properties.id) {
+                try {
+                    await routeNodesApi.addConnection(currentSelectedNode, clickedNode.properties.id);
+                    refetchNodes();
+                } catch (error) {
+                    logger.error("Failed to connect nodes", error as Error);
+                    alert("Failed to connect nodes. Please try again.");
+                }
+            } else {
+                drawingState.setSelectedNodeForConnection(clickedNode.properties.id);
+            }
+        } else {
+            try {
+                if (currentSelectedNode) {
+                    const newNodeId = await createNewNode(lng, lat, currentSelectedNode);
+                    drawingState.setSelectedNodeForConnection(newNodeId);
+                } else if (currentNodes.length === 0) {
+                    const newNodeId = await createNewNode(lng, lat, null);
+                    drawingState.setSelectedNodeForConnection(newNodeId);
+                } else {
+                    alert("Please click on an existing node first to connect the new node to it.");
+                }
+            } catch (error) {
+                logger.error("Failed to create node", error as Error);
+                alert("Failed to create node. Please try again.");
+            }
+        }
+    }, [drawingState, refetchNodes]);
 
-			if (coordinateUpdateTimeout.current) {
-				clearTimeout(coordinateUpdateTimeout.current);
-				coordinateUpdateTimeout.current = null;
-			}
+    const handleElevatorStairsClick = useCallback(async (lng: number, lat: number) => {
+        const currentNodes = nodesRef.current;
+        const clickedNode = findNodeNearCoordinates(currentNodes, lng, lat);
 
-			// Clean up map
-			if (map.current) {
-				map.current.remove();
-			}
-		};
-	}, [floorId]);
+        if (clickedNode) {
+            drawingState.setSelectedNodeForConnection(clickedNode.properties.id);
+        } else {
+            dialogState.openMultiFloorNodeDialog({ lng, lat });
+        }
+    }, [drawingState, dialogState]);
 
-	// NOTE: Map initialization useEffect moved to after initializeMap function declaration
+    const handlePolygonClick = useCallback((lng: number, lat: number) => {
+        const newPoint: Point = { x: lng, y: lat } as Point;
 
-	// Function to update map with current data (called manually when needed)
-	const updateMapData = useCallback(
-		(
-			currentPolygons: Polygon[],
-			currentBeacons: Beacon[],
-			currentNodes: RouteNode[],
-			selectedNodeId?: number | null
-		) => {
-			if (!map.current) return;
+        if (
+            drawingState.pendingPolygonPointsRef.current.length >= 3 &&
+            isCloseToFirstPoint(lng, lat, drawingState.pendingPolygonPointsRef.current[0])
+        ) {
+            // Close polygon and show dialog
+            dialogState.openPolygonDialog();
+            return;
+        }
 
-			logger.info("Updating map with current data", {
-				polygonsCount: currentPolygons.length,
-				beaconsCount: currentBeacons.length,
-				nodesCount: currentNodes.length,
-				selectedNodeId,
-                nodeIds: currentNodes.map((n) => n.properties.id),
-				nodeDetails: currentNodes.map((n) => ({
-                    id: n.properties.id,
-                    location: n.geometry?.coordinates,
-                    visible: n.properties.is_visible,
-				})),
-			});
-			const mapInstance = map.current;
+        const updatedPoints = [...drawingState.pendingPolygonPointsRef.current, newPoint];
+        drawingState.setPendingPolygonPoints(updatedPoints);
+        drawingState.pendingPolygonPointsRef.current = updatedPoints;
 
-			// Clear existing markers and layers
-			Object.values(mapMarkers.current).forEach((marker) =>
-				marker.remove()
-			);
-			mapMarkers.current = {};
+        if (updatedPoints.length === 1) {
+            drawingState.setIsDrawingPolygon(true);
+        }
 
-			// Remove layers
-			Object.values(mapLayers.current).forEach((layerId) => {
-				if (mapInstance.getLayer(layerId)) {
-					mapInstance.removeLayer(layerId);
-				}
-			});
-			mapLayers.current = {};
+        // Add visual feedback for the point (implement addPolygonPointMarker)
+        addPolygonPointMarker(lng, lat, updatedPoints.length - 1);
+    }, [drawingState, dialogState]);
 
-			// Remove sources
-			Object.values(mapSources.current).forEach((sourceId) => {
-				if (mapInstance.getSource(sourceId)) {
-					mapInstance.removeSource(sourceId);
-				}
-			});
-			mapSources.current = {};
+    // Create new node helper
+    const createNewNode = async (lng: number, lat: number, connectToNodeId: number | null): Promise<number> => {
+        const newNodeData = new RouteNodeBuilder()
+            .setFloorId(floorId)
+            .setLocation(lng, lat)
+            .setIsVisible(true)
+            .build();
 
-			// Add polygons as filled areas
-			currentPolygons.forEach((p) => {
-				const polygon = p.properties;
-                if (polygon.is_visible && p.geometry.coordinates[0].length >= 3) {
-					const coordinates = p.geometry.coordinates;
-                    console.log("WE ARE IN")
-					const sourceId = `polygon-source-${polygon.id}`;
-					const layerId = `polygon-layer-${polygon.id}`;
+        const createdNode = await routeNodesMutations.create.mutateAsync({ data: newNodeData });
+        const newNodeId = createdNode?.id || createdNode?.properties?.id;
 
-					mapInstance.addSource(sourceId, {
-						type: "geojson",
-						data: {
-							type: "Feature",
-							geometry: {
-								type: "Polygon",
-								coordinates: coordinates,
-							},
-							properties: {},
-						},
-					});
+        if (!newNodeId) {
+            throw new Error("Backend didn't return node ID");
+        }
 
-					mapInstance.addLayer({
-						id: layerId,
-						type: "fill",
-						source: sourceId,
-						paint: {
-							"fill-color": polygon.color,
-							"fill-opacity": 0.6,
-						},
-					});
+        if (connectToNodeId) {
+            await routeNodesApi.addConnection(newNodeId, connectToNodeId);
+        }
 
-					// Add border
-					const borderLayerId = `polygon-border-${polygon.id}`;
-					mapInstance.addLayer({
-						id: borderLayerId,
-						type: "line",
-						source: sourceId,
-						paint: {
-							"line-color": polygon.color,
-							"line-width": 2,
-						},
-					});
+        await refetchNodes();
+        return newNodeId;
+    };
 
-					// Track sources and layers
-					mapSources.current[`polygon-${polygon.id}`] = sourceId;
-					mapLayers.current[`polygon-${polygon.id}`] = layerId;
-					mapLayers.current[`polygon-border-${polygon.id}`] =
-						borderLayerId;
+    // Placeholder for polygon point marker (implement based on original)
+    const addPolygonPointMarker = (lng: number, lat: number, pointIndex: number) => {
+        // Implementation from original FloorEditor
+        if (!map.current) return;
+        
+        const isFirst = pointIndex === 0;
+        const color = isFirst ? "#ff0000" : "#00aa00";
 
-					// Add center marker for interaction using GeoJSON
-					const ring = p.geometry.coordinates[0]; // outer ring
+        const markerElement = document.createElement("div");
+        markerElement.style.width = "10px";
+        markerElement.style.height = "10px";
+        markerElement.style.borderRadius = "50%";
+        markerElement.style.backgroundColor = color;
+        markerElement.style.border = "2px solid white";
+        markerElement.style.boxShadow = "0 0 4px rgba(0,0,0,0.3)";
 
-					const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
-					const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+        const marker = new Marker({ element: markerElement })
+            .setLngLat([lng, lat])
+            .addTo(map.current);
 
+        mapState.tempDrawingMarkers.current.push(marker);
+    };
 
-					mapMarkers.current[`polygon-${polygon.id}`] = new Marker({
-						color: polygon.color,
-						scale: 0.8,
-					})
-						.setLngLat([centerX, centerY])
-						.setPopup(
-							new Popup().setHTML(
-								`<strong>${polygon.name}</strong><br>Type: ${polygon.type}`
-							)
-						)
-						.addTo(mapInstance);
-				}
-			});
+    // Save handlers
+    const handlePolygonSave = async () => {
+        dialogState.updateSaveStatus("saving");
 
-			// Add beacons
-			currentBeacons.forEach((b) => {
-				let beacon = b.properties;
-                if (beacon.is_visible) {
-					mapMarkers.current[`beacon-${beacon.id}`] = new Marker({color: "#fbbf24"})
-						.setLngLat(b.geometry!!.coordinates)
-						.setPopup(
-							new Popup().setHTML(
-								`<strong>${beacon.name}</strong><br>Type: Beacon`
-							)
-						)
-						.addTo(mapInstance);
-				}
-			});
+        try {
+            if (drawingState.editingPolygonId) {
+                const polygon = polygons.find((p) => p.properties.id === drawingState.editingPolygonId);
+                if (polygon) {
+                    const updated = PolygonBuilder.fromPolygon(polygon).setName(dialogState.polygonName).build();
+                    await poisMutations.update.mutateAsync({ data: updated });
+                }
+            } else {
+                const newPolygon = new PolygonBuilder()
+                    .setFloorId(floorId)
+                    .setName(dialogState.polygonName)
+                    .setDescription("")
+                    .setType("Room")
+                    .setIsVisible(true)
+                    .setColor("#3b82f6")
+                    .setCategoryId(null)
+                    .setGeometry(convertPointsToCoordinates(drawingState.pendingPolygonPoints))
+                    .build();
 
-			// Add nodes
-			logger.info("Processing nodes for rendering", {
-				totalNodes: currentNodes.length,
-                visibleNodes: currentNodes.filter((n) => n.properties.is_visible).length,
-			});
+                const { id, ...propertiesWithoutId } = newPolygon.properties;
+                const polygonForCreation = { ...newPolygon, properties: propertiesWithoutId };
+                await poisMutations.create.mutateAsync({ data: polygonForCreation });
+            }
 
-			currentNodes.forEach((node) => {
-				logger.info("Processing node", {
-                    nodeId: node.properties.id,
-                    visible: node.properties.is_visible,
-                    location: node.geometry,
-                    connections: node.properties.connections,
-                    isSelectedForConnection: selectedNodeId === node.properties.id,
-				});
+            dialogState.updateSaveStatus("success");
+            dialogState.closePolygonDialog();
+            drawingState.resetPolygonDrawing();
+            mapState.clearTempDrawing(map.current);
+        } catch (error) {
+            logger.error("Failed to save polygon", error as Error);
+            dialogState.updateSaveStatus("error", "Failed to save polygon: " + (error as Error).message);
+        }
+    };
 
-                if (node.properties.is_visible) {
-                    const isSelectedForConnection = selectedNodeId === node.properties.id;
-                    const nodeType = node.properties.node_type;
-                    
-                    let markerElement: HTMLElement | undefined;
-                    
-                    // Create custom marker for elevator/stairs nodes
-                    if (nodeType === 'elevator' || nodeType === 'stairs') {
-                        markerElement = document.createElement('div');
-                        markerElement.className = 'custom-node-marker';
-                        markerElement.style.cssText = `
-                            width: 24px;
-                            height: 24px;
-                            background-color: ${isSelectedForConnection ? '#22c55e' : '#3b82f6'};
-                            border: 2px solid white;
-                            border-radius: 50%;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 12px;
-                            font-weight: bold;
-                            color: white;
-                            cursor: pointer;
-                        `;
-                        markerElement.textContent = nodeType === 'elevator' ? 'E' : 'S';
-                    }
-                    
-                    const marker = markerElement 
-                        ? new Marker({ element: markerElement })
-                        : new Marker({ color: isSelectedForConnection ? "#22c55e" : "#3b82f6" });
-                    
-                    mapMarkers.current[`node-${node.properties.id}`] = marker
-                        .setLngLat(node.geometry!!.coordinates)
-						.addTo(mapInstance);
-					logger.info("Node marker added to map", {
-                        nodeId: node.properties.id,
-                        markerKey: `node-${node.properties.id}`,
-                        nodeType,
-                        isSelectedForConnection,
-					});
-				} else {
-					logger.warn("Node not visible, skipping", {
-                        nodeId: node.properties.id,
-					});
-				}
-			});
+    const handleBeaconSave = async () => {
+        dialogState.updateSaveStatus("saving");
 
-			const renderedEdges = new Set<string>(); // Prevent duplicate lines
+        try {
+            if (dialogState.editingBeaconId) {
+                const beacon = beacons.find((b) => b.properties.id === dialogState.editingBeaconId);
+                if (beacon) {
+                    const updated = BeaconBuilder.fromBeacon(beacon).setName(dialogState.beaconName).build();
+                    await beaconsMutations.update.mutateAsync({ data: updated });
+                }
+            } else if (dialogState.pendingBeaconLocation) {
+                const newBeacon = new BeaconBuilder()
+                    .setFloorId(floorId)
+                    .setName(dialogState.beaconName)
+                    .setGeometry(dialogState.pendingBeaconLocation.lng, dialogState.pendingBeaconLocation.lat)
+                    .setIsVisible(true)
+                    .setIsActive(true)
+                    .setBatteryLevel(100)
+                    .build();
 
-			logger.info("Processing connections for all nodes", {
-				totalNodes: currentNodes.length,
-				nodesWithConnections: currentNodes.filter(n => n.properties.connections && n.properties.connections.length > 0).length
-			});
+                const { id, ...propertiesWithoutId } = newBeacon.properties;
+                const beaconForCreation = { ...newBeacon, properties: propertiesWithoutId };
+                await beaconsMutations.create.mutateAsync({ data: beaconForCreation });
+            }
 
-			currentNodes.forEach((node) => {
-                if (!node.properties.is_visible || !node.geometry) return;
+            dialogState.updateSaveStatus("success");
+            dialogState.closeBeaconDialog();
+        } catch (error) {
+            logger.error("Failed to save beacon", error as Error);
+            dialogState.updateSaveStatus("error", "Failed to save beacon: " + (error as Error).message);
+        }
+    };
 
-                // Check if connections exist and is an array
-                if (!node.properties.connections || !Array.isArray(node.properties.connections)) {
-                    return;
+    // Multi-floor node save handler
+    const handleMultiFloorNodeSave = async (nodeType: NodeType, selectedFloors: number[]) => {
+        if (!dialogState.pendingMultiFloorLocation) return;
+
+        const { lng, lat } = dialogState.pendingMultiFloorLocation;
+        const currentSelectedNode = drawingState.selectedNodeForConnectionRef.current;
+
+        try {
+            dialogState.updateSaveStatus("saving");
+            const createdNodeIds: number[] = [];
+
+            for (const targetFloorId of selectedFloors) {
+                let connectToNodeId: number | null = null;
+                if (targetFloorId === floorId && currentSelectedNode) {
+                    connectToNodeId = currentSelectedNode;
                 }
 
-				if (node.properties.connections.length > 0) {
-					logger.info("Node has connections", {
-						nodeId: node.properties.id,
-						connections: node.properties.connections,
-						connectionsCount: node.properties.connections.length
-					});
-				}
-
-                node.properties.connections.forEach((connectedNodeId) => {
-                    const targetNode = currentNodes.find(n => n.properties.id === connectedNodeId);
-
-					logger.info("Processing connection", {
-						fromNodeId: node.properties.id,
-						toNodeId: connectedNodeId,
-						targetNodeFound: !!targetNode,
-						targetNodeVisible: targetNode?.properties.is_visible,
-						targetNodeHasGeometry: !!targetNode?.geometry
-					});
-
-					if (
-						!targetNode ||
-                        !targetNode.properties.is_visible ||
-                        !targetNode.geometry
-					) {
-						logger.warn("Skipping connection due to missing/hidden node", {
-                            fromId: node.properties.id,
-							toId: connectedNodeId,
-                            fromVisible: node.properties.is_visible,
-                            toVisible: targetNode?.properties.is_visible,
-						});
-						return;
-					}
-
-					// Prevent duplicate edges (e.g., from both A→B and B→A)
-                    const edgeKey = [node.properties.id, connectedNodeId].sort((a, b) => a - b).join("-");
-					if (renderedEdges.has(edgeKey)) return;
-					renderedEdges.add(edgeKey);
-
-					const sourceId = `edge-source-${edgeKey}`;
-					const layerId = `edge-layer-${edgeKey}`;
-
-                    const fromCoords = node.geometry!!.coordinates;
-                    const toCoords = targetNode.geometry.coordinates;
-
-					logger.info("Rendering route edge", {
-						edgeKey,
-                        fromId: node.properties.id,
-						toId: connectedNodeId,
-						fromCoords,
-						toCoords,
-					});
-
-					mapInstance.addSource(sourceId, {
-						type: "geojson",
-						data: {
-							type: "Feature",
-							geometry: {
-								type: "LineString",
-								coordinates: [fromCoords, toCoords],
-							},
-							properties: {},
-						},
-					});
-
-					mapInstance.addLayer({
-						id: layerId,
-						type: "line",
-						source: sourceId,
-						paint: {
-							"line-color": "#3b82f6",
-							"line-width": 3,
-							"line-opacity": 0.8,
-						},
-					});
-
-					mapSources.current[`edge-${edgeKey}`] = sourceId;
-					mapLayers.current[`edge-${edgeKey}`] = layerId;
-
-					logger.info("Edge layer added", {
-						sourceId,
-						layerId,
-					});
-				});
-			});
-
-			// Add highlighting for selected object
-			if (selectedItem) {
-				const {type, id} = selectedItem;
-
-				if (type === "polygon") {
-					const polygon = currentPolygons.find((p) => p.properties.id === id);
-                    if (polygon && polygon.properties.is_visible) {
-						// Highlight selected polygon with a thicker border or different color
-						const layerId = `polygon-layer-${id}`;
-						const borderLayerId = `polygon-border-${id}`;
-
-						if (mapInstance.getLayer(layerId)) {
-							mapInstance.setPaintProperty(
-								layerId,
-								"fill-opacity",
-								0.8
-							);
-						}
-						if (mapInstance.getLayer(borderLayerId)) {
-							mapInstance.setPaintProperty(
-								borderLayerId,
-								"line-width",
-								4
-							);
-							mapInstance.setPaintProperty(
-								borderLayerId,
-								"line-color",
-								"#ef4444"
-							);
-						}
-					}
-				} else if (type === "beacon") {
-					const b = currentBeacons.find((b) => b.properties.id === id);
-					const beacon = b?.properties
-                    if (beacon && beacon.is_visible) {
-						// Highlight selected beacon
-						const marker = mapMarkers.current[`beacon-${id}`];
-						if (marker) {
-							marker.remove();
-							mapMarkers.current[`beacon-${id}`] =
-								new Marker({
-									color: "#ef4444",
-									scale: 1.2,
-								})
-									.setLngLat(b.geometry!!.coordinates)
-									.setPopup(
-										new Popup().setHTML(
-											`<strong>${beacon.name}</strong><br>Type: Beacon (SELECTED)`
-										)
-									)
-									.addTo(mapInstance);
-						}
-					}
-				} else if (type === "node") {
-                    const node = currentNodes.find((n) => n.properties.id === id);
-                    if (node && node.properties.is_visible) {
-						// Highlight selected node
-						const marker = mapMarkers.current[`node-${id}`];
-						if (marker) {
-							marker.remove();
-							mapMarkers.current[`node-${id}`] =
-								new Marker({
-									color: "#ef4444",
-									scale: 1.2,
-								})
-                                    .setLngLat(node.geometry!!.coordinates)
-									.addTo(mapInstance);
-						}
-					}
-				}
-			}
-
-			logger.info("Map data updated successfully");
-		},
-		[selectedItem]
-	); // Add selectedItem as dependency
-
-	// Load initial sample data and update map when data changes
-	useEffect(() => {
-		if (!mapLoading && map.current) {
-			updateMapData(
-				polygons,
-				beacons,
-				nodes,
-				selectedNodeForConnection
-			);
-		}
-	}, [
-		mapLoading,
-		polygons,
-		beacons,
-		nodes,
-		selectedNodeForConnection,
-	]);
-
-	// const getUserLocationAndCenter = (mapInstance: Map) => {
-	// 	if ("geolocation" in navigator) {
-	// 		logger.info(
-	// 			"🌍 Requesting user location permission - this should show a browser popup"
-	// 		);
-	//
-	// 		navigator.geolocation.getCurrentPosition(
-	// 			(position) => {
-	// 				const { latitude, longitude } = position.coords;
-	// 				logger.info(
-	// 					"🎯 User location obtained, centering map NOW!",
-	// 					{ latitude, longitude }
-	// 				);
-	//
-	// 				// Force center the map
-	// 				mapInstance.flyTo({
-	// 					center: [longitude, latitude],
-	// 					zoom: 18,
-	// 					duration: 2000,
-	// 				});
-	//
-	// 				// Add a marker at user's location
-	// 				new Marker({ color: "#ef4444" })
-	// 					.setLngLat([longitude, latitude])
-	// 					.setPopup(
-	// 						new Popup().setHTML(
-	// 							"<strong>🎯 Your Location</strong>"
-	// 						)
-	// 					)
-	// 					.addTo(mapInstance);
-	// 			},
-	// 			(error) => {
-	// 				logger.warn(
-	// 					"Geolocation error - using default location",
-	// 					error
-	// 				);
-	// 				logger.info("Geolocation error details", {
-	// 					code: error.code,
-	// 					message: error.message,
-	// 				});
-	// 				// Keep default location (Honolulu)
-	// 			},
-	// 			{
-	// 				enableHighAccuracy: true,
-	// 				timeout: 15000, // Increased timeout
-	// 				maximumAge: 0, // Don't use cached location
-	// 			}
-	// 		);
-	// 	} else {
-	// 		logger.warn("Geolocation not supported by this browser");
-	// 	}
-	// };
-
-	const initializeMap = useCallback(() => {
-		if (!mapContainer.current) {
-			logger.warn("Map container not available");
-			return;
-		}
-
-		try {
-			logger.info("Initializing map", {
-				apiKey: MAPTILER_API_KEY ? "SET" : "NOT_SET",
-				apiKeyLength: MAPTILER_API_KEY?.length || 0,
-				envApiKey: process.env.REACT_APP_MAPTILER_API_KEY
-					? "ENV_SET"
-					: "ENV_NOT_SET",
-			});
-
-			// Configure MapTiler SDK
-			config.apiKey = MAPTILER_API_KEY;
-
-			if (!MAPTILER_API_KEY) {
-				throw new Error(
-					"MapTiler API key is not set. Please check your .env file and restart the development server."
-				);
-			}
-
-			// Initialize map with your custom style (same as Android app)
-			const mapInstance = new Map({
-				container: mapContainer.current,
-				style: MAPTILER_STYLE_URL, // Using your custom style URL
-				center: [50.142335, 26.313387], // User's actual coordinates in Bahrain
-				zoom: 18,
-			});
-
-			map.current = mapInstance;
-
-			mapInstance.on("load", () => {
-				// Clear the timeout since map loaded successfully
-				if (mapLoadTimeout.current) {
-					clearTimeout(mapLoadTimeout.current);
-					mapLoadTimeout.current = null;
-				}
-
-				setMapLoading(false);
-				setMapLoadedSuccessfully(true);
-				logger.info("Map loaded successfully");
-			});
-
-			mapInstance.on("error", (e) => {
-				// Only show error if map hasn't loaded successfully yet
-				if (!mapLoadedSuccessfully) {
-					// Clear the timeout since we got an error (not a timeout)
-					if (mapLoadTimeout.current) {
-						clearTimeout(mapLoadTimeout.current);
-						mapLoadTimeout.current = null;
-					}
-
-					logger.error(
-						"Map error event during initial load",
-						new Error(e.error?.message || "Map error occurred")
-					);
-					setMapLoading(false);
-				} else {
-					// Map already loaded successfully, just log the error but don't show to user
-					logger.warn(
-						"Map error after successful load (ignoring)",
-						new Error(e.error?.message || "Map error occurred")
-					);
-				}
-			});
-
-			// Click handlers for different tools
-			mapInstance.on("click", (e) => {
-				handleMapClick(e);
-			});
-
-			// Set a timeout to catch cases where the map never loads
-			mapLoadTimeout.current = setTimeout(() => {
-				// Only show timeout error if map is still loading (not if it already loaded)
-				if (mapLoading) {
-					logger.error(
-						"Map loading timeout - map failed to load within 30 seconds"
-					);
-					setMapLoading(false);
-				}
-				mapLoadTimeout.current = null;
-			}, 30000);
-		} catch (error) {
-			logger.error("Failed to initialize map", error as Error);
-			setMapLoading(false);
-		}
-	}, [updateCoordinates]);
-
-	// Separate effect for map initialization - only after loading is complete and container is ready
-	useEffect(() => {
-		if (!loading && mapContainer.current && !map.current) {
-			logger.info("Initializing map after loading complete");
-			initializeMap();
-		}
-	}, [loading, initializeMap]); // Depend on loading and initializeMap
-
-	const addBeacon = useCallback((lng: number, lat: number) => {
-		// Show beacon name dialog
-		setPendingBeaconLocation({lng, lat});
-		setBeaconName(`Beacon ${beacons.length + 1}`); // Default name
-		setShowBeaconDialog(true);
-
-		logger.userAction("Beacon dialog opened", {location: {lng, lat}});
-	}, [beacons.length]);
-
-	const handleNodeClick = useCallback(async (lng: number, lat: number) => {
-		// Use refs to get current values and avoid stale closures
-		const currentNodes = nodesRef.current;
-		const currentNodesLoading = nodesLoadingRef.current;
-		
-		// Debug: Always log the current state
-		logger.info("handleNodeClick: Current query state", {
-			closureNodesLoading: nodesLoading,
-			refNodesLoading: currentNodesLoading,
-			closureNodesLength: nodes.length,
-			refNodesLength: currentNodes.length,
-			nodesIsError,
-			nodesError: nodesError?.message,
-			floorId
-		});
-		
-		// Guard: Don't process clicks while nodes are loading (use ref value)
-		if (currentNodesLoading) {
-			logger.info("handleNodeClick: nodes still loading (ref), ignoring click");
-			return;
-		}
-		
-		// Log error state if there's an issue
-		if (nodesIsError) {
-			logger.error("handleNodeClick: nodes query failed", nodesError as Error);
-			logger.info("Query error details", { floorId });
-			alert(`Failed to load nodes: ${nodesError?.message}`);
-			return;
-		}
-		
-		// Check if this click is near an existing node (using Canvas-style distance calculation)
-        // @cursor, check this out - now using refs to avoid stale closures
-        console.log("handleNodeClick: ", currentNodes.length, currentNodes);
-		const clickedNode = currentNodes.find((node) => {
-            if (!node.properties.is_visible) return false;
-			// Use proper Euclidean distance like the working Canvas version
-			const distance = Math.sqrt(
-                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
-			);
-
-            console.log("distance", distance);
-            return distance < 0.00001; // Adjust threshold for coordinate space instead of pixel space
-		});
-
-		// Use ref values for current state to avoid stale closures
-		const currentSelectedNode = selectedNodeForConnectionRef.current;
-		const currentLastPlacedNode = lastPlacedNodeIdRef.current;
-
-		// Debug logging to understand what's happening
-		logger.info("Node click detected", {
-			lng,
-			lat,
-			nodesCount: currentNodes.length,
-			selectedNodeForConnection: currentSelectedNode,
-			lastPlacedNodeId: currentLastPlacedNode,
-            clickedNodeId: clickedNode?.properties.id || "none",
-		});
-
-		if (clickedNode) {
-			// Clicked on an existing node
-			if (currentSelectedNode && currentSelectedNode !== clickedNode.properties.id) {
-				// We have a different node selected - connect them! COPY addNewNode pattern
-				logger.userAction("Connecting two existing nodes", {
-					nodeA: currentSelectedNode,
-					nodeB: clickedNode.properties.id
-				});
-				
-				try {
-					// Use the new addConnection endpoint - much simpler!
-					await routeNodesApi.addConnection(currentSelectedNode, clickedNode.properties.id);
-					
-					logger.info("Successfully connected two nodes", {
-						nodeA: currentSelectedNode,
-						nodeB: clickedNode.properties.id
-					});
-					
-					// Refresh nodes to show new connections
-					refetchNodes();
-					
-				} catch (error) {
-					logger.error("Failed to connect nodes", error as Error);
-					alert("Failed to connect nodes. Please try again.");
-				}
-			} else {
-				// Select this node for connection (make marker green)
-				setSelectedNodeForConnection(clickedNode.properties.id);
-				selectedNodeForConnectionRef.current = clickedNode.properties.id;
-				// Clear lastPlacedNodeId when manually selecting a node
-				setLastPlacedNodeId(null);
-				lastPlacedNodeIdRef.current = null;
-				logger.userAction("Node selected for connection", {
-					nodeId: clickedNode.properties.id,
-				});
-			}
-		} else {
-			// Clicked on empty space
-			logger.info("Clicked on empty space - DETAILED STATE", {
-				lng,
-				lat,
-				nodesLength: currentNodes.length,
-				selectedNodeForConnection: currentSelectedNode,
-				lastPlacedNodeId: currentLastPlacedNode,
-				hasSelectedNode: !!currentSelectedNode,
-				hasLastPlaced: !!currentLastPlacedNode,
-				"nodes.length === 0": currentNodes.length === 0,
-			});
-
-			try {
-				if (currentSelectedNode) {
-					// Have a selected node - create new node and connect it
-					logger.info("Creating connected node", {
-						selectedNodeForConnection: currentSelectedNode,
-					});
-					const newNodeId = await addNewNode(lng, lat, currentSelectedNode);
-					// Auto-select the newly placed node (make it green) so next node connects to it
-					logger.info("🔗 AUTO-SELECTING newly created connected node", { 
-						newNodeId, 
-						previouslySelected: currentSelectedNode 
-					});
-					setSelectedNodeForConnection(newNodeId);
-					selectedNodeForConnectionRef.current = newNodeId;
-					setLastPlacedNodeId(null);
-					lastPlacedNodeIdRef.current = null;
-				} else if (currentNodes.length === 0) {
-					// No nodes exist - create first isolated node
-					logger.info("Creating first isolated node");
-					const newNodeId = await addNewNode(lng, lat, null);
-					// Auto-select the newly placed node (make it green) so next node connects to it
-					logger.info("🔗 AUTO-SELECTING newly created first node", { 
-						newNodeId 
-					});
-					setSelectedNodeForConnection(newNodeId);
-					selectedNodeForConnectionRef.current = newNodeId;
-					setLastPlacedNodeId(null);
-					lastPlacedNodeIdRef.current = null;
-				} else {
-					// Nodes exist but none selected - show error to user
-					logger.info("Cannot create node - no previous node selected");
-					// TODO: Show user error message telling them to choose a previous node
-					alert("Please click on an existing node first to connect the new node to it.");
-				}
-			} catch (error) {
-				logger.error("Failed to create node", error as Error);
-				alert("Failed to create node. Please try again.");
-			}
-		}
-	}, [nodesLoading, nodesIsError, nodesError, floorId, routeNodesMutations, refetchNodes]);
-
-	// Handle elevator/stairs tool click - should work like normal nodes
-	const handleElevatorStairsClick = useCallback(async (lng: number, lat: number) => {
-		// Use the same logic as handleNodeClick for consistency
-		const currentNodes = nodesRef.current;
-		const currentNodesLoading = nodesLoadingRef.current;
-		
-		logger.userAction("Elevator/Stairs tool clicked", { lng, lat });
-		
-		// Guard: Don't process clicks while nodes are loading
-		if (currentNodesLoading) {
-			logger.info("handleElevatorStairsClick: nodes still loading, ignoring click");
-			return;
-		}
-		
-		// Check if this click is near an existing node
-		const clickedNode = currentNodes.find((node) => {
-            if (!node.properties.is_visible) return false;
-			const distance = Math.sqrt(
-                (node.geometry!!.coordinates[0] - lng) ** 2 + (node.geometry!!.coordinates[1] - lat) ** 2
-			);
-            return distance < 0.00001;
-		});
-
-		const currentSelectedNode = selectedNodeForConnectionRef.current;
-
-		if (clickedNode) {
-			// Clicked on an existing node - select it for connection
-			setSelectedNodeForConnection(clickedNode.properties.id);
-			selectedNodeForConnectionRef.current = clickedNode.properties.id;
-			setLastPlacedNodeId(null);
-			lastPlacedNodeIdRef.current = null;
-			logger.userAction("Node selected for elevator/stairs connection", {
-				nodeId: clickedNode.properties.id,
-			});
-		} else {
-			// Clicked on empty space - check if we can create multi-floor node
-			if (currentSelectedNode || currentNodes.length === 0) {
-				// We have a selected node to connect to, or this is the first node
-				setPendingMultiFloorLocation({ lng, lat });
-				setShowMultiFloorNodeDialog(true);
-			} else {
-				// No node selected - show error like normal nodes
-				alert("Please click on an existing node first to connect the elevator/stairs to it.");
-			}
-		}
-	}, []);
-
-	// Handle multi-floor node creation - COPY EXACT PATTERN FROM addNewNode
-	const handleMultiFloorNodeSave = useCallback(async (nodeType: NodeType, selectedFloors: number[]) => {
-		if (!pendingMultiFloorLocation) {
-			logger.error("No pending location for multi-floor node");
-			return;
-		}
-
-		const { lng, lat } = pendingMultiFloorLocation;
-		const currentSelectedNode = selectedNodeForConnectionRef.current;
-		
-		logger.userAction("Creating multi-floor nodes", {
-			nodeType,
-			selectedFloors,
-			location: { lng, lat },
-			connectToNodeId: currentSelectedNode
-		});
-
-		try {
-			setSaveStatus("saving");
-			const createdNodeIds: number[] = [];
-			
-			// STEP 1: Create nodes on all selected floors - COPY addNewNode pattern
-			for (const targetFloorId of selectedFloors) {
-				// Determine connection for this floor
-				let connectToNodeId: number | null = null;
-				if (targetFloorId === floorId && currentSelectedNode) {
-					// On current floor, connect to selected node
-					connectToNodeId = currentSelectedNode;
-				}
-				
-				// Create node (connection will be added separately via addConnection)
-				const newNodeData = {
-					type: "Feature" as const,
-					geometry: {
-						type: "Point" as const,
-						coordinates: [lng, lat] as [number, number]
-					},
-					properties: {
-						floor_id: targetFloorId,
-						is_visible: true,
-						node_type: nodeType
-					}
-				};
-
-				const createdNode = await routeNodesMutations.create.mutateAsync({
-					data: newNodeData
-				});
-
-				const newNodeId = createdNode?.id || createdNode?.properties?.id;
-				if (!newNodeId) {
-					throw new Error("❌ Backend didn't return node ID");
-				}
-				
-				createdNodeIds.push(newNodeId);
-				
-				// Use the new addConnection endpoint for bidirectional connection
-				if (connectToNodeId) {
-					logger.info("🔗 Adding bidirectional connection to existing node");
-					await routeNodesApi.addConnection(newNodeId, connectToNodeId);
-				}
-			}
-
-			// STEP 2: Connect multi-floor nodes to each other (vertical connections)
-			if (createdNodeIds.length > 1) {
-				for (let i = 0; i < createdNodeIds.length; i++) {
-					const currentNodeId = createdNodeIds[i];
-					const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
-					
-					// Use the new addConnection endpoint for each connection
-					for (const otherNodeId of otherNodeIds) {
-						await routeNodesApi.addConnection(currentNodeId, otherNodeId);
-					}
-				}
-			}
-
-			setSaveStatus("success");
-			logger.info("Multi-floor nodes created successfully", {
-				nodeType,
-				createdNodeIds,
-				selectedFloors
-			});
-
-			// Auto-select the newly created node on current floor for chaining
-			const currentFloorNodeIndex = selectedFloors.indexOf(floorId);
-			if (currentFloorNodeIndex !== -1) {
-				const currentFloorNodeId = createdNodeIds[currentFloorNodeIndex];
-				setSelectedNodeForConnection(currentFloorNodeId);
-				selectedNodeForConnectionRef.current = currentFloorNodeId;
-			}
-
-			// Close dialog and reset state
-			setShowMultiFloorNodeDialog(false);
-			setPendingMultiFloorLocation(null);
-
-			// Refresh nodes data
-			refetchNodes();
-
-		} catch (error) {
-			logger.error("Failed to create multi-floor nodes", error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to create multi-floor nodes: " + (error as Error).message);
-		}
-	}, [pendingMultiFloorLocation, floorId, routeNodesMutations, refetchNodes]);
-
-	// Handle multi-floor node dialog cancel
-	const handleMultiFloorNodeCancel = useCallback(() => {
-		setShowMultiFloorNodeDialog(false);
-		setPendingMultiFloorLocation(null);
-	}, []);
-
-	const handleMapClick = useCallback((e: any) => {
-		logger.userAction("Map clicked - DETAILED", {
-			hasMap: !!map.current,
-			activeTool,
-			lng: e.lngLat.lng,
-			lat: e.lngLat.lat,
-			eventType: e.type,
-			currentBeacons: beacons.length,
-			currentNodes: nodesRef.current.length, // Use ref for current value
-			currentPolygons: polygons.length,
-		});
-
-		if (!map.current) {
-			logger.error("Map click failed - no map instance");
-			return;
-		}
-
-		const {lng, lat} = e.lngLat;
-		const currentTool = activeToolRef.current; // Use ref to get current tool
-
-		switch (currentTool) {
-			case "beacons":
-				addBeacon(lng, lat);
-				// Keep the tool active for adding multiple beacons
-				break;
-			case "nodes":
-				handleNodeClick(lng, lat);
-				// Keep the tool active for adding multiple nodes
-				break;
-			case "elevatorStairs":
-				handleElevatorStairsClick(lng, lat);
-				break;
-			case "poi":
-				addPolygonPoint(lng, lat);
-				break;
-			case "select":
-				break;
-			case "pan":
-				break;
-			default:
-				break;
-		}
-	}, [handleNodeClick, addBeacon, handleElevatorStairsClick, activeTool, beacons.length, polygons.length]);
-
-	const addNewNode = async (
-		lng: number,
-		lat: number,
-		connectToNodeId: number | null
-	): Promise<number> => {
-		logger.info("🎯 CREATING NODE - SIMPLE APPROACH", {
-			coordinates: [lng, lat],
-			connectToNodeId,
-			willConnect: !!connectToNodeId
-		});
-
-		try {
-			// Step 1: Create the new node (connection will be added separately via addConnection)
-			const newNodeData = {
-				type: "Feature" as const,
-				geometry: {
-					type: "Point" as const,
-					coordinates: [lng, lat] as [number, number]
-				},
-				properties: {
-					floor_id: floorId,
-					is_visible: true
-				}
-			};
-
-			logger.info("📤 Creating node with backend field name", { 
-				newNodeData,
-				hasConnection: !!connectToNodeId,
-				connectingTo: connectToNodeId,
-				exactPayload: JSON.stringify(newNodeData, null, 2)
-			});
-
-			const createdNode = await routeNodesMutations.create.mutateAsync({
-				data: newNodeData
-			});
-
-			const newNodeId = createdNode?.id || createdNode?.properties?.id;
-			
-			if (!newNodeId) {
-				throw new Error("❌ Backend didn't return node ID");
-			}
-
-			logger.info("✅ Node created successfully", { 
-				newNodeId,
-				createdNode,
-				backendResponse: createdNode,
-				fullResponse: JSON.stringify(createdNode, null, 2),
-				hasConnections: !!(createdNode?.properties?.connected_node_ids || createdNode?.properties?.connections)
-			});
-
-			// Step 2: Use the new addConnection endpoint for bidirectional connection
-			if (connectToNodeId) {
-				logger.info("🔗 Adding bidirectional connection using addConnection endpoint");
-				await routeNodesApi.addConnection(newNodeId, connectToNodeId);
-				logger.info("✅ Bidirectional connection established");
-			}
-
-			// Refetch nodes to update the UI
-			await refetchNodes();
-
-			// Since addConnection automatically creates bidirectional connections,
-			// we don't need to mark connections as needing fixing
-
-			return newNodeId;
-		} catch (error) {
-			logger.error("❌ Node creation failed", error as Error);
-			throw error;
-		}
-	};
-
-	// Clear all temporary drawing elements from the map
-	const clearTempDrawing = () => {
-		if (!map.current) return;
-
-		logger.info("Clearing temporary drawing elements");
-
-		// Remove temporary markers
-		tempDrawingMarkers.current.forEach((marker) => marker.remove());
-		tempDrawingMarkers.current = [];
-
-		// Remove temporary lines
-		Object.entries(tempDrawingLines.current).forEach(
-			([layerId, sourceId]) => {
-				if (map.current!.getLayer(layerId)) {
-					map.current!.removeLayer(layerId);
-				}
-				if (map.current!.getSource(sourceId)) {
-					map.current!.removeSource(sourceId);
-				}
-			}
-		);
-		tempDrawingLines.current = {};
-	};
-
-	// Add a small circle marker at the clicked location
-	const addPolygonPointMarker = (
-		lng: number,
-		lat: number,
-		pointIndex: number
-	) => {
-		if (!map.current) return;
-
-		const isFirst = pointIndex === 0;
-		const color = isFirst ? "#ff0000" : "#00aa00"; // Red for first point, green for others
-
-		// Create a simple HTML element for the marker
-		const markerElement = document.createElement("div");
-		markerElement.style.width = "10px";
-		markerElement.style.height = "10px";
-		markerElement.style.borderRadius = "50%";
-		markerElement.style.backgroundColor = color;
-		markerElement.style.border = "2px solid white";
-		markerElement.style.boxShadow = "0 0 4px rgba(0,0,0,0.3)";
-
-		const marker = new Marker({element: markerElement})
-			.setLngLat([lng, lat])
-			.addTo(map.current);
-
-		tempDrawingMarkers.current.push(marker);
-
-		logger.info("Added polygon point marker", {
-			point: {lng, lat},
-			pointIndex,
-			isFirst,
-			color,
-		});
-	};
-
-	// // Add a line between two points
-	const addPolygonLine = (
-		fromPoint: Point,
-		toPoint: Point,
-		lineId: number
-	) => {
-		if (!map.current) {
-			logger.error("Cannot add polygon line - no map instance");
-			return;
-		}
-
-		const sourceId = `temp-polygon-line-source-${Math.floor(lineId)}`;
-		const layerId = `temp-polygon-line-layer-${Math.floor(lineId)}`;
-
-		logger.info("ATTEMPTING to add polygon line", {
-			from: fromPoint,
-			to: toPoint,
-			lineId,
-			sourceId,
-			layerId,
-			mapExists: !!map.current,
-		});
-
-		try {
-			// Check if source already exists and remove it
-			if (map.current.getSource(sourceId)) {
-				logger.warn("Source already exists, removing it first", {
-					sourceId,
-				});
-				if (map.current.getLayer(layerId)) {
-					map.current.removeLayer(layerId);
-				}
-				map.current.removeSource(sourceId);
-			}
-
-			map.current.addSource(sourceId, {
-				type: "geojson",
-				data: {
-					type: "Feature",
-					geometry: {
-						type: "LineString",
-						coordinates: [
-							[fromPoint.x, fromPoint.y],
-							[toPoint.x, toPoint.y],
-						],
-					},
-					properties: {},
-				},
-			});
-
-			map.current.addLayer({
-				id: layerId,
-				type: "line",
-				source: sourceId,
-				paint: {
-					"line-color": "#0066ff", // Blue lines
-					"line-width": 3,
-				},
-			});
-
-			tempDrawingLines.current[layerId] = sourceId;
-
-			logger.info("✅ SUCCESS - Added polygon line", {
-				from: fromPoint,
-				to: toPoint,
-				lineId,
-				sourceId,
-				layerId,
-			});
-		} catch (error) {
-			logger.error("❌ FAILED to add polygon line", error as Error, {
-				fromPoint,
-				toPoint,
-				lineId,
-				sourceId,
-				layerId,
-				errorMessage: (error as Error).message,
-				mapLoaded: !!map.current,
-			});
-		}
-	};
-
-	// // Check if the clicked point is close to the first point (to close the polygon)
-	const isCloseToFirstPoint = (
-		lng: number,
-		lat: number,
-		firstPoint: Point
-	): boolean => {
-		const deltaLng = Math.abs(lng - firstPoint.x);
-		const deltaLat = Math.abs(lat - firstPoint.y);
-        const maxDelta = 0.00001; // About 10 meters - much easier to click accurately
-
-		logger.info("Checking if close to first point", {
-			clickedPoint: {lng, lat},
-			firstPoint,
-			deltaLng,
-			deltaLat,
-			maxDelta,
-			isClose: deltaLng < maxDelta && deltaLat < maxDelta,
-		});
-
-		return deltaLng < maxDelta && deltaLat < maxDelta;
-	};
-
-	// Handle polygon point addition with the new flow
-	const addPolygonPoint = useCallback((lng: number, lat: number) => {
-		const newPoint: Point = {x: lng, y: lat} as Point;
-
-		logger.userAction("🎯 Polygon point clicked", {
-			point: newPoint,
-			currentPoints: pendingPolygonPointsRef.current.length,
-			pendingPoints: pendingPolygonPointsRef.current,
-			isDrawingPolygon: isDrawingPolygonRef.current,
-			activeTool: activeTool,
-		});
-
-		// If this is not the first point, check if it's close to the first point to close
-		if (
-			pendingPolygonPointsRef.current.length >= 3 &&
-			isCloseToFirstPoint(lng, lat, pendingPolygonPointsRef.current[0])
-		) {
-			// Close the polygon and show dialog
-			logger.info("🎉 POLYGON CLOSED by clicking near first point!");
-
-			// Add closing line back to first point
-			const closingLineId = Math.random() * 1000000;
-			addPolygonLine(
-				pendingPolygonPointsRef.current[
-				pendingPolygonPointsRef.current.length - 1
-					],
-				pendingPolygonPointsRef.current[0],
-				closingLineId
-			);
-
-			// Store the completed polygon points and show dialog
-			// setCurrentPolygonPoints([...pendingPolygonPointsRef.current]); // Don't include the closing point
-
-			// Calculate center for the dialog
-			const centerX =
-				pendingPolygonPointsRef.current.reduce(
-					(sum, p) => sum + p.x,
-					0
-				) / pendingPolygonPointsRef.current.length;
-			const centerY =
-				pendingPolygonPointsRef.current.reduce(
-					(sum, p) => sum + p.y,
-					0
-				) / pendingPolygonPointsRef.current.length;
-
-			// setPendingPolygonCenter({ lng: centerX, lat: centerY });
-			setPolygonName("");
-            // setIsWallMode(false);
-			setShowPolygonDialog(true);
-
-			logger.info("🎉 Showing polygon dialog", {
-				center: {lng: centerX, lat: centerY},
-				points: pendingPolygonPointsRef.current.length,
-			});
-
-			return;
-		}
-
-		// Add the new point
-		const updatedPoints = [...pendingPolygonPointsRef.current, newPoint];
-		pendingPolygonPointsRef.current = updatedPoints;
-		setPendingPolygonPoints(updatedPoints);
-
-		// Add visual marker for this point
-		addPolygonPointMarker(lng, lat, updatedPoints.length - 1);
-
-		// Set drawing state first
-		if (updatedPoints.length === 1) {
-			isDrawingPolygonRef.current = true;
-			setIsDrawingPolygon(true);
-			logger.info("Started drawing polygon");
-		}
-
-		// Add line from previous point to this point (if not the first point)
-		if (updatedPoints.length > 1) {
-			const previousPoint = updatedPoints[updatedPoints.length - 2];
-			const lineId = Math.random() * 1000000; // Use random number for unique ID
-			logger.info("🔵 ADDING LINE between points", {
-				from: previousPoint,
-				to: newPoint,
-				lineId,
-				totalPoints: updatedPoints.length,
-			});
-			addPolygonLine(previousPoint, newPoint, lineId);
-		}
-
-		logger.userAction("Polygon point added", {
-			point: newPoint,
-			totalPoints: updatedPoints.length,
-		});
-	}, [activeTool]);
-
-	const handleToolChange = (tool: DrawingTool) => {
-		logger.info("Tool change requested", {
-			from: activeTool,
-			to: tool,
-			isDrawingPolygon,
-			// pendingPoints: pendingPolygonPoints.length,
-		});
-
-		// If switching away from POI tool, clear any polygon drawing state
-		if (
-			activeTool === "poi" &&
-			tool !== "poi" &&
-			isDrawingPolygonRef.current
-		) {
-			isDrawingPolygonRef.current = false;
-			pendingPolygonPointsRef.current = [];
-			setIsDrawingPolygon(false);
-			// setCurrentPolygonPoints([]);
-			setPendingPolygonPoints([]);
-			clearTempDrawing();
-		}
-
-		// If switching away from nodes tool, clear node selection state
-		if (activeTool === "nodes" && tool !== "nodes") {
-			setSelectedNodeForConnection(null);
-			setLastPlacedNodeId(null);
-			lastPlacedNodeIdRef.current = null;
-		}
-
-		// If switching away from elevatorStairs tool, clear any pending state
-		if (activeTool === "elevatorStairs" && tool !== "elevatorStairs") {
-			setShowMultiFloorNodeDialog(false);
-			setPendingMultiFloorLocation(null);
-		}
-
-		setActiveTool(tool);
-		activeToolRef.current = tool; // Keep ref in sync
-		setSelectedItem(null);
-	};
-
-	// --- Update handlers ---
-
-	// Polygon Save (add or edit) - immediate backend save
-	const handlePolygonSave = async () => {
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			if (editingPolygonId) {
-				// Edit existing polygon
-				const polygon = polygons.find((p) => p.properties.id === editingPolygonId);
-				if (polygon) {
-					const updated = PolygonBuilder.fromPolygon(polygon).setName(polygonName).build();
-					await poisMutations.update.mutateAsync({
-						data: updated
-					});
-					logger.info("Polygon updated successfully", { id: editingPolygonId });
-				}
-			} else {
-				// Add new polygon - immediate save to backend (let backend generate ID)
-				const newPolygon = new PolygonBuilder()
-					.setFloorId(floorId)
-					.setName(polygonName)
-					.setDescription("")
-					.setType("Room")
-					.setIsVisible(true)
-					.setColor("#3b82f6")
-					.setCategoryId(null)
-					.setGeometry(convertPointsToCoordinates(pendingPolygonPoints))
-					.build();
-
-				// Remove ID from properties to let backend generate it
-				const { id, ...propertiesWithoutId } = newPolygon.properties;
-				const polygonForCreation = {
-					...newPolygon,
-					properties: propertiesWithoutId
-				};
-
-				await poisMutations.create.mutateAsync({
-                    data: polygonForCreation
-				});
-				logger.info("Polygon created successfully", { name: polygonName });
-			}
-
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-		} catch (error) {
-			logger.error("Failed to save polygon", error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to save polygon: " + (error as Error).message);
-		}
-
-		// Clear dialog state
-		setShowPolygonDialog(false);
-		setPolygonName("");
-		setEditingPolygonId(null);
-		setPendingPolygonPoints([]);
-		clearTempDrawing();
-	};
-
-	// Beacon Save (add or edit) - immediate backend save
-	const handleBeaconSave = async () => {
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			if (editingBeaconId) {
-				// Edit existing beacon
-				const beacon = beacons.find((b) => b.properties.id === editingBeaconId);
-				if (beacon) {
-					const updated = BeaconBuilder.fromBeacon(beacon).setName(beaconName).build();
-					await beaconsMutations.update.mutateAsync({
-						data: updated
-					});
-					logger.info("Beacon updated successfully", { id: editingBeaconId });
-				}
-			} else {
-				// Add new beacon - immediate save to backend (let backend generate ID)
-				if (pendingBeaconLocation) {
-					const newBeacon = new BeaconBuilder()
-						.setFloorId(floorId)
-						.setName(beaconName)
-						.setGeometry(pendingBeaconLocation.lng, pendingBeaconLocation.lat)
-						.setIsVisible(true)
-						.setIsActive(true)
-						.setBatteryLevel(100)
-						.build();
-
-					// Remove ID from properties to let backend generate it
-					const { id, ...propertiesWithoutId } = newBeacon.properties;
-					const beaconForCreation = {
-						...newBeacon,
-						properties: propertiesWithoutId
-					};
-
-					await beaconsMutations.create.mutateAsync({
-                        data: beaconForCreation
-					});
-					logger.info("Beacon created successfully", { name: beaconName });
-				}
-			}
-
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-		} catch (error) {
-			logger.error("Failed to save beacon", error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to save beacon: " + (error as Error).message);
-		}
-
-		// Clear dialog state
-		setShowBeaconDialog(false);
-		setBeaconName("");
-		setPendingBeaconLocation(null);
-		setEditingBeaconId(null);
-	};
-
-	// Node Save (add or edit) - immediate backend save
-	const handleNodeSave = async () => {
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			if (editingNodeId) {
-				// Edit existing node (name only for now)
-				const node = nodes.find((n) => n.properties.id === editingNodeId);
-				if (node) {
-					// Note: RouteNode doesn't have a name field in the interface, 
-					// this is just for demonstration. In practice, you might update other properties
-					await routeNodesMutations.update.mutateAsync({
-						data: node
-					});
-					logger.info("Node updated successfully", { id: editingNodeId });
-				}
-			} else {
-				// Add (not typically used as nodes are created via map click)
-				logger.info("Node creation via dialog not implemented");
-			}
-
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-		} catch (error) {
-			logger.error("Failed to save node", error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to save node: " + (error as Error).message);
-		}
-
-		// Clear dialog state
-		setShowNodeDialog(false);
-		setNodeName("");
-		setEditingNodeId(null);
-	};
-
-	// Fix bidirectional connections handler removed - no longer needed with addConnection endpoint
-
-	// Recalculate POI closest nodes handler
-	const handleRecalculatePoiNodes = async () => {
-		logger.userAction('Recalculate POI closest nodes clicked', { floorId });
-		setIsRecalculatingPoiNodes(true);
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			const result = await polygonsApi.recalculateClosestNodes(floorId);
-			
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-			
-			logger.info('POI closest nodes recalculated successfully', { 
-				floorId, 
-				updatedPois: result.updatedPois,
-				message: result.message 
-			});
-		} catch (error) {
-			logger.error('Failed to recalculate POI closest nodes', error as Error);
-			setSaveStatus("error");
-			setSaveError("Failed to recalculate POI closest nodes: " + (error as Error).message);
-		} finally {
-			setIsRecalculatingPoiNodes(false);
-		}
-	};
-
-	// Delete handler - immediate backend delete
-	const handleDeleteItem = async (
-		type: "polygon" | "beacon" | "node",
-		id: number,
-		e: React.MouseEvent<HTMLButtonElement>
-	) => {
-		e.stopPropagation();
-		logger.userAction("Delete item clicked", {type, id});
-
-		setSaveStatus("saving");
-		setSaveError(null);
-
-		try {
-			switch (type) {
-				case "polygon":
-					await poisMutations.delete.mutateAsync(id);
-					logger.info("Polygon deleted successfully", { id });
-					break;
-				case "beacon":
-					await beaconsMutations.delete.mutateAsync(id);
-					logger.info("Beacon deleted successfully", { id });
-					break;
-				case "node":
-					await routeNodesMutations.delete.mutateAsync(id);
-					logger.info("Node deleted successfully", { id });
-					break;
-			}
-
-			setSaveStatus("success");
-			setTimeout(() => setSaveStatus("idle"), 2000);
-		} catch (error) {
-			logger.error(`Failed to delete ${type}`, error as Error);
-			setSaveStatus("error");
-			setSaveError(`Failed to delete ${type}: ` + (error as Error).message);
-		}
-
-		if (selectedItem?.type === type && selectedItem?.id === id) {
-			setSelectedItem(null);
-		}
-	};
-
-	// No more unsaved changes since we save immediately
-	const hasUnsavedChanges = false;
-
-	const toggleLayerVisibility = (
-		type: "polygon" | "beacon" | "node",
-		id: number
-	) => {
-		logger.userAction("Layer visibility toggled", {type, id});
-
-		if (!map.current) {
-			logger.userAction("Map instance not available, aborting toggle", {type, id});
-			return;
-		}
-
-		const mapInstance = map.current;
-		logger.userAction("Map instance found, proceeding", {type, id});
-
-		switch (type) {
-			case "polygon":
-				logger.userAction("Handling polygon visibility toggle", {id});
-				queryClient.setQueryData<Polygon[]>(['pois'], (old = []) => {
-					logger.userAction("Current polygons fetched from cache", {count: old.length});
-
-					const newPolygons = old.map(polygon => {
-						const p = polygon.properties;
-						if (p.id === id) {
-                            const newVisible = !p.is_visible;
-							logger.userAction("Found matching polygon, toggling visibility", {
-								id,
-                                oldVisible: p.is_visible,
-								newVisible
-							});
-
-							// Update map visibility
-							const marker = mapMarkers.current[`polygon-${id}`];
-							const layerId = mapLayers.current[`polygon-${id}`];
-							const borderLayerId = mapLayers.current[`polygon-border-${id}`];
-
-							if (marker) {
-								logger.userAction("Marker found for polygon", {id});
-								if (newVisible) {
-									marker.addTo(mapInstance);
-									logger.userAction("Marker added to map", {id});
-								} else {
-									marker.remove();
-									logger.userAction("Marker removed from map", {id});
-								}
-							} else {
-								logger.userAction("No marker found for polygon", {id});
-							}
-
-							if (layerId && mapInstance.getLayer(layerId)) {
-								mapInstance.setLayoutProperty(
-									layerId,
-									"visibility",
-									newVisible ? "visible" : "none"
-								);
-								logger.userAction("Layer visibility set", {layerId, visible: newVisible});
-							} else {
-								logger.userAction("Layer ID not found or layer missing in map instance", {layerId, id});
-							}
-
-							if (borderLayerId && mapInstance.getLayer(borderLayerId)) {
-								mapInstance.setLayoutProperty(
-									borderLayerId,
-									"visibility",
-									newVisible ? "visible" : "none"
-								);
-								logger.userAction("Border layer visibility set", {borderLayerId, visible: newVisible});
-							} else {
-								logger.userAction("Border layer ID not found or layer missing in map instance", {
-									borderLayerId,
-									id
-								});
-							}
-
+                const newNodeData = new RouteNodeBuilder()
+                    .setFloorId(targetFloorId)
+                    .setLocation(lng, lat)
+                    .setIsVisible(true)
+                    .setNodeType(nodeType)
+                    .build();
+
+                const createdNode = await routeNodesMutations.create.mutateAsync({ data: newNodeData });
+                const newNodeId = createdNode?.id || createdNode?.properties?.id;
+
+                if (!newNodeId) {
+                    throw new Error("Backend didn't return node ID");
+                }
+
+                createdNodeIds.push(newNodeId);
+
+                if (connectToNodeId) {
+                    await routeNodesApi.addConnection(newNodeId, connectToNodeId);
+                }
+            }
+
+            // Connect multi-floor nodes to each other
+            if (createdNodeIds.length > 1) {
+                for (let i = 0; i < createdNodeIds.length; i++) {
+                    const currentNodeId = createdNodeIds[i];
+                    const otherNodeIds = createdNodeIds.filter(id => id !== currentNodeId);
+
+                    for (const otherNodeId of otherNodeIds) {
+                        await routeNodesApi.addConnection(currentNodeId, otherNodeId);
+                    }
+                }
+            }
+
+            dialogState.updateSaveStatus("success");
+            dialogState.closeMultiFloorNodeDialog();
+            refetchNodes();
+
+            // Auto-select the newly created node on current floor
+            const currentFloorNodeIndex = selectedFloors.indexOf(floorId);
+            if (currentFloorNodeIndex !== -1) {
+                const currentFloorNodeId = createdNodeIds[currentFloorNodeIndex];
+                drawingState.setSelectedNodeForConnection(currentFloorNodeId);
+            }
+        } catch (error) {
+            logger.error("Failed to create multi-floor nodes", error as Error);
+            dialogState.updateSaveStatus("error", "Failed to create multi-floor nodes: " + (error as Error).message);
+        }
+    };
+
+    // Delete handler
+    const handleDeleteItem = async (type: "polygon" | "beacon" | "node", id: number, e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+        dialogState.updateSaveStatus("saving");
+
+        try {
+            switch (type) {
+                case "polygon":
+                    await poisMutations.delete.mutateAsync(id);
+                    break;
+                case "beacon":
+                    await beaconsMutations.delete.mutateAsync(id);
+                    break;
+                case "node":
+                    await routeNodesMutations.delete.mutateAsync(id);
+                    break;
+            }
+            dialogState.updateSaveStatus("success");
+        } catch (error) {
+            logger.error(`Failed to delete ${type}`, error as Error);
+            dialogState.updateSaveStatus("error", `Failed to delete ${type}: ` + (error as Error).message);
+        }
+
+        if (drawingState.selectedItem?.type === type && drawingState.selectedItem?.id === id) {
+            drawingState.setSelectedItem(null);
+        }
+    };
+
+    // Layer visibility toggle
+    const toggleLayerVisibility = (type: "polygon" | "beacon" | "node", id: number) => {
+        logger.userAction("Layer visibility toggled", { type, id });
+
+        switch (type) {
+            case "polygon":
+                queryClient.setQueryData<Polygon[]>(['pois', floorId], (old = []) => {
+                    return old.map(polygon => {
+                        if (polygon.properties.id === id) {
+                            const newVisible = !polygon.properties.is_visible;
+                            logger.userAction("Polygon visibility toggled", { id, newVisible });
                             return PolygonBuilder.fromPolygon(polygon).setIsVisible(newVisible).build();
                         }
-						return polygon;
-					});
+                        return polygon;
+                    });
+                });
+                break;
 
-					logger.userAction("Polygons updated with new visibility state", {updatedCount: newPolygons.length});
-					return newPolygons;
-				});
-				break;
+            case "beacon":
+                queryClient.setQueryData<Beacon[]>(['beacons', floorId], (old = []) => {
+                    return old.map(beacon => {
+                        if (beacon.properties.id === id) {
+                            const newVisible = !beacon.properties.is_visible;
+                            logger.userAction("Beacon visibility toggled", { id, newVisible });
+                            return BeaconBuilder.fromBeacon(beacon).setIsVisible(newVisible).build();
+                        }
+                        return beacon;
+                    });
+                });
+                break;
 
-			case "beacon":
-				queryClient.setQueryData<Beacon[]>(['beacons'], (old = []) =>
-					old.map(b => {
-						if (b.properties.id === id) {
-                            const newVisible = !b.properties.is_visible;
+            case "node":
+                queryClient.setQueryData<RouteNode[]>(['routeNodes', floorId], (old = []) => {
+                    return old.map(node => {
+                        if (node.properties.id === id) {
+                            const newVisible = !node.properties.is_visible;
+                            logger.userAction("Node visibility toggled", { id, newVisible });
+                            return RouteNodeBuilder.fromRouteNode(node).setIsVisible(newVisible).build();
+                        }
+                        return node;
+                    });
+                });
+                break;
+        }
+    };
 
-							// Update map visibility
-							const marker = mapMarkers.current[`beacon-${id}`];
-							if (marker) {
-								if (newVisible) {
-									marker.addTo(mapInstance);
-								} else {
-									marker.remove();
-								}
-							}
-
-                            return BeaconBuilder.fromBeacon(b).setIsVisible(newVisible).build();
-						}
-						return b;
-					})
-				);
-				break;
-		}
-	};
-
-	// Old save handler removed - now using immediate saves
-
-	// // Add missing handler functions
-	const handlePolygonCancel = () => {
-		setShowPolygonDialog(false);
-		setPolygonName("");
-        // setIsWallMode(false);
-		setEditingPolygonId(null);
-		setPendingPolygonPoints([]);
-		logger.userAction("Polygon dialog cancelled");
-	};
-
-	const handleBeaconCancel = () => {
-		setShowBeaconDialog(false);
-		setBeaconName("");
-		setPendingBeaconLocation(null);
-		setEditingBeaconId(null);
-		logger.userAction("Beacon dialog cancelled");
-	};
-
-	const handleNodeCancel = () => {
-		setShowNodeDialog(false);
-		setNodeName("");
-		setEditingNodeId(null);
-		logger.userAction("Node dialog cancelled");
-	};
-
-	const handleLayerItemClick = (
-		type: "polygon" | "beacon" | "node",
-		id: number
-	) => {
-		setSelectedItem({type, id});
-		setActiveTool("select");
-		logger.userAction("Layer item selected", {type, id});
-	};
-
-	const handleEditItem = (
-		type: "polygon" | "beacon" | "node",
-		id: number,
-		e: React.MouseEvent<HTMLButtonElement>
-	) => {
-		e.stopPropagation();
-		logger.userAction("Edit item clicked", {type, id});
-
-		switch (type) {
-			case "polygon":
+    // Edit handler
+    const handleEditItem = (type: "polygon" | "beacon" | "node", id: number, e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+        
+        switch (type) {
+            case "polygon":
                 const polygon = polygons.find((p) => p.properties.id === id);
-				if (polygon) {
-                    setPolygonName(polygon.properties.name);
-					setEditingPolygonId(id);
-					setShowPolygonDialog(true);
-					setSelectedItem({type, id});
-				}
-				break;
-			case "beacon":
+                if (polygon) {
+                    dialogState.openPolygonDialog(polygon.properties.name, id);
+                    drawingState.setSelectedItem({ type, id });
+                }
+                break;
+            case "beacon":
                 const beacon = beacons.find((b) => b.properties.id === id);
-				if (beacon) {
-                    setBeaconName(beacon.properties.name);
-					setEditingBeaconId(id);
-					setShowBeaconDialog(true);
-					setSelectedItem({type, id});
-				}
-				break;
-			case "node":
+                if (beacon) {
+                    dialogState.openBeaconDialog(beacon.properties.name, null, id);
+                    drawingState.setSelectedItem({ type, id });
+                }
+                break;
+            case "node":
                 const node = nodes.find((n) => n.properties.id === id);
-				if (node) {
-                    setNodeName(`Node ${node.properties.id}`);
-					setEditingNodeId(id);
-					setShowNodeDialog(true);
-					setSelectedItem({type, id});
-				}
-				break;
-		}
-	};
+                if (node) {
+                    dialogState.openNodeDialog(`Node ${node.properties.id}`, id);
+                    drawingState.setSelectedItem({ type, id });
+                }
+                break;
+        }
+    };
 
-	// Add more detailed debugging for re-render tracking
-	logger.debug("FloorEditor component rendering", {
-		floorId,
-		activeTool,
-		loading,
-		mapLoading,
-		hasFloorData: true, // Now using individual queries
-		coordinates: currentCoordinates,
-	});
+    // Layer item click handler
+    const handleLayerItemClick = (type: "polygon" | "beacon" | "node", id: number) => {
+        logger.userAction("Layer item clicked", { type, id });
+        
+        // Set the selected item for highlighting
+        drawingState.setSelectedItem({ type, id });
+        drawingState.setActiveTool("select");
+        
+        // Center the map on the selected item if possible
+        if (map.current) {
+            try {
+                let coordinates: [number, number] | null = null;
+                
+                switch (type) {
+                    case "polygon":
+                        const polygon = polygons.find(p => p.properties.id === id);
+                        if (polygon && polygon.geometry.coordinates[0].length > 0) {
+                            // Calculate center of polygon
+                            const ring = polygon.geometry.coordinates[0];
+                            const centerX = ring.reduce((sum, point) => sum + point[0], 0) / ring.length;
+                            const centerY = ring.reduce((sum, point) => sum + point[1], 0) / ring.length;
+                            coordinates = [centerX, centerY];
+                        }
+                        break;
+                        
+                    case "beacon":
+                        const beacon = beacons.find(b => b.properties.id === id);
+                        if (beacon && beacon.geometry) {
+                            coordinates = beacon.geometry.coordinates;
+                        }
+                        break;
+                        
+                    case "node":
+                        const node = nodes.find(n => n.properties.id === id);
+                        if (node && node.geometry) {
+                            coordinates = node.geometry.coordinates;
+                        }
+                        break;
+                }
+                
+                // Pan to the item's location with smooth animation
+                if (coordinates) {
+                    map.current.flyTo({
+                        center: coordinates,
+                        zoom: Math.max(map.current.getZoom(), 18), // Ensure good zoom level
+                        duration: 1000 // 1 second animation
+                    });
+                    
+                    logger.userAction("Map centered on selected item", { type, id, coordinates });
+                }
+            } catch (error) {
+                logger.error("Error centering map on selected item", error as Error);
+            }
+        }
+    };
 
-	if (loading) {
-		return (
-			<Container variant="PAGE">
-				<Header
-					title={UI_MESSAGES.FLOOR_EDITOR_TITLE}
-					actions={
-						<Button
-							variant="SECONDARY"
-							onClick={onBack}
-						>
-							{UI_MESSAGES.FLOOR_EDITOR_BACK_BUTTON}
-						</Button>
-					}
-				/>
-				<div className="loading-message">
-					{UI_MESSAGES.FLOOR_EDITOR_LOADING}
-				</div>
-			</Container>
-		);
-	}
+    // POI recalculation handler
+    const handleRecalculatePoiNodes = async () => {
+        setIsRecalculatingPoiNodes(true);
+        dialogState.updateSaveStatus("saving");
 
-	return (
-		<Container variant="PAGE">
-			<Header
-				title={`${UI_MESSAGES.FLOOR_EDITOR_TITLE} - ${
-					floor?.name || "Unknown Floor"
-				}`}
-				actions={
-					<div className="header-actions">
-						{saveStatus === "saving" && (
-							<span className="save-status saving">
-								Saving...
-							</span>
-						)}
-						{saveStatus === "success" && (
-							<span className="save-status success">
-								Saved successfully!
-							</span>
-						)}
-						{saveError && (
-							<span className="save-status error">
-								{saveError}
-							</span>
-						)}
-						<Button
-							variant="SECONDARY"
-							onClick={onBack}
-						>
-							{UI_MESSAGES.FLOOR_EDITOR_BACK_BUTTON}
-						</Button>
-					</div>
-				}
-			/>
+        try {
+            const result = await polygonsApi.recalculateClosestNodes(floorId);
+            dialogState.updateSaveStatus("success");
+            logger.info('POI closest nodes recalculated successfully', { result });
+        } catch (error) {
+            logger.error('Failed to recalculate POI closest nodes', error as Error);
+            dialogState.updateSaveStatus("error", "Failed to recalculate POI closest nodes: " + (error as Error).message);
+        } finally {
+            setIsRecalculatingPoiNodes(false);
+        }
+    };
 
-			{error && <div className="floor-editor-error">{error}</div>}
+    // Effects
+    useEffect(() => {
+        if (!loading && mapContainer.current && !map.current) {
+            initializeMap();
+        }
+    }, [loading, initializeMap]);
 
-			<div className="floor-editor-layout">
-				{/* Actions Section */}
-				<ActionsSection
-					floorId={floorId}
-					onRecalculatePoiNodes={handleRecalculatePoiNodes}
-					isRecalculatingPoiNodes={isRecalculatingPoiNodes}
-				/>
+    useEffect(() => {
+        if (mapState.mapLoadedSuccessfully && !mapState.mapLoading) {
+            updateMapData();
+        }
+    }, [polygons, beacons, nodes, drawingState.selectedNodeForConnection, mapState.mapLoadedSuccessfully, mapState.mapLoading, updateMapData]);
 
-				{/* Drawing Tools Toolbar */}
-				<DrawingToolbar
-					activeTool={activeTool}
-					onToolChange={handleToolChange}
-					isDrawingPolygon={isDrawingPolygon}
-					pendingPolygonPoints={pendingPolygonPoints.length}
-					onCancelDrawing={() => {
-						isDrawingPolygonRef.current = false;
-						pendingPolygonPointsRef.current = [];
-						setIsDrawingPolygon(false);
-						setCurrentPolygonPoints([]);
-						setPendingPolygonPoints([]);
-						clearTempDrawing();
-						setSelectedNodeForConnection(null);
-						setLastPlacedNodeId(null);
-						lastPlacedNodeIdRef.current = null;
-						logger.userAction("Polygon drawing cancelled");
-					}}
-						onClearAll={async () => {
-							logger.userAction("Clear all button clicked");
-							setSaveStatus("saving");
-							setSaveError(null);
+    useEffect(() => {
+        return () => {
+            mapState.cleanup();
+            if (map.current) {
+                try {
+                    map.current.remove();
+                } catch (error) {
+                    console.warn('Error removing map:', error);
+                }
+            }
+        };
+    }, []); // Empty dependency array - only cleanup on unmount
 
-							try {
-								// Delete all polygons
-								for (const polygon of polygons) {
-									await poisMutations.delete.mutateAsync(polygon.properties.id);
-								}
+    if (loading) {
+        return (
+            <Container variant="PAGE">
+                <Header
+                    title={UI_MESSAGES.FLOOR_EDITOR_TITLE}
+                    actions={<Button variant="SECONDARY" onClick={onBack}>{UI_MESSAGES.FLOOR_EDITOR_BACK_BUTTON}</Button>}
+                />
+                <div className="loading-message">{UI_MESSAGES.FLOOR_EDITOR_LOADING}</div>
+            </Container>
+        );
+    }
 
-								// Delete all beacons
-								for (const beacon of beacons) {
-									await beaconsMutations.delete.mutateAsync(beacon.properties.id);
-								}
+    return (
+        <Container variant="PAGE">
+            <Header
+                title={`${UI_MESSAGES.FLOOR_EDITOR_TITLE} - ${floor?.name || "Unknown Floor"}`}
+                actions={
+                    <div className="header-actions">
+                        {dialogState.saveStatus === "saving" && <span className="save-status saving">Saving...</span>}
+                        {dialogState.saveStatus === "success" && <span className="save-status success">Saved successfully!</span>}
+                        {dialogState.saveError && <span className="save-status error">{dialogState.saveError}</span>}
+                        <Button variant="SECONDARY" onClick={onBack}>{UI_MESSAGES.FLOOR_EDITOR_BACK_BUTTON}</Button>
+                    </div>
+                }
+            />
 
-								// Delete all nodes
-								for (const node of nodes) {
-									await routeNodesMutations.delete.mutateAsync(node.properties.id);
-								}
+            {error && <div className="floor-editor-error">{error}</div>}
 
-								setSaveStatus("success");
-								setTimeout(() => setSaveStatus("idle"), 2000);
-								logger.info("All data cleared from backend successfully");
-							} catch (error) {
-								logger.error("Failed to clear all data", error as Error);
-								setSaveStatus("error");
-								setSaveError("Failed to clear all data: " + (error as Error).message);
-							}
-						}}
-					nodesCount={nodes.length}
-					selectedNodeForConnection={selectedNodeForConnection}
-					lastPlacedNodeId={lastPlacedNodeId}
-				/>
+            <div className="floor-editor-layout">
+                <ActionsSection
+                    floorId={floorId}
+                    onRecalculatePoiNodes={handleRecalculatePoiNodes}
+                    isRecalculatingPoiNodes={isRecalculatingPoiNodes}
+                />
 
-				{/* Main Content Area */}
-				<div className="editor-main">
-					{/* Map Container */}
-					<MapContainer
-						mapRef={mapContainer}
-						mapLoading={mapLoading}
-						activeTool={activeTool}
-						currentCoordinates={currentCoordinates}
-						error={null}
-					/>
+                <DrawingToolbar
+                    activeTool={drawingState.activeTool}
+                    onToolChange={drawingState.handleToolChange}
+                    isDrawingPolygon={drawingState.isDrawingPolygon}
+                    pendingPolygonPoints={drawingState.pendingPolygonPoints.length}
+                    onCancelDrawing={() => {
+                        drawingState.resetPolygonDrawing();
+                        drawingState.resetNodeSelection();
+                        mapState.clearTempDrawing(map.current);
+                    }}
+                    onClearAll={async () => {
+                        dialogState.updateSaveStatus("saving");
+                        try {
+                            for (const polygon of polygons) {
+                                await poisMutations.delete.mutateAsync(polygon.properties.id);
+                            }
+                            for (const beacon of beacons) {
+                                await beaconsMutations.delete.mutateAsync(beacon.properties.id);
+                            }
+                            for (const node of nodes) {
+                                await routeNodesMutations.delete.mutateAsync(node.properties.id);
+                            }
+                            dialogState.updateSaveStatus("success");
+                        } catch (error) {
+                            logger.error("Failed to clear all data", error as Error);
+                            dialogState.updateSaveStatus("error", "Failed to clear all data: " + (error as Error).message);
+                        }
+                    }}
+                    nodesCount={nodes.length}
+                    selectedNodeForConnection={drawingState.selectedNodeForConnection}
+                    lastPlacedNodeId={drawingState.lastPlacedNodeId}
+                />
 
-					{/* Layers Panel */}
-					<LayersPanel
-						polygons={polygons}
-						beacons={beacons}
-						nodes={nodes}
-						layerFilter={layerFilter}
-						selectedItem={selectedItem}
-						onFilterChange={setLayerFilter}
-						onLayerItemClick={handleLayerItemClick}
-						onToggleVisibility={toggleLayerVisibility}
-						onEditItem={handleEditItem}
-						onDeleteItem={handleDeleteItem}
-					/>
-				</div>
-			</div>
+                <div className="editor-main">
+                    <MapContainer
+                        mapRef={mapContainer}
+                        mapLoading={mapState.mapLoading}
+                        activeTool={drawingState.activeTool}
+                        currentCoordinates={mapState.currentCoordinates}
+                        error={null}
+                    />
 
-			{/* Polygon Dialog */}
-			<PolygonDialog
-				show={showPolygonDialog}
-				polygonName={polygonName}
+                    <LayersPanel
+                        polygons={polygons}
+                        beacons={beacons}
+                        nodes={nodes}
+                        layerFilter={layerFilter}
+                        selectedItem={drawingState.selectedItem}
+                        onFilterChange={setLayerFilter}
+                        onLayerItemClick={handleLayerItemClick}
+                        onToggleVisibility={toggleLayerVisibility}
+                        onEditItem={handleEditItem}
+                        onDeleteItem={handleDeleteItem}
+                    />
+                </div>
+            </div>
+
+            {/* Dialogs */}
+            <PolygonDialog
+                show={dialogState.showPolygonDialog}
+                polygonName={dialogState.polygonName}
                 isWallMode={false}
-				isEditing={!!editingPolygonId}
-				onNameChange={setPolygonName}
-                onWallModeChange={() => {
-                }}
-				onSave={handlePolygonSave}
-				onCancel={handlePolygonCancel}
-			/>
+                isEditing={!!drawingState.editingPolygonId}
+                onNameChange={dialogState.setPolygonName}
+                onWallModeChange={() => {}}
+                onSave={handlePolygonSave}
+                onCancel={dialogState.closePolygonDialog}
+            />
 
-			{/* Beacon Dialog */}
-			<BeaconDialog
-				show={showBeaconDialog}
-				beaconName={beaconName}
-				isEditing={!!editingBeaconId}
-				onNameChange={setBeaconName}
-				onSave={handleBeaconSave}
-				onCancel={handleBeaconCancel}
-			/>
+            <BeaconDialog
+                show={dialogState.showBeaconDialog}
+                beaconName={dialogState.beaconName}
+                isEditing={!!dialogState.editingBeaconId}
+                onNameChange={dialogState.setBeaconName}
+                onSave={handleBeaconSave}
+                onCancel={dialogState.closeBeaconDialog}
+            />
 
-			{/* Route Node Dialog */}
-			<RouteNodeDialog
-				show={showNodeDialog}
-				nodeName={nodeName}
-				isEditing={!!editingNodeId}
-				onNameChange={setNodeName}
-				onSave={handleNodeSave}
-				onCancel={handleNodeCancel}
-			/>
+            <RouteNodeDialog
+                show={dialogState.showNodeDialog}
+                nodeName={dialogState.nodeName}
+                isEditing={!!dialogState.editingNodeId}
+                onNameChange={dialogState.setNodeName}
+                onSave={() => dialogState.closeNodeDialog()}
+                onCancel={dialogState.closeNodeDialog}
+            />
 
-			{/* Multi-Floor Node Dialog */}
-			<MultiFloorNodeDialog
-				show={showMultiFloorNodeDialog}
-				currentFloorId={floorId}
-				availableFloors={buildingFloors}
-				onSave={handleMultiFloorNodeSave}
-				onCancel={handleMultiFloorNodeCancel}
-			/>
-		</Container>
-	);
+            <MultiFloorNodeDialog
+                show={dialogState.showMultiFloorNodeDialog}
+                currentFloorId={floorId}
+                availableFloors={buildingFloors}
+                onSave={handleMultiFloorNodeSave}
+                onCancel={dialogState.closeMultiFloorNodeDialog}
+            />
+        </Container>
+    );
 };
