@@ -15,6 +15,7 @@ export interface DialogState {
     showNodeDialog: boolean;
     nodeName: string;
     editingNodeId: number | null;
+    nodeLevel: number | null;
     
     // Multi-floor node dialog
     showMultiFloorNodeDialog: boolean;
@@ -43,6 +44,7 @@ export function useDialogState() {
     const [showNodeDialog, setShowNodeDialog] = useState(false);
     const [nodeName, setNodeName] = useState("");
     const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
+    const [nodeLevel, setNodeLevel] = useState<number | null>(null);
     
     // Multi-floor node dialog state
     const [showMultiFloorNodeDialog, setShowMultiFloorNodeDialog] = useState(false);
@@ -82,9 +84,10 @@ export function useDialogState() {
         setEditingBeaconId(null);
     }, []);
 
-    const openNodeDialog = useCallback((name: string = "", editingId: number | null = null) => {
+    const openNodeDialog = useCallback((name: string = "", editingId: number | null = null, level: number | null = null) => {
         setNodeName(name);
         setEditingNodeId(editingId);
+        setNodeLevel(level);
         setShowNodeDialog(true);
     }, []);
 
@@ -92,6 +95,7 @@ export function useDialogState() {
         setShowNodeDialog(false);
         setNodeName("");
         setEditingNodeId(null);
+        setNodeLevel(null);
     }, []);
 
     const openMultiFloorNodeDialog = useCallback((location: { lng: number; lat: number }) => {
@@ -141,6 +145,8 @@ export function useDialogState() {
         setNodeName,
         editingNodeId,
         setEditingNodeId,
+        nodeLevel,
+        setNodeLevel,
         openNodeDialog,
         closeNodeDialog,
         

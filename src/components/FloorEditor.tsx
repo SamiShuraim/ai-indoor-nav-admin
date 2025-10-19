@@ -449,6 +449,26 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
         }
     };
 
+    const handleNodeSave = async () => {
+        dialogState.updateSaveStatus("saving");
+
+        try {
+            if (dialogState.editingNodeId) {
+                const node = nodes.find((n) => n.properties.id === dialogState.editingNodeId);
+                if (node) {
+                    const updated = RouteNodeBuilder.fromRouteNode(node).setLevel(dialogState.nodeLevel).build();
+                    await routeNodesMutations.update.mutateAsync({ data: updated });
+                }
+            }
+
+            dialogState.updateSaveStatus("success");
+            dialogState.closeNodeDialog();
+        } catch (error) {
+            logger.error("Failed to save route node", error as Error);
+            dialogState.updateSaveStatus("error", "Failed to save route node: " + (error as Error).message);
+        }
+    };
+
     // Multi-floor node save handler
     const handleMultiFloorNodeSave = async (nodeType: NodeType, selectedFloors: number[]) => {
         if (!dialogState.pendingMultiFloorLocation) return;
@@ -611,7 +631,7 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
             case "node":
                 const node = nodes.find((n) => n.properties.id === id);
                 if (node) {
-                    dialogState.openNodeDialog(`Node ${node.properties.id}`, id);
+                    dialogState.openNodeDialog(`Node ${node.properties.id}`, id, node.properties.level);
                     drawingState.setSelectedItem({ type, id });
                 }
                 break;
@@ -834,8 +854,10 @@ export const FloorEditor: React.FC<FloorEditorProps> = ({ floorId, onBack }) => 
                 show={dialogState.showNodeDialog}
                 nodeName={dialogState.nodeName}
                 isEditing={!!dialogState.editingNodeId}
+                level={dialogState.nodeLevel}
                 onNameChange={dialogState.setNodeName}
-                onSave={() => dialogState.closeNodeDialog()}
+                onLevelChange={dialogState.setNodeLevel}
+                onSave={handleNodeSave}
                 onCancel={dialogState.closeNodeDialog}
             />
 
