@@ -272,6 +272,29 @@ export class FloorEditorService {
     }
 
     /**
+     * Updates a route node using the builder pattern
+     */
+    static async updateRouteNode(node: RouteNode, updates: Partial<{ nodeType: string; level: number | null }>): Promise<RouteNode> {
+        logger.info("Updating route node", { nodeId: node.properties.id, updates });
+
+        try {
+            let builder = RouteNodeBuilder.fromRouteNode(node);
+
+            if (updates.nodeType !== undefined) builder = builder.setNodeType(updates.nodeType);
+            if (updates.level !== undefined) builder = builder.setLevel(updates.level);
+
+            const updatedNode = builder.build();
+            const result = await routeNodesApi.update(node.properties.id, updatedNode);
+            
+            logger.info("Route node updated successfully", { nodeId: node.properties.id });
+            return result;
+        } catch (error) {
+            logger.error("Failed to update route node", error as Error);
+            throw error;
+        }
+    }
+
+    /**
      * Deletes multiple entities of different types
      */
     static async bulkDelete(items: Array<{ type: 'polygon' | 'beacon' | 'node', id: number }>): Promise<void> {

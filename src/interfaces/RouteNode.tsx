@@ -11,6 +11,7 @@ export interface RouteNode {
         connections: number[]; // Frontend uses this name
         connected_node_ids?: number[]; // Backend uses this name
         node_type?: string; // Node type (elevator, stairs, waypoint, etc.)
+        level?: number | null; // Level (1, 2, 3, or null for none)
     }
 }
 
@@ -21,6 +22,7 @@ export class RouteNodeBuilder {
     private _isVisible: boolean = true;
     private _connections: number[] = [];
     private _nodeType?: string;
+    private _level?: number | null;
     private _isCreating: boolean = true; // Flag to indicate if we're creating a new object
 
     public static fromRouteNode(node: RouteNode): RouteNodeBuilder {
@@ -31,6 +33,7 @@ export class RouteNodeBuilder {
         builder._isVisible = node.properties.is_visible;
         builder._connections = [...(node.properties.connections || node.properties.connected_node_ids || [])];
         builder._nodeType = node.properties.node_type;
+        builder._level = node.properties.level;
         builder._isCreating = false; // This is an existing object
         return builder;
     }
@@ -86,6 +89,11 @@ export class RouteNodeBuilder {
         return this;
     }
 
+    public setLevel(level: number | null | undefined): this {
+        this._level = level;
+        return this;
+    }
+
     public validate(): void {
         // Only validate ID for existing objects (updates), not for new objects (creates)
         if (!this._isCreating && (this._id === undefined || this._id === null)) {
@@ -110,6 +118,7 @@ export class RouteNodeBuilder {
                 is_visible: this._isVisible,
                 connections: this._connections,
                 ...(this._nodeType && { node_type: this._nodeType }),
+                ...(this._level !== undefined && { level: this._level }),
             } as any // Type assertion needed because id is now optional
         };
     }
