@@ -53,6 +53,11 @@ export const API_ENDPOINTS = {
   ROUTE_NODES_FIX_BIDIRECTIONAL: '/api/RouteNode/fixBidirectionalConnections',
   ROUTE_NODES_ADD_CONNECTION: '/api/RouteNode/addConnection',
   // ROUTE_NODES_BY_TYPE: (nodeType: string) => `/api/RouteNode/type/${nodeType}`,
+  
+  // Load Balancer
+  LOAD_BALANCER_ASSIGN: '/api/LoadBalancer/assign',
+  LOAD_BALANCER_UTILIZATION: '/api/LoadBalancer/utilization',
+  LOAD_BALANCER_RESET: '/api/LoadBalancer/reset',
 } as const;
 
 // Storage Keys

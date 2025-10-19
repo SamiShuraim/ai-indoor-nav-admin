@@ -9,9 +9,10 @@ const logger = createLogger('Dashboard');
 interface DashboardProps {
   onLogout: () => void;
   onNavigateToBuildings: () => void;
+  onNavigateToLoadBalancer: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings, onNavigateToLoadBalancer }) => {
   // Component lifecycle logging
   useEffect(() => {
     logger.info('Dashboard component mounted');
@@ -49,6 +50,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings }
     logger.userAction('Buildings & Floors card clicked');
     logger.info('Navigating to Buildings & Floors management');
     onNavigateToBuildings();
+  };
+
+  const handleLoadBalancerClick = () => {
+    logger.userAction('Load Balancer Simulation card clicked');
+    logger.info('Navigating to Load Balancer Simulation');
+    onNavigateToLoadBalancer();
   };
 
   logger.debug('Dashboard component rendering');
@@ -90,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings }
           <Card
             title={UI_MESSAGES.CARD_REPORTS_TITLE}
             description={UI_MESSAGES.CARD_REPORTS_DESC}
-            onClick={() => handleCardClick('Reports')}
+            onClick={handleLoadBalancerClick}
           />
           
           <Card
