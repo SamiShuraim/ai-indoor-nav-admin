@@ -5,6 +5,7 @@ import AdminLogin from './components/AdminLogin';
 import BuildingsManagement from './components/BuildingsManagement';
 import Dashboard from './components/Dashboard';
 import {FloorEditor} from './components/FloorEditor';
+import LoadBalancerSimulation from './components/LoadBalancerSimulation';
 import {getStoredToken, removeStoredToken, validateToken} from './utils/auth';
 import {createLogger} from './utils/logger';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
@@ -17,6 +18,7 @@ const ROUTES = {
   LOGIN: '/login',
   DASHBOARD: '/dashboard',
   BUILDINGS: '/buildings',
+  LOAD_BALANCER: '/load-balancer',
   FLOOR_EDITOR: '/floor-editor/:floorId',
   FLOOR_EDITOR_PATH: (floorId: string) => `/floor-editor/${floorId}`,
 } as const;
@@ -127,6 +129,12 @@ function AppContent() {
     navigate(ROUTES.BUILDINGS);
   };
 
+  const handleNavigateToLoadBalancer = () => {
+    logger.userAction('Navigate to load balancer clicked');
+    logger.navigationChange('Navigating to', ROUTES.LOAD_BALANCER);
+    navigate(ROUTES.LOAD_BALANCER);
+  };
+
   const handleNavigateToFloorEditor = (floorId: string | number) => {
     const floorIdString = floorId.toString();
     logger.userAction('Navigate to floor editor clicked', { floorId, floorIdString });
@@ -187,6 +195,7 @@ function AppContent() {
               <Dashboard 
                 onLogout={handleLogout}
                 onNavigateToBuildings={handleNavigateToBuildings}
+                onNavigateToLoadBalancer={handleNavigateToLoadBalancer}
               />
             ) : (
               <Navigate to={ROUTES.LOGIN} replace />
@@ -200,6 +209,18 @@ function AppContent() {
               <BuildingsManagement 
                 onBack={handleNavigateToDashboard}
                 onFloorEdit={handleNavigateToFloorEditor}
+              />
+            ) : (
+              <Navigate to={ROUTES.LOGIN} replace />
+            )
+          } 
+        />
+        <Route 
+          path={ROUTES.LOAD_BALANCER} 
+          element={
+            token ? (
+              <LoadBalancerSimulation 
+                onBack={handleNavigateToDashboard}
               />
             ) : (
               <Navigate to={ROUTES.LOGIN} replace />
