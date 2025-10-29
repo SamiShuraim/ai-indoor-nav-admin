@@ -745,17 +745,17 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 </div>
               </div>
               <div className="wait-times">
-                {lastAssignment.decision.waitEst[1] !== undefined && (
+                {lastAssignment.decision.waitEst[1] != null && (
                   <div className="wait-item">
                     <span>L1: {lastAssignment.decision.waitEst[1].toFixed(1)}m</span>
                   </div>
                 )}
-                {lastAssignment.decision.waitEst[2] !== undefined && (
+                {lastAssignment.decision.waitEst[2] != null && (
                   <div className="wait-item">
                     <span>L2: {lastAssignment.decision.waitEst[2].toFixed(1)}m</span>
                   </div>
                 )}
-                {lastAssignment.decision.waitEst[3] !== undefined && (
+                {lastAssignment.decision.waitEst[3] != null && (
                   <div className="wait-item">
                     <span>L3: {lastAssignment.decision.waitEst[3].toFixed(1)}m</span>
                   </div>
@@ -799,11 +799,15 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 </div>
                 <div className="metric-item primary">
                   <div className="metric-label">Age Cutoff</div>
-                  <div className="metric-value">{metrics.ageCutoff.toFixed(1)} years</div>
+                  <div className="metric-value">
+                    {metrics.ageCutoff != null ? `${metrics.ageCutoff.toFixed(1)} years` : 'N/A'}
+                  </div>
                 </div>
                 <div className="metric-item primary">
                   <div className="metric-label">P(Disabled)</div>
-                  <div className="metric-value">{(metrics.pDisabled * 100).toFixed(1)}%</div>
+                  <div className="metric-value">
+                    {metrics.pDisabled != null ? `${(metrics.pDisabled * 100).toFixed(1)}%` : 'N/A'}
+                  </div>
                 </div>
                 <div className="metric-item">
                   <div className="metric-label">Wait Target</div>
@@ -811,12 +815,17 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 </div>
                 <div className="metric-item">
                   <div className="metric-label">Controller Gain</div>
-                  <div className="metric-value">{metrics.controllerGain.toFixed(3)}</div>
+                  <div className="metric-value">
+                    {metrics.controllerGain != null ? metrics.controllerGain.toFixed(3) : 'N/A'}
+                  </div>
                 </div>
                 <div className="metric-item">
                   <div className="metric-label">Alpha1 Range</div>
                   <div className="metric-value">
-                    {(metrics.alpha1Min * 100).toFixed(0)}-{(metrics.alpha1Max * 100).toFixed(0)}%
+                    {metrics.alpha1Min != null && metrics.alpha1Max != null 
+                      ? `${(metrics.alpha1Min * 100).toFixed(0)}-${(metrics.alpha1Max * 100).toFixed(0)}%`
+                      : 'N/A'
+                    }
                   </div>
                 </div>
               </div>
@@ -844,20 +853,30 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             {/* Quantiles */}
             <div className="metrics-card">
               <h3>📈 Age Quantiles (Non-Disabled)</h3>
-              <div className="metrics-grid">
-                <div className="metric-item">
-                  <div className="metric-label">50th Percentile (Median)</div>
-                  <div className="metric-value">{metrics.quantilesNonDisabledAge.q50.toFixed(1)} years</div>
+              {metrics.quantilesNonDisabledAge && metrics.counts.nonDisabled > 0 ? (
+                <div className="metrics-grid">
+                  <div className="metric-item">
+                    <div className="metric-label">50th Percentile (Median)</div>
+                    <div className="metric-value">
+                      {metrics.quantilesNonDisabledAge.q50?.toFixed(1) ?? 'N/A'} years
+                    </div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">80th Percentile</div>
+                    <div className="metric-value">
+                      {metrics.quantilesNonDisabledAge.q80?.toFixed(1) ?? 'N/A'} years
+                    </div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">90th Percentile</div>
+                    <div className="metric-value">
+                      {metrics.quantilesNonDisabledAge.q90?.toFixed(1) ?? 'N/A'} years
+                    </div>
+                  </div>
                 </div>
-                <div className="metric-item">
-                  <div className="metric-label">80th Percentile</div>
-                  <div className="metric-value">{metrics.quantilesNonDisabledAge.q80.toFixed(1)} years</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">90th Percentile</div>
-                  <div className="metric-value">{metrics.quantilesNonDisabledAge.q90.toFixed(1)} years</div>
-                </div>
-              </div>
+              ) : (
+                <div className="no-data">No non-disabled arrivals yet</div>
+              )}
             </div>
 
             {/* Level States */}
@@ -871,7 +890,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                       <h4>Level {levelNum}</h4>
                       {level ? (
                         <>
-                          {level.waitEst !== undefined && (
+                          {level.waitEst != null && (
                             <div className="level-stat">
                               <span className="stat-label">Wait Time:</span>
                               <span className={`stat-value wait-${getWaitColor(level.waitEst, metrics.waitTargetMinutes)}`}>
@@ -879,13 +898,13 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                               </span>
                             </div>
                           )}
-                          {level.queueLen !== undefined && (
+                          {level.queueLen != null && (
                             <div className="level-stat">
                               <span className="stat-label">Queue:</span>
                               <span className="stat-value">{level.queueLen}</span>
                             </div>
                           )}
-                          {level.throughputPerMin !== undefined && (
+                          {level.throughputPerMin != null && (
                             <div className="level-stat">
                               <span className="stat-label">Throughput:</span>
                               <span className="stat-value">{level.throughputPerMin.toFixed(1)}/min</span>
