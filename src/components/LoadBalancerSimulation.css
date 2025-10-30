@@ -165,6 +165,105 @@
   background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
 }
 
+/* Assignment Tracker */
+.assignment-tracker .tracker-info {
+  margin-bottom: 1.5rem;
+}
+
+.info-banner {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-left: 4px solid #2196f3;
+  padding: 1.5rem;
+  border-radius: 8px;
+  color: #0d47a1;
+  line-height: 1.6;
+}
+
+.info-banner strong {
+  color: #1565c0;
+  font-size: 1.1rem;
+}
+
+.info-banner ul {
+  margin: 0.5rem 0 0 1rem;
+  padding-left: 1rem;
+}
+
+.info-banner li {
+  margin: 0.5rem 0;
+}
+
+.assignment-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.count-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 2px solid #dee2e6;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.count-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.count-card.level-1-count {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.count-card.level-2-count {
+  border-color: #f093fb;
+  background: linear-gradient(135deg, rgba(240, 147, 251, 0.05) 0%, rgba(245, 87, 108, 0.05) 100%);
+}
+
+.count-card.level-3-count {
+  border-color: #4facfe;
+  background: linear-gradient(135deg, rgba(79, 172, 254, 0.05) 0%, rgba(0, 242, 254, 0.05) 100%);
+}
+
+.count-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.count-value {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #2c3e50;
+  font-family: 'Courier New', monospace;
+  margin: 0.5rem 0;
+}
+
+.count-note {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.simulation-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.simulation-actions button {
+  flex: 1;
+  min-width: 250px;
+}
+
 /* System Controls */
 .system-controls .controls-row {
   display: flex;

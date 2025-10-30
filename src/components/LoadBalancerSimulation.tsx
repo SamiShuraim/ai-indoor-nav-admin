@@ -31,6 +31,9 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
   const [error, setError] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<string>('Unknown');
   
+  // Track assignments per level for simulation
+  const [levelAssignments, setLevelAssignments] = useState({ 1: 0, 2: 0, 3: 0 });
+  
   // Config edit state
   const [editingConfig, setEditingConfig] = useState(false);
   const [configForm, setConfigForm] = useState({
@@ -122,6 +125,13 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       const response = await assignArrival(age, isDisabled);
       setLastAssignment(response);
       setAssignmentHistory([response, ...assignmentHistory.slice(0, 9)]); // Keep last 10
+      
+      // Track assignment count per level
+      setLevelAssignments(prev => ({
+        ...prev,
+        [response.level]: prev[response.level as 1 | 2 | 3] + 1
+      }));
+      
       logger.info('Assignment successful', { age, isDisabled, response });
       
       // Fetch updated metrics
@@ -144,14 +154,24 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     try {
       const assignments: ArrivalAssignmentResponse[] = [];
       
+      const levelCounts = { 1: 0, 2: 0, 3: 0 };
+      
       for (const scenario of scenarios) {
         for (let i = 0; i < scenario.count; i++) {
           const response = await assignArrival(scenario.age, scenario.isDisabled);
           assignments.push(response);
+          levelCounts[response.level as 1 | 2 | 3]++;
           // Small delay to avoid overwhelming the server
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
+      
+      // Update level assignment counts
+      setLevelAssignments(prev => ({
+        1: prev[1] + levelCounts[1],
+        2: prev[2] + levelCounts[2],
+        3: prev[3] + levelCounts[3]
+      }));
       
       setAssignmentHistory([...assignments.slice(0, 10)]); // Keep last 10
       setLastAssignment(assignments[assignments.length - 1]);
@@ -282,6 +302,57 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     }
   };
 
+  const handleSimulateWaitTimes = async () => {
+    setIsLoading(true);
+    setError(null);
+    logger.userAction('Simulate wait times clicked', levelAssignments);
+    
+    try {
+      // Simple simulation: wait time increases with more assignments
+      // Level 1 has lower capacity, so it fills up faster
+      const baseWaitL1 = 8; // minutes
+      const baseWaitL2L3 = 10; // minutes
+      
+      const waitL1 = baseWaitL1 + (levelAssignments[1] * 0.3);
+      const waitL2 = baseWaitL2L3 + (levelAssignments[2] * 0.15);
+      const waitL3 = baseWaitL2L3 + (levelAssignments[3] * 0.15);
+      
+      const levels: LevelStateUpdate[] = [
+        { level: 1, waitEst: waitL1, queueLen: levelAssignments[1] * 5 },
+        { level: 2, waitEst: waitL2, queueLen: levelAssignments[2] * 5 },
+        { level: 3, waitEst: waitL3, queueLen: levelAssignments[3] * 5 },
+      ];
+      
+      await updateLevelState(levels);
+      logger.info('Simulated wait times updated', levels);
+      
+      // Update the form to show what was set
+      setLevelStateForm({
+        level1Wait: waitL1.toFixed(1),
+        level2Wait: waitL2.toFixed(1),
+        level3Wait: waitL3.toFixed(1),
+        level1Queue: (levelAssignments[1] * 5).toString(),
+        level2Queue: (levelAssignments[2] * 5).toString(),
+        level3Queue: (levelAssignments[3] * 5).toString(),
+      });
+      
+      await fetchMetrics();
+    } catch (err) {
+      const errorMessage = 'Failed to simulate wait times';
+      logger.error(errorMessage, err as Error);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSimulation = () => {
+    setLevelAssignments({ 1: 0, 2: 0, 3: 0 });
+    setAssignmentHistory([]);
+    setLastAssignment(null);
+    logger.userAction('Simulation reset');
+  };
+
   const handleBack = () => {
     logger.userAction('Back button clicked');
     onBack();
@@ -316,6 +387,10 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             Test the new adaptive load balancer system with dynamic age cutoffs, feedback control, 
             and rolling statistics. The system automatically adjusts assignments based on real-time 
             congestion and arrival patterns.
+          </p>
+          <p className="load-balancer-description" style={{ marginTop: '1rem', fontWeight: '600', color: '#2196f3' }}>
+            💡 Quick Start: (1) Assign pilgrims → (2) Click "Simulate Wait Times" → (3) Click "Trigger Controller Tick" 
+            to see the feedback controller in action!
           </p>
         </Card>
 
@@ -494,6 +569,64 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             >
               <span className="button-label">Random</span>
               <span className="button-subtitle">Random age & status</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Assignment Tracker & Wait Time Simulator */}
+        <div className="simulation-section assignment-tracker">
+          <h2>📊 Assignment Tracker & Wait Time Simulator</h2>
+          <div className="tracker-info">
+            <div className="info-banner">
+              <strong>ℹ️ Important:</strong> Wait times don't auto-update from assignments. 
+              You need to either:
+              <ul>
+                <li>Use <strong>"Simulate Wait Times"</strong> button below (calculates based on assignments)</li>
+                <li>Manually set wait times in the "Update Level State" section</li>
+              </ul>
+              Then click <strong>"Trigger Controller Tick"</strong> to see the feedback controller adjust Alpha1!
+            </div>
+          </div>
+          
+          <div className="assignment-counts">
+            <div className="count-card level-1-count">
+              <div className="count-label">Level 1 Assignments</div>
+              <div className="count-value">{levelAssignments[1]}</div>
+              <div className="count-note">Priority: Disabled + Elderly</div>
+            </div>
+            <div className="count-card level-2-count">
+              <div className="count-label">Level 2 Assignments</div>
+              <div className="count-value">{levelAssignments[2]}</div>
+              <div className="count-note">General (load balanced)</div>
+            </div>
+            <div className="count-card level-3-count">
+              <div className="count-label">Level 3 Assignments</div>
+              <div className="count-value">{levelAssignments[3]}</div>
+              <div className="count-note">General (load balanced)</div>
+            </div>
+          </div>
+          
+          <div className="simulation-actions">
+            <Button
+              variant="PRIMARY"
+              onClick={handleSimulateWaitTimes}
+              disabled={isLoading || (levelAssignments[1] + levelAssignments[2] + levelAssignments[3]) === 0}
+            >
+              🎭 Simulate Wait Times
+              <span className="button-subtitle">
+                Auto-calculate wait times based on assignments
+              </span>
+            </Button>
+            
+            <Button
+              variant="SECONDARY"
+              onClick={handleResetSimulation}
+              disabled={isLoading}
+            >
+              🔄 Reset Counts
+              <span className="button-subtitle">
+                Clear assignment counts & history
+              </span>
             </Button>
           </div>
         </div>
