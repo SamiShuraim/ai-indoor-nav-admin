@@ -34,6 +34,10 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
   // Track assignments per level for simulation
   const [levelAssignments, setLevelAssignments] = useState({ 1: 0, 2: 0, 3: 0 });
   
+  // Auto-refresh for simulating admin dashboard
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(15); // seconds
+  
   // Config edit state
   const [editingConfig, setEditingConfig] = useState(false);
   const [configForm, setConfigForm] = useState({
@@ -61,6 +65,18 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       logger.info('LoadBalancerSimulation component unmounted');
     };
   }, []);
+
+  // Auto-refresh effect (simulates admin dashboard polling)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const intervalId = setInterval(() => {
+      logger.info('Auto-refresh: fetching metrics');
+      fetchMetrics();
+    }, refreshInterval * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [autoRefresh, refreshInterval]);
 
   const initializeData = async () => {
     await Promise.all([
@@ -384,13 +400,40 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       <main className="load-balancer-content">
         <Card variant="welcome" title="Adaptive Load Balancer Simulation">
           <p className="load-balancer-description">
-            Test the new adaptive load balancer system with dynamic age cutoffs, feedback control, 
-            and rolling statistics. The system automatically adjusts assignments based on real-time 
-            congestion and arrival patterns.
+            <strong>This page simulates the complete production architecture:</strong>
           </p>
+          <div className="architecture-overview">
+            <div className="arch-item">
+              <span className="arch-icon">📱</span>
+              <div>
+                <strong>Mobile App</strong>: Test buttons simulate <code>POST /arrivals/assign</code> calls
+                <br/><small>In production: Mobile apps ONLY call this endpoint to get level assignments</small>
+              </div>
+            </div>
+            <div className="arch-item">
+              <span className="arch-icon">🎥</span>
+              <div>
+                <strong>Sensor System</strong>: "Simulate Wait Times" button simulates <code>POST /levels/state</code>
+                <br/><small>In production: Cameras/sensors automatically report queue congestion</small>
+              </div>
+            </div>
+            <div className="arch-item">
+              <span className="arch-icon">📊</span>
+              <div>
+                <strong>Admin Dashboard</strong>: Metrics display simulates <code>GET /metrics</code> polling
+                <br/><small>In production: Dashboard polls every 15-30 seconds for real-time data</small>
+              </div>
+            </div>
+            <div className="arch-item">
+              <span className="arch-icon">🤖</span>
+              <div>
+                <strong>Backend Controller</strong>: "Trigger Controller Tick" simulates automatic feedback loop
+                <br/><small>In production: Runs automatically every minute (no manual trigger needed)</small>
+              </div>
+            </div>
+          </div>
           <p className="load-balancer-description" style={{ marginTop: '1rem', fontWeight: '600', color: '#2196f3' }}>
-            💡 Quick Start: (1) Assign pilgrims → (2) Click "Simulate Wait Times" → (3) Click "Trigger Controller Tick" 
-            to see the feedback controller in action!
+            💡 Quick Start: (1) Assign pilgrims → (2) Simulate Wait Times → (3) Trigger Controller Tick!
           </p>
         </Card>
 
@@ -405,7 +448,11 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
         {/* Quick Actions */}
         <div className="simulation-section">
-          <h2>⚡ Quick Test Scenarios</h2>
+          <h2>📱 Mobile App Simulation: Assign Pilgrims</h2>
+          <p className="section-description">
+            These buttons simulate mobile app calls to <code>POST /api/LoadBalancer/arrivals/assign</code>.
+            In production, mobile apps send pilgrim data and receive level assignments.
+          </p>
           <div className="button-grid">
             <Button
               variant="PRIMARY"
