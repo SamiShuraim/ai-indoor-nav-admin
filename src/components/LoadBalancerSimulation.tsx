@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { createLogger } from '../utils/logger';
 import {
   assignArrival,
-  updateLevelState,
-  triggerControlTick,
   getMetrics,
   updateConfig,
   getConfig,
@@ -11,7 +9,6 @@ import {
   ArrivalAssignmentResponse,
   MetricsResponse,
   ConfigResponse,
-  LevelStateUpdate,
 } from '../utils/api_helpers/loadBalancerApi';
 import { Button, Card, Container, Header } from './common';
 import './LoadBalancerSimulation.css';
@@ -45,16 +42,6 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     waitTargetMinutes: '',
     controllerGain: '',
     slidingWindowMinutes: '',
-  });
-  
-  // Level state edit
-  const [levelStateForm, setLevelStateForm] = useState({
-    level1Wait: '',
-    level2Wait: '',
-    level3Wait: '',
-    level1Queue: '',
-    level2Queue: '',
-    level3Queue: '',
   });
 
   useEffect(() => {
@@ -203,83 +190,6 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     }
   };
 
-  const handleUpdateLevelState = async () => {
-    setIsLoading(true);
-    setError(null);
-    logger.userAction('Update level state clicked');
-    
-    try {
-      const levels: LevelStateUpdate[] = [];
-      
-      if (levelStateForm.level1Wait) {
-        levels.push({ level: 1, waitEst: parseFloat(levelStateForm.level1Wait) });
-      }
-      if (levelStateForm.level2Wait) {
-        levels.push({ level: 2, waitEst: parseFloat(levelStateForm.level2Wait) });
-      }
-      if (levelStateForm.level3Wait) {
-        levels.push({ level: 3, waitEst: parseFloat(levelStateForm.level3Wait) });
-      }
-      
-      if (levelStateForm.level1Queue) {
-        const existing = levels.find(l => l.level === 1);
-        if (existing) {
-          existing.queueLen = parseInt(levelStateForm.level1Queue);
-        } else {
-          levels.push({ level: 1, queueLen: parseInt(levelStateForm.level1Queue) });
-        }
-      }
-      if (levelStateForm.level2Queue) {
-        const existing = levels.find(l => l.level === 2);
-        if (existing) {
-          existing.queueLen = parseInt(levelStateForm.level2Queue);
-        } else {
-          levels.push({ level: 2, queueLen: parseInt(levelStateForm.level2Queue) });
-        }
-      }
-      if (levelStateForm.level3Queue) {
-        const existing = levels.find(l => l.level === 3);
-        if (existing) {
-          existing.queueLen = parseInt(levelStateForm.level3Queue);
-        } else {
-          levels.push({ level: 3, queueLen: parseInt(levelStateForm.level3Queue) });
-        }
-      }
-      
-      if (levels.length > 0) {
-        await updateLevelState(levels);
-        logger.info('Level state updated successfully', levels);
-        await fetchMetrics();
-      } else {
-        setError('Please enter at least one level state value');
-      }
-    } catch (err) {
-      const errorMessage = 'Failed to update level state';
-      logger.error(errorMessage, err as Error);
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleControlTick = async () => {
-    setIsLoading(true);
-    setError(null);
-    logger.userAction('Control tick clicked');
-    
-    try {
-      const response = await triggerControlTick();
-      logger.info('Control tick successful', response);
-      await fetchMetrics();
-    } catch (err) {
-      const errorMessage = 'Failed to trigger control tick';
-      logger.error(errorMessage, err as Error);
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleUpdateConfig = async () => {
     setIsLoading(true);
     setError(null);
@@ -311,50 +221,6 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       await fetchMetrics();
     } catch (err) {
       const errorMessage = 'Failed to update config';
-      logger.error(errorMessage, err as Error);
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSimulateWaitTimes = async () => {
-    setIsLoading(true);
-    setError(null);
-    logger.userAction('Simulate wait times clicked', levelAssignments);
-    
-    try {
-      // Simple simulation: wait time increases with more assignments
-      // Level 1 has lower capacity, so it fills up faster
-      const baseWaitL1 = 8; // minutes
-      const baseWaitL2L3 = 10; // minutes
-      
-      const waitL1 = baseWaitL1 + (levelAssignments[1] * 0.3);
-      const waitL2 = baseWaitL2L3 + (levelAssignments[2] * 0.15);
-      const waitL3 = baseWaitL2L3 + (levelAssignments[3] * 0.15);
-      
-      const levels: LevelStateUpdate[] = [
-        { level: 1, waitEst: waitL1, queueLen: levelAssignments[1] * 5 },
-        { level: 2, waitEst: waitL2, queueLen: levelAssignments[2] * 5 },
-        { level: 3, waitEst: waitL3, queueLen: levelAssignments[3] * 5 },
-      ];
-      
-      await updateLevelState(levels);
-      logger.info('Simulated wait times updated', levels);
-      
-      // Update the form to show what was set
-      setLevelStateForm({
-        level1Wait: waitL1.toFixed(1),
-        level2Wait: waitL2.toFixed(1),
-        level3Wait: waitL3.toFixed(1),
-        level1Queue: (levelAssignments[1] * 5).toString(),
-        level2Queue: (levelAssignments[2] * 5).toString(),
-        level3Queue: (levelAssignments[3] * 5).toString(),
-      });
-      
-      await fetchMetrics();
-    } catch (err) {
-      const errorMessage = 'Failed to simulate wait times';
       logger.error(errorMessage, err as Error);
       setError(errorMessage);
     } finally {
@@ -400,40 +266,33 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       <main className="load-balancer-content">
         <Card variant="welcome" title="Adaptive Load Balancer Simulation">
           <p className="load-balancer-description">
-            <strong>This page simulates the complete production architecture:</strong>
+            <strong>This page simulates the production architecture:</strong>
           </p>
           <div className="architecture-overview">
             <div className="arch-item">
               <span className="arch-icon">📱</span>
               <div>
                 <strong>Mobile App</strong>: Test buttons simulate <code>POST /arrivals/assign</code> calls
-                <br/><small>In production: Mobile apps ONLY call this endpoint to get level assignments</small>
-              </div>
-            </div>
-            <div className="arch-item">
-              <span className="arch-icon">🎥</span>
-              <div>
-                <strong>Sensor System</strong>: "Simulate Wait Times" button simulates <code>POST /levels/state</code>
-                <br/><small>In production: Cameras/sensors automatically report queue congestion</small>
+                <br/><small>Mobile apps ONLY call this endpoint - backend handles everything else automatically</small>
               </div>
             </div>
             <div className="arch-item">
               <span className="arch-icon">📊</span>
               <div>
-                <strong>Admin Dashboard</strong>: Metrics display simulates <code>GET /metrics</code> polling
-                <br/><small>In production: Dashboard polls every 15-30 seconds for real-time data</small>
+                <strong>Admin Dashboard</strong>: Metrics display polls <code>GET /metrics</code>
+                <br/><small>Dashboard shows real-time statistics - backend calculates wait times, runs controller, etc.</small>
               </div>
             </div>
             <div className="arch-item">
               <span className="arch-icon">🤖</span>
               <div>
-                <strong>Backend Controller</strong>: "Trigger Controller Tick" simulates automatic feedback loop
-                <br/><small>In production: Runs automatically every minute (no manual trigger needed)</small>
+                <strong>Backend (Automatic)</strong>: Tracks arrivals, manages queues, runs feedback controller every minute
+                <br/><small>Everything happens automatically - no manual updates needed!</small>
               </div>
             </div>
           </div>
           <p className="load-balancer-description" style={{ marginTop: '1rem', fontWeight: '600', color: '#2196f3' }}>
-            💡 Quick Start: (1) Assign pilgrims → (2) Simulate Wait Times → (3) Trigger Controller Tick!
+            💡 Quick Start: (1) Click test buttons to assign pilgrims → (2) Watch metrics update automatically!
           </p>
         </Card>
 
@@ -620,19 +479,63 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
           </div>
         </div>
 
-        {/* Assignment Tracker & Wait Time Simulator */}
-        <div className="simulation-section assignment-tracker">
-          <h2>📊 Assignment Tracker & Wait Time Simulator</h2>
-          <div className="tracker-info">
-            <div className="info-banner">
-              <strong>ℹ️ Important:</strong> Wait times don't auto-update from assignments. 
-              You need to either:
-              <ul>
-                <li>Use <strong>"Simulate Wait Times"</strong> button below (calculates based on assignments)</li>
-                <li>Manually set wait times in the "Update Level State" section</li>
-              </ul>
-              Then click <strong>"Trigger Controller Tick"</strong> to see the feedback controller adjust Alpha1!
+        {/* Dashboard Controls */}
+        <div className="simulation-section dashboard-controls">
+          <h2>📊 Admin Dashboard Simulation</h2>
+          <div className="info-banner info-banner-dashboard">
+            <strong>ℹ️ Dashboard Polling:</strong> In production, the admin dashboard polls <code>GET /metrics</code> 
+            every 15-30 seconds to show real-time data. Enable auto-refresh below to simulate this behavior.
+          </div>
+          
+          <div className="dashboard-controls-row">
+            <div className="control-group">
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                  className="toggle-checkbox"
+                />
+                <span className="toggle-text">
+                  {autoRefresh ? '🟢 Auto-Refresh ON' : '⚪ Auto-Refresh OFF'}
+                </span>
+              </label>
+              <small className="control-hint">
+                {autoRefresh ? `Fetching metrics every ${refreshInterval} seconds` : 'Manually refresh metrics as needed'}
+              </small>
             </div>
+            
+            <div className="control-group">
+              <label>Refresh Interval (seconds):</label>
+              <select 
+                value={refreshInterval} 
+                onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                disabled={!autoRefresh}
+                className="interval-select"
+              >
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds (recommended)</option>
+                <option value={30}>30 seconds</option>
+                <option value={60}>60 seconds</option>
+              </select>
+            </div>
+            
+            <Button
+              variant="SECONDARY"
+              onClick={fetchMetrics}
+              disabled={isLoading}
+            >
+              🔄 Refresh Now
+            </Button>
+            
+            <Button
+              variant="SECONDARY"
+              onClick={handleResetSimulation}
+              disabled={isLoading}
+            >
+              ♻️ Reset Simulation
+            </Button>
           </div>
           
           <div className="assignment-counts">
@@ -651,135 +554,6 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               <div className="count-value">{levelAssignments[3]}</div>
               <div className="count-note">General (load balanced)</div>
             </div>
-          </div>
-          
-          <div className="simulation-actions">
-            <Button
-              variant="PRIMARY"
-              onClick={handleSimulateWaitTimes}
-              disabled={isLoading || (levelAssignments[1] + levelAssignments[2] + levelAssignments[3]) === 0}
-            >
-              🎭 Simulate Wait Times
-              <span className="button-subtitle">
-                Auto-calculate wait times based on assignments
-              </span>
-            </Button>
-            
-            <Button
-              variant="SECONDARY"
-              onClick={handleResetSimulation}
-              disabled={isLoading}
-            >
-              🔄 Reset Counts
-              <span className="button-subtitle">
-                Clear assignment counts & history
-              </span>
-            </Button>
-          </div>
-        </div>
-
-        {/* System Controls */}
-        <div className="simulation-section system-controls">
-          <h2>⚙️ System Controls</h2>
-          <div className="controls-row">
-            <Button
-              variant="PRIMARY"
-              onClick={handleControlTick}
-              disabled={isLoading}
-            >
-              🔄 Trigger Controller Tick
-            </Button>
-            
-            <Button
-              variant="SECONDARY"
-              onClick={fetchMetrics}
-              disabled={isLoading}
-            >
-              📊 Refresh Metrics
-            </Button>
-            
-            <Button
-              variant="SECONDARY"
-              onClick={checkHealth}
-              disabled={isLoading}
-            >
-              🏥 Check Health
-            </Button>
-          </div>
-        </div>
-
-        {/* Level State Update */}
-        <div className="simulation-section">
-          <h2>📈 Update Level State</h2>
-          <div className="level-state-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label>Level 1 Wait (min)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={levelStateForm.level1Wait}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level1Wait: e.target.value })}
-                  placeholder="e.g., 11.5"
-                />
-              </div>
-              <div className="form-group">
-                <label>Level 2 Wait (min)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={levelStateForm.level2Wait}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level2Wait: e.target.value })}
-                  placeholder="e.g., 15.0"
-                />
-              </div>
-              <div className="form-group">
-                <label>Level 3 Wait (min)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={levelStateForm.level3Wait}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level3Wait: e.target.value })}
-                  placeholder="e.g., 14.5"
-                />
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Level 1 Queue</label>
-                <input
-                  type="number"
-                  value={levelStateForm.level1Queue}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level1Queue: e.target.value })}
-                  placeholder="e.g., 120"
-                />
-              </div>
-              <div className="form-group">
-                <label>Level 2 Queue</label>
-                <input
-                  type="number"
-                  value={levelStateForm.level2Queue}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level2Queue: e.target.value })}
-                  placeholder="e.g., 230"
-                />
-              </div>
-              <div className="form-group">
-                <label>Level 3 Queue</label>
-                <input
-                  type="number"
-                  value={levelStateForm.level3Queue}
-                  onChange={(e) => setLevelStateForm({ ...levelStateForm, level3Queue: e.target.value })}
-                  placeholder="e.g., 210"
-                />
-              </div>
-            </div>
-            <Button
-              variant="PRIMARY"
-              onClick={handleUpdateLevelState}
-              disabled={isLoading}
-            >
-              Update Level State
-            </Button>
           </div>
         </div>
 
