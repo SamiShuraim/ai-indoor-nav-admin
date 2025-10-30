@@ -10,7 +10,7 @@ export interface ArrivalAssignmentRequest {
   isDisabled: boolean;
 }
 
-export interface WaitEstimate {
+export interface OccupancyCount {
   1?: number;
   2?: number;
   3?: number;
@@ -24,7 +24,7 @@ export interface AssignmentDecision {
   pDisabled: number;
   shareLeftForOld: number;
   tauQuantile: number;
-  waitEst: WaitEstimate;
+  waitEst: OccupancyCount; // Legacy name - actually occupancy count
   reason: string;
 }
 
@@ -36,9 +36,7 @@ export interface ArrivalAssignmentResponse {
 
 export interface LevelStateUpdate {
   level: number;
-  waitEst?: number;
-  queueLen?: number;
-  throughputPerMin?: number;
+  queueLength?: number; // Occupancy count
 }
 
 export interface LevelStateRequest {
@@ -49,16 +47,7 @@ export interface LevelStateResponse {
   ok: boolean;
 }
 
-export interface ControlTickResponse {
-  alpha1: number;
-  ageCutoff: number;
-  pDisabled: number;
-  window: {
-    method: string;
-    slidingWindowMinutes?: number;
-    halfLifeMinutes?: number;
-  };
-}
+// Removed - no longer needed without feedback controller
 
 export interface CountsMetrics {
   total: number;
@@ -73,17 +62,12 @@ export interface QuantilesMetrics {
 }
 
 export interface LevelMetrics {
-  waitEst?: number;
-  queueLen?: number;
-  throughputPerMin?: number;
+  queueLength?: number; // Occupancy count
+  waitEst?: number; // Legacy name - actually occupancy count
 }
 
 export interface MetricsResponse {
   alpha1: number;
-  alpha1Min: number;
-  alpha1Max: number;
-  waitTargetMinutes: number;
-  controllerGain: number;
   pDisabled: number;
   ageCutoff: number;
   counts: CountsMetrics;
@@ -98,47 +82,23 @@ export interface MetricsResponse {
 export interface WindowConfig {
   mode?: 'sliding' | 'decay';
   minutes?: number;
-}
-
-export interface SoftGateConfig {
-  enabled?: boolean;
-  bandYears?: number;
-}
-
-export interface RandomizationConfig {
-  enabled?: boolean;
-  rate?: number;
+  halfLifeMinutes?: number;
 }
 
 export interface ConfigUpdateRequest {
   alpha1?: number;
   alpha1Min?: number;
   alpha1Max?: number;
-  waitTargetMinutes?: number;
-  controllerGain?: number;
   window?: WindowConfig;
-  softGate?: SoftGateConfig;
-  randomization?: RandomizationConfig;
 }
 
 export interface ConfigResponse {
   alpha1: number;
   alpha1Min: number;
   alpha1Max: number;
-  waitTargetMinutes: number;
-  controllerGain: number;
-  window: {
-    mode: string;
-    minutes: number;
-  };
-  softGate: {
-    enabled: boolean;
-    bandYears: number;
-  };
-  randomization: {
-    enabled: boolean;
-    rate: number;
-  };
+  slidingWindowMinutes: number;
+  windowMode: string;
+  halfLifeMinutes?: number;
 }
 
 export interface HealthResponse {
@@ -204,34 +164,8 @@ export const assignArrival = async (
   );
 };
 
-/**
- * Updates level state (wait times, queue lengths, throughput)
- */
-export const updateLevelState = async (
-  levels: LevelStateUpdate[]
-): Promise<LevelStateResponse> => {
-  const requestBody: LevelStateRequest = { levels };
-
-  return apiRequest<LevelStateResponse>(
-    API_ENDPOINTS.LOAD_BALANCER_LEVELS_STATE,
-    {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    }
-  );
-};
-
-/**
- * Manually triggers a controller tick
- */
-export const triggerControlTick = async (): Promise<ControlTickResponse> => {
-  return apiRequest<ControlTickResponse>(
-    API_ENDPOINTS.LOAD_BALANCER_CONTROL_TICK,
-    {
-      method: 'POST',
-    }
-  );
-};
+// Removed - no longer needed without feedback controller
+// The system now only tracks occupancy internally
 
 /**
  * Gets comprehensive metrics and statistics
