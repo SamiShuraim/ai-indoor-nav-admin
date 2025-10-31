@@ -112,14 +112,14 @@ export interface ConfigResponse {
   alpha1: number;
   alpha1Min: number;
   alpha1Max: number;
-  targetUtilL1: number;
-  controllerGain: number;
-  softGateBandYears: number;
-  dwellMinutes: number;
-  slidingWindowMinutes: number;
-  windowMode: string;
+  targetUtilL1?: number;
+  controllerGain?: number;
+  softGateBandYears?: number;
+  dwellMinutes?: number;
+  slidingWindowMinutes?: number;
+  windowMode?: string;
   halfLifeMinutes?: number;
-  capacity: CapacityInfo;
+  capacity?: CapacityInfo;
 }
 
 export interface HealthResponse {

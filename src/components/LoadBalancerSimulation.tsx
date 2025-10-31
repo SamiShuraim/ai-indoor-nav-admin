@@ -106,11 +106,11 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       const data = await getConfig();
       setConfig(data);
       setConfigForm({
-        alpha1: data.alpha1.toString(),
-        targetUtilL1: data.targetUtilL1.toString(),
-        controllerGain: data.controllerGain.toString(),
-        softGateBandYears: data.softGateBandYears.toString(),
-        slidingWindowMinutes: data.slidingWindowMinutes.toString(),
+        alpha1: data.alpha1 != null ? data.alpha1.toString() : '',
+        targetUtilL1: data.targetUtilL1 != null ? data.targetUtilL1.toString() : '',
+        controllerGain: data.controllerGain != null ? data.controllerGain.toString() : '',
+        softGateBandYears: data.softGateBandYears != null ? data.softGateBandYears.toString() : '',
+        slidingWindowMinutes: data.slidingWindowMinutes != null ? data.slidingWindowMinutes.toString() : '',
         windowMode: data.windowMode || 'sliding',
       });
       logger.info('Config fetched successfully', data);
@@ -601,31 +601,47 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               <div className="config-grid">
                 <div className="config-item">
                   <span className="config-label">Alpha1 (Current):</span>
-                  <span className="config-value">{(config.alpha1 * 100).toFixed(2)}%</span>
+                  <span className="config-value">
+                    {config.alpha1 != null ? `${(config.alpha1 * 100).toFixed(2)}%` : 'N/A'}
+                  </span>
                 </div>
                 <div className="config-item">
                   <span className="config-label">Alpha1 Range:</span>
-                  <span className="config-value">{(config.alpha1Min * 100).toFixed(1)}% - {(config.alpha1Max * 100).toFixed(1)}%</span>
+                  <span className="config-value">
+                    {config.alpha1Min != null && config.alpha1Max != null
+                      ? `${(config.alpha1Min * 100).toFixed(1)}% - ${(config.alpha1Max * 100).toFixed(1)}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <div className="config-item">
-                  <span className="config-label">Target L1 Utilization:</span>
-                  <span className="config-value">{(config.targetUtilL1 * 100).toFixed(0)}%</span>
-                </div>
-                <div className="config-item">
-                  <span className="config-label">Controller Gain:</span>
-                  <span className="config-value">{config.controllerGain.toFixed(3)}</span>
-                </div>
-                <div className="config-item">
-                  <span className="config-label">Soft Gate Band:</span>
-                  <span className="config-value">{config.softGateBandYears} years</span>
-                </div>
-                <div className="config-item">
-                  <span className="config-label">Dwell Time:</span>
-                  <span className="config-value">{config.dwellMinutes} min</span>
-                </div>
+                {config.targetUtilL1 != null && (
+                  <div className="config-item">
+                    <span className="config-label">Target L1 Utilization:</span>
+                    <span className="config-value">{(config.targetUtilL1 * 100).toFixed(0)}%</span>
+                  </div>
+                )}
+                {config.controllerGain != null && (
+                  <div className="config-item">
+                    <span className="config-label">Controller Gain:</span>
+                    <span className="config-value">{config.controllerGain.toFixed(3)}</span>
+                  </div>
+                )}
+                {config.softGateBandYears != null && (
+                  <div className="config-item">
+                    <span className="config-label">Soft Gate Band:</span>
+                    <span className="config-value">{config.softGateBandYears} years</span>
+                  </div>
+                )}
+                {config.dwellMinutes != null && (
+                  <div className="config-item">
+                    <span className="config-label">Dwell Time:</span>
+                    <span className="config-value">{config.dwellMinutes} min</span>
+                  </div>
+                )}
                 <div className="config-item">
                   <span className="config-label">Window Mode:</span>
-                  <span className="config-value">{config.windowMode} ({config.slidingWindowMinutes} min)</span>
+                  <span className="config-value">
+                    {config.windowMode || 'sliding'} ({config.slidingWindowMinutes || 45} min)
+                  </span>
                 </div>
                 {config.capacity && (
                   <>
