@@ -16,6 +16,13 @@ export interface OccupancyCount {
   3?: number;
 }
 
+export interface CapacityInfo {
+  l1CapSoft: number;
+  l1CapHard: number;
+  l2Cap: number;
+  l3Cap: number;
+}
+
 export interface AssignmentDecision {
   isDisabled: boolean;
   age: number;
@@ -24,6 +31,7 @@ export interface AssignmentDecision {
   pDisabled?: number;
   shareLeftForOld?: number;
   tauQuantile?: number;
+  occupancy?: OccupancyCount; // Current occupancy at each level
   waitEst?: OccupancyCount; // Legacy name - actually occupancy count
   reason: string;
 }
@@ -62,16 +70,21 @@ export interface QuantilesMetrics {
 }
 
 export interface LevelMetrics {
-  queueLength?: number; // Occupancy count
-  waitEst?: number; // Legacy name - actually occupancy count
+  occupancy?: number; // Current occupancy count
+  capacity?: number; // Capacity limit
+  utilization?: number; // Utilization percentage (0-1)
+  queueLength?: number; // Legacy: Occupancy count
+  waitEst?: number; // Legacy: actually occupancy count
 }
 
 export interface MetricsResponse {
   alpha1?: number;
+  targetUtilL1?: number; // Target utilization for Level 1 (e.g., 0.90)
   pDisabled?: number;
   ageCutoff?: number;
   counts?: CountsMetrics;
   quantilesNonDisabledAge?: QuantilesMetrics;
+  capacity?: CapacityInfo;
   levels?: {
     1?: LevelMetrics;
     2?: LevelMetrics;
@@ -89,6 +102,9 @@ export interface ConfigUpdateRequest {
   alpha1?: number;
   alpha1Min?: number;
   alpha1Max?: number;
+  targetUtilL1?: number;
+  controllerGain?: number;
+  softGateBandYears?: number;
   window?: WindowConfig;
 }
 
@@ -96,9 +112,14 @@ export interface ConfigResponse {
   alpha1: number;
   alpha1Min: number;
   alpha1Max: number;
+  targetUtilL1: number;
+  controllerGain: number;
+  softGateBandYears: number;
+  dwellMinutes: number;
   slidingWindowMinutes: number;
   windowMode: string;
   halfLifeMinutes?: number;
+  capacity: CapacityInfo;
 }
 
 export interface HealthResponse {
