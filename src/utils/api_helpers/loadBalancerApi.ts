@@ -21,10 +21,10 @@ export interface AssignmentDecision {
   age: number;
   ageCutoff: number;
   alpha1: number;
-  pDisabled: number;
-  shareLeftForOld: number;
-  tauQuantile: number;
-  waitEst: OccupancyCount; // Legacy name - actually occupancy count
+  pDisabled?: number;
+  shareLeftForOld?: number;
+  tauQuantile?: number;
+  waitEst?: OccupancyCount; // Legacy name - actually occupancy count
   reason: string;
 }
 
@@ -67,12 +67,12 @@ export interface LevelMetrics {
 }
 
 export interface MetricsResponse {
-  alpha1: number;
-  pDisabled: number;
-  ageCutoff: number;
-  counts: CountsMetrics;
-  quantilesNonDisabledAge: QuantilesMetrics;
-  levels: {
+  alpha1?: number;
+  pDisabled?: number;
+  ageCutoff?: number;
+  counts?: CountsMetrics;
+  quantilesNonDisabledAge?: QuantilesMetrics;
+  levels?: {
     1?: LevelMetrics;
     2?: LevelMetrics;
     3?: LevelMetrics;

@@ -672,39 +672,51 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 </div>
                 <div className="info-row">
                   <span className="info-label">Age Cutoff:</span>
-                  <span className="info-value">{lastAssignment.decision.ageCutoff.toFixed(1)} years</span>
+                  <span className="info-value">
+                    {lastAssignment.decision.ageCutoff != null 
+                      ? `${lastAssignment.decision.ageCutoff.toFixed(1)} years` 
+                      : 'N/A'}
+                  </span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Alpha1:</span>
-                  <span className="info-value">{(lastAssignment.decision.alpha1 * 100).toFixed(1)}%</span>
+                  <span className="info-value">
+                    {lastAssignment.decision.alpha1 != null
+                      ? `${(lastAssignment.decision.alpha1 * 100).toFixed(1)}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">P(Disabled):</span>
-                  <span className="info-value">{(lastAssignment.decision.pDisabled * 100).toFixed(1)}%</span>
-                </div>
+                {lastAssignment.decision.pDisabled != null && (
+                  <div className="info-row">
+                    <span className="info-label">P(Disabled):</span>
+                    <span className="info-value">{(lastAssignment.decision.pDisabled * 100).toFixed(1)}%</span>
+                  </div>
+                )}
                 <div className="info-row reason">
                   <span className="info-label">Reason:</span>
                   <span className="info-value">{lastAssignment.decision.reason}</span>
                 </div>
               </div>
-              <div className="wait-times">
-                <h4>Occupancy at Assignment Time:</h4>
-                {lastAssignment.decision.waitEst[1] != null && (
-                  <div className="wait-item">
-                    <span>L1: {lastAssignment.decision.waitEst[1]} people</span>
-                  </div>
-                )}
-                {lastAssignment.decision.waitEst[2] != null && (
-                  <div className="wait-item">
-                    <span>L2: {lastAssignment.decision.waitEst[2]} people</span>
-                  </div>
-                )}
-                {lastAssignment.decision.waitEst[3] != null && (
-                  <div className="wait-item">
-                    <span>L3: {lastAssignment.decision.waitEst[3]} people</span>
-                  </div>
-                )}
-              </div>
+              {lastAssignment.decision.waitEst && (
+                <div className="wait-times">
+                  <h4>Occupancy at Assignment Time:</h4>
+                  {lastAssignment.decision.waitEst[1] != null && (
+                    <div className="wait-item">
+                      <span>L1: {lastAssignment.decision.waitEst[1]} people</span>
+                    </div>
+                  )}
+                  {lastAssignment.decision.waitEst[2] != null && (
+                    <div className="wait-item">
+                      <span>L2: {lastAssignment.decision.waitEst[2]} people</span>
+                    </div>
+                  )}
+                  {lastAssignment.decision.waitEst[3] != null && (
+                    <div className="wait-item">
+                      <span>L3: {lastAssignment.decision.waitEst[3]} people</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -739,7 +751,9 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               <div className="metrics-grid">
                 <div className="metric-item primary">
                   <div className="metric-label">Alpha1 (Target Share for L1)</div>
-                  <div className="metric-value">{(metrics.alpha1 * 100).toFixed(1)}%</div>
+                  <div className="metric-value">
+                    {metrics.alpha1 != null ? `${(metrics.alpha1 * 100).toFixed(1)}%` : 'N/A'}
+                  </div>
                   <small>User-configured target</small>
                 </div>
                 <div className="metric-item primary">
@@ -760,28 +774,30 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             </div>
 
             {/* Arrival Counts */}
-            <div className="metrics-card">
-              <h3>👥 Arrival Counts (Rolling Window)</h3>
-              <div className="metrics-grid">
-                <div className="metric-item">
-                  <div className="metric-label">Total Arrivals</div>
-                  <div className="metric-value">{metrics.counts.total}</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Disabled</div>
-                  <div className="metric-value">{metrics.counts.disabled}</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Non-Disabled</div>
-                  <div className="metric-value">{metrics.counts.nonDisabled}</div>
+            {metrics.counts && (
+              <div className="metrics-card">
+                <h3>👥 Arrival Counts (Rolling Window)</h3>
+                <div className="metrics-grid">
+                  <div className="metric-item">
+                    <div className="metric-label">Total Arrivals</div>
+                    <div className="metric-value">{metrics.counts.total || 0}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Disabled</div>
+                    <div className="metric-value">{metrics.counts.disabled || 0}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Non-Disabled</div>
+                    <div className="metric-value">{metrics.counts.nonDisabled || 0}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Quantiles */}
             <div className="metrics-card">
               <h3>📈 Age Quantiles (Non-Disabled)</h3>
-              {metrics.quantilesNonDisabledAge && metrics.counts.nonDisabled > 0 ? (
+              {metrics.quantilesNonDisabledAge && metrics.counts && metrics.counts.nonDisabled > 0 ? (
                 <div className="metrics-grid">
                   <div className="metric-item">
                     <div className="metric-label">50th Percentile (Median)</div>
@@ -808,12 +824,13 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             </div>
 
             {/* Level Occupancy */}
-            <div className="metrics-card">
-              <h3>🏛️ Level Occupancy</h3>
-              <div className="levels-grid">
-                {[1, 2, 3].map((levelNum) => {
-                  const level = metrics.levels[levelNum as 1 | 2 | 3];
-                  const occupancy = level?.waitEst || level?.queueLength || 0;
+            {metrics.levels && (
+              <div className="metrics-card">
+                <h3>🏛️ Level Occupancy</h3>
+                <div className="levels-grid">
+                  {[1, 2, 3].map((levelNum) => {
+                    const level = metrics.levels?.[levelNum as 1 | 2 | 3];
+                    const occupancy = level?.waitEst || level?.queueLength || 0;
                   return (
                     <div key={levelNum} className={`level-card level-${levelNum}`}>
                       <h4>Level {levelNum}</h4>
@@ -840,6 +857,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 })}
               </div>
             </div>
+            )}
           </div>
         )}
       </main>
