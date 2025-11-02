@@ -35,6 +35,10 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(15); // seconds
   
+  // Automated traffic test
+  const [autoTrafficRunning, setAutoTrafficRunning] = useState(false);
+  const [lastBurst, setLastBurst] = useState<Array<{ age: number; isDisabled: boolean }>>([]);
+  
   // Config edit state
   const [editingConfig, setEditingConfig] = useState(false);
   const [configForm, setConfigForm] = useState({
@@ -66,6 +70,46 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     
     return () => clearInterval(intervalId);
   }, [autoRefresh, refreshInterval]);
+
+  // Automated traffic test effect
+  useEffect(() => {
+    if (!autoTrafficRunning) return;
+    
+    const sendBurst = async () => {
+      // Random number of requests: 2-3 per second
+      const requestCount = Math.floor(Math.random() * 2) + 2; // 2 or 3
+      const burst: Array<{ age: number; isDisabled: boolean }> = [];
+      
+      for (let i = 0; i < requestCount; i++) {
+        // Random age between 18 and 100
+        const age = Math.floor(Math.random() * (100 - 18 + 1)) + 18;
+        // 20% chance of being disabled
+        const isDisabled = Math.random() < 0.2;
+        
+        burst.push({ age, isDisabled });
+        
+        // Send the request without waiting
+        handleAssign(age, isDisabled).catch(err => {
+          logger.error('Auto-traffic request failed', err);
+        });
+        
+        // Small delay between requests in the burst
+        if (i < requestCount - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      setLastBurst(burst);
+    };
+    
+    // Send first burst immediately
+    sendBurst();
+    
+    // Then send bursts every second
+    const intervalId = setInterval(sendBurst, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [autoTrafficRunning]);
 
   const initializeData = async () => {
     await Promise.all([
@@ -242,6 +286,16 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     logger.userAction('Simulation reset');
   };
 
+  const handleStartAutoTraffic = () => {
+    setAutoTrafficRunning(true);
+    logger.userAction('Auto-traffic test started');
+  };
+
+  const handleStopAutoTraffic = () => {
+    setAutoTrafficRunning(false);
+    logger.userAction('Auto-traffic test stopped');
+  };
+
   const handleBack = () => {
     logger.userAction('Back button clicked');
     onBack();
@@ -257,11 +311,11 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
   return (
     <Container variant="PAGE">
       <Header 
-        title="📊 Capacity-Based Load Balancer with Soft Gate"
+        title="?? Capacity-Based Load Balancer with Soft Gate"
         actions={
           <div className="header-actions">
             <span className={`health-badge ${healthStatus.toLowerCase()}`}>
-              {healthStatus === 'OK' ? '✓' : '⚠'} {healthStatus}
+              {healthStatus === 'OK' ? '?' : '?'} {healthStatus}
             </span>
             <Button variant="SECONDARY" onClick={handleBack}>
               Back to Dashboard
@@ -277,28 +331,28 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
           </p>
           <div className="architecture-overview">
             <div className="arch-item">
-              <span className="arch-icon">🎯</span>
+              <span className="arch-icon">??</span>
               <div>
                 <strong>Capacity-Based</strong>: Hard limits protect each level
                 <br/><small>L1: 500 soft / 550 hard | L2: 3000 | L3: 3000 | 45-min dwell time</small>
               </div>
             </div>
             <div className="arch-item">
-              <span className="arch-icon">🎛️</span>
+              <span className="arch-icon">???</span>
               <div>
                 <strong>Utilization Controller</strong>: Auto-adjusts alpha1 to target 90% L1 utilization
                 <br/><small>Feedback loop runs every minute to optimize Level 1 occupancy</small>
               </div>
             </div>
             <div className="arch-item">
-              <span className="arch-icon">📈</span>
+              <span className="arch-icon">??</span>
               <div>
                 <strong>Sigmoid Soft Gate</strong>: Smooth probability curve around age cutoff
-                <br/><small>No hard jumps - uses probabilistic assignment near cutoff (±6 years)</small>
+                <br/><small>No hard jumps - uses probabilistic assignment near cutoff (?6 years)</small>
               </div>
             </div>
             <div className="arch-item">
-              <span className="arch-icon">⚡</span>
+              <span className="arch-icon">?</span>
               <div>
                 <strong>Rate Limited</strong>: Max 11 per minute to Level 1
                 <br/><small>Prevents bursts from overwhelming capacity</small>
@@ -306,10 +360,10 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             </div>
           </div>
           <p className="load-balancer-description" style={{ marginTop: '1rem', fontWeight: '600', color: '#2196f3' }}>
-            💡 Disabled always → L1 | Non-disabled → Sigmoid probability based on age vs dynamic cutoff
+            ?? Disabled always ? L1 | Non-disabled ? Sigmoid probability based on age vs dynamic cutoff
           </p>
           <div className="info-banner" style={{ marginTop: '1rem', padding: '1rem', background: '#f5f5f5', borderRadius: '8px' }}>
-            <strong>🧮 System Flow:</strong>
+            <strong>?? System Flow:</strong>
             <br/>
             <code>1. Controller adjusts alpha1 based on L1 utilization (target: 90%)</code>
             <br/>
@@ -319,13 +373,13 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             <br/>
             <code>4. Assign based on probability, capacity, and rate limit</code>
             <br/><br/>
-            <strong>Example:</strong> If alpha1=8% and 2% disabled, cutoff=94th percentile. Age 72 near cutoff → ~50% chance L1.
+            <strong>Example:</strong> If alpha1=8% and 2% disabled, cutoff=94th percentile. Age 72 near cutoff ? ~50% chance L1.
           </div>
         </Card>
 
         {error && (
           <div className="load-balancer-error">
-            <p>⚠ {error}</p>
+            <p>? {error}</p>
             <Button variant="SECONDARY" onClick={() => setError(null)}>
               Dismiss
             </Button>
@@ -334,7 +388,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
         {/* Quick Actions */}
         <div className="simulation-section">
-          <h2>📱 Mobile App Simulation: Assign Pilgrims</h2>
+          <h2>?? Mobile App Simulation: Assign Pilgrims</h2>
           <p className="section-description">
             These buttons simulate mobile app calls to <code>POST /api/LoadBalancer/arrivals/assign</code>.
             In production, mobile apps send pilgrim data and receive level assignments.
@@ -346,7 +400,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button disabled-old"
             >
-              <span className="button-icon">♿</span>
+              <span className="button-icon">?</span>
               <span className="button-label">Disabled + Old</span>
               <span className="button-subtitle">75 years, disabled</span>
             </Button>
@@ -357,7 +411,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button elderly"
             >
-              <span className="button-icon">👴</span>
+              <span className="button-icon">??</span>
               <span className="button-label">Elderly</span>
               <span className="button-subtitle">70 years, non-disabled</span>
             </Button>
@@ -368,7 +422,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button middle-aged"
             >
-              <span className="button-icon">👨</span>
+              <span className="button-icon">??</span>
               <span className="button-label">Middle Aged</span>
               <span className="button-subtitle">50 years, non-disabled</span>
             </Button>
@@ -379,7 +433,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button young"
             >
-              <span className="button-icon">🧑</span>
+              <span className="button-icon">??</span>
               <span className="button-label">Young</span>
               <span className="button-subtitle">25 years, non-disabled</span>
             </Button>
@@ -390,7 +444,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button disabled-young"
             >
-              <span className="button-icon">♿</span>
+              <span className="button-icon">?</span>
               <span className="button-label">Disabled + Young</span>
               <span className="button-subtitle">35 years, disabled</span>
             </Button>
@@ -401,7 +455,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               disabled={isLoading}
               className="test-button very-old"
             >
-              <span className="button-icon">👵</span>
+              <span className="button-icon">??</span>
               <span className="button-label">Very Elderly</span>
               <span className="button-subtitle">85 years, non-disabled</span>
             </Button>
@@ -410,7 +464,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
         {/* Advanced Test Scenarios */}
         <div className="simulation-section">
-          <h2>🎯 Advanced Scenarios</h2>
+          <h2>?? Advanced Scenarios</h2>
           <div className="button-grid advanced">
             <Button
               variant="SECONDARY"
@@ -462,7 +516,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
         {/* Edge Cases */}
         <div className="simulation-section">
-          <h2>🔬 Edge Cases</h2>
+          <h2>?? Edge Cases</h2>
           <div className="button-grid edge-cases">
             <Button
               variant="SECONDARY"
@@ -506,11 +560,67 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
           </div>
         </div>
 
+        {/* Automated Traffic Test */}
+        <div className="simulation-section">
+          <h2>?? Automated Continuous Traffic</h2>
+          <p className="section-description">
+            Simulates continuous user traffic with 2-3 random requests per second.
+            Each request has a random age (18-100 years) and 20% chance of being disabled.
+          </p>
+          
+          <div className="auto-traffic-controls">
+            {!autoTrafficRunning ? (
+              <Button
+                variant="PRIMARY"
+                onClick={handleStartAutoTraffic}
+                className="auto-traffic-button start"
+              >
+                <span className="button-icon">??</span>
+                <span className="button-label">Start Automated Traffic</span>
+                <span className="button-subtitle">2-3 requests/second with random age & status</span>
+              </Button>
+            ) : (
+              <Button
+                variant="SECONDARY"
+                onClick={handleStopAutoTraffic}
+                className="auto-traffic-button stop"
+              >
+                <span className="button-icon">??</span>
+                <span className="button-label">Stop Automated Traffic</span>
+                <span className="button-subtitle">Currently running...</span>
+              </Button>
+            )}
+          </div>
+          
+          {autoTrafficRunning && lastBurst.length > 0 && (
+            <div className="last-burst-display">
+              <h3>?? Last Burst ({lastBurst.length} requests)</h3>
+              <div className="burst-items">
+                {lastBurst.map((request, idx) => (
+                  <div key={idx} className="burst-item">
+                    <span className="burst-age">{request.age}y</span>
+                    <span className={`burst-status ${request.isDisabled ? 'disabled' : 'enabled'}`}>
+                      {request.isDisabled ? '? Disabled' : '?? Enabled'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="burst-stats">
+                <span className="burst-stat-label">Disabled in burst:</span>
+                <span className="burst-stat-value">
+                  {lastBurst.filter(r => r.isDisabled).length} of {lastBurst.length} 
+                  ({((lastBurst.filter(r => r.isDisabled).length / lastBurst.length) * 100).toFixed(0)}%)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Dashboard Controls */}
         <div className="simulation-section dashboard-controls">
-          <h2>📊 Metrics Dashboard</h2>
+          <h2>?? Metrics Dashboard</h2>
           <div className="info-banner info-banner-dashboard">
-            <strong>ℹ️ Real-Time Monitoring:</strong> View live occupancy counts, age cutoff, and distribution metrics. 
+            <strong>?? Real-Time Monitoring:</strong> View live occupancy counts, age cutoff, and distribution metrics. 
             Enable auto-refresh to continuously poll <code>GET /metrics</code> endpoint.
           </div>
           
@@ -524,7 +634,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                   className="toggle-checkbox"
                 />
                 <span className="toggle-text">
-                  {autoRefresh ? '🟢 Auto-Refresh ON' : '⚪ Auto-Refresh OFF'}
+                  {autoRefresh ? '?? Auto-Refresh ON' : '? Auto-Refresh OFF'}
                 </span>
               </label>
               <small className="control-hint">
@@ -553,7 +663,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               onClick={fetchMetrics}
               disabled={isLoading}
             >
-              🔄 Refresh Now
+              ?? Refresh Now
             </Button>
             
             <Button
@@ -561,7 +671,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               onClick={handleResetSimulation}
               disabled={isLoading}
             >
-              ♻️ Reset Simulation
+              ?? Reset Simulation
             </Button>
           </div>
           
@@ -587,7 +697,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
         {/* Configuration Panel */}
         <div className="simulation-section">
           <div className="section-header">
-            <h2>⚙️ Configuration</h2>
+            <h2>?? Configuration</h2>
             <Button
               variant="SECONDARY"
               onClick={() => setEditingConfig(!editingConfig)}
@@ -751,7 +861,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
         {/* Latest Assignment */}
         {lastAssignment && (
           <div className="assignment-result">
-            <h3>✅ Latest Assignment</h3>
+            <h3>? Latest Assignment</h3>
             <div className="assignment-details">
               <div className="assignment-header">
                 <span className={`level-badge level-${lastAssignment.level}`}>
@@ -827,14 +937,14 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
         {/* Assignment History */}
         {assignmentHistory.length > 0 && (
           <div className="simulation-section">
-            <h2>📜 Recent Assignments (Last 10)</h2>
+            <h2>?? Recent Assignments (Last 10)</h2>
             <div className="history-list">
               {assignmentHistory.map((assignment, idx) => (
                 <div key={idx} className="history-item">
                   <span className={`level-badge level-${assignment.level}`}>L{assignment.level}</span>
                   <span className="history-age">{assignment.decision.age}y</span>
                   <span className="history-status">
-                    {assignment.decision.isDisabled ? '♿ Disabled' : '👤 Non-disabled'}
+                    {assignment.decision.isDisabled ? '? Disabled' : '?? Non-disabled'}
                   </span>
                   <span className="history-reason">{assignment.decision.reason}</span>
                 </div>
@@ -846,11 +956,11 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
         {/* Metrics Display */}
         {metrics && (
           <div className="simulation-section">
-            <h2>📊 System Metrics</h2>
+            <h2>?? System Metrics</h2>
             
             {/* Controller State */}
             <div className="metrics-card">
-              <h3>🎛️ Feedback Controller State</h3>
+              <h3>??? Feedback Controller State</h3>
               <div className="metrics-grid">
                 <div className="metric-item primary">
                   <div className="metric-label">Alpha1 (Current)</div>
@@ -886,7 +996,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             {/* Capacity Info */}
             {metrics.capacity && (
               <div className="metrics-card">
-                <h3>🎯 Capacity Limits</h3>
+                <h3>?? Capacity Limits</h3>
                 <div className="metrics-grid">
                   <div className="metric-item">
                     <div className="metric-label">Level 1 (Soft / Hard)</div>
@@ -907,7 +1017,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             {/* Arrival Counts */}
             {metrics.counts && (
               <div className="metrics-card">
-                <h3>👥 Arrival Counts (Rolling Window)</h3>
+                <h3>?? Arrival Counts (Rolling Window)</h3>
                 <div className="metrics-grid">
                   <div className="metric-item">
                     <div className="metric-label">Total Arrivals</div>
@@ -927,7 +1037,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
             {/* Quantiles */}
             <div className="metrics-card">
-              <h3>📈 Age Quantiles (Non-Disabled)</h3>
+              <h3>?? Age Quantiles (Non-Disabled)</h3>
               {metrics.quantilesNonDisabledAge && metrics.counts && metrics.counts.nonDisabled > 0 ? (
                 <div className="metrics-grid">
                   <div className="metric-item">
@@ -957,7 +1067,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             {/* Level Occupancy */}
             {metrics.levels && (
               <div className="metrics-card">
-                <h3>🏛️ Level Occupancy & Utilization</h3>
+                <h3>??? Level Occupancy & Utilization</h3>
                 <div className="levels-grid">
                   {[1, 2, 3].map((levelNum) => {
                     const level = metrics.levels?.[levelNum as 1 | 2 | 3];
