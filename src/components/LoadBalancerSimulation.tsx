@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { createLogger } from '../utils/logger';
+import React, {useEffect, useState} from 'react';
+import {createLogger} from '../utils/logger';
 import {
-  assignArrival,
-  getMetrics,
-  updateConfig,
-  getConfig,
-  getHealth,
-  ArrivalAssignmentResponse,
-  MetricsResponse,
-  ConfigResponse,
+    ArrivalAssignmentResponse,
+    assignArrival,
+    ConfigResponse,
+    getConfig,
+    getHealth,
+    getMetrics,
+    MetricsResponse,
+    updateConfig,
 } from '../utils/api_helpers/loadBalancerApi';
-import { Button, Card, Container, Header } from './common';
+import {Button, Card, Container, Header} from './common';
 import './LoadBalancerSimulation.css';
 
 const logger = createLogger('LoadBalancerSimulation');
@@ -549,7 +549,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               variant="SECONDARY"
               onClick={() => {
                 const randomAge = Math.floor(Math.random() * (100 - 18 + 1)) + 18;
-                const randomDisabled = Math.random() > 0.5;
+                  const randomDisabled = Math.random() > 0.2;
                 handleAssign(randomAge, randomDisabled);
               }}
               disabled={isLoading}
