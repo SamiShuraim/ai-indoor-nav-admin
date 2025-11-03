@@ -54,7 +54,15 @@ export const API_ENDPOINTS = {
   ROUTE_NODES_ADD_CONNECTION: '/api/RouteNode/addConnection',
   // ROUTE_NODES_BY_TYPE: (nodeType: string) => `/api/RouteNode/type/${nodeType}`,
   
-  // Load Balancer
+  // Load Balancer (Adaptive System)
+  LOAD_BALANCER_ARRIVALS_ASSIGN: '/api/LoadBalancer/arrivals/assign',
+  LOAD_BALANCER_LEVELS_STATE: '/api/LoadBalancer/levels/state',
+  LOAD_BALANCER_CONTROL_TICK: '/api/LoadBalancer/control/tick',
+  LOAD_BALANCER_METRICS: '/api/LoadBalancer/metrics',
+  LOAD_BALANCER_CONFIG: '/api/LoadBalancer/config',
+  LOAD_BALANCER_HEALTH: '/api/LoadBalancer/health',
+  
+  // Load Balancer (Legacy - for backward compatibility)
   LOAD_BALANCER_ASSIGN: '/api/LoadBalancer/assign',
   LOAD_BALANCER_UTILIZATION: '/api/LoadBalancer/utilization',
   LOAD_BALANCER_RESET: '/api/LoadBalancer/reset',
