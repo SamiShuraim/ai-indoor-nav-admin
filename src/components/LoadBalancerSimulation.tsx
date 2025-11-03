@@ -39,9 +39,11 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
   const [editingConfig, setEditingConfig] = useState(false);
   const [configForm, setConfigForm] = useState({
     alpha1: '',
-    waitTargetMinutes: '',
+    targetUtilL1: '',
     controllerGain: '',
+    softGateBandYears: '',
     slidingWindowMinutes: '',
+    windowMode: 'sliding',
   });
 
   useEffect(() => {
@@ -104,10 +106,12 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       const data = await getConfig();
       setConfig(data);
       setConfigForm({
-        alpha1: data.alpha1.toString(),
-        waitTargetMinutes: data.waitTargetMinutes.toString(),
-        controllerGain: data.controllerGain.toString(),
-        slidingWindowMinutes: data.window.minutes.toString(),
+        alpha1: data.alpha1 != null ? data.alpha1.toString() : '',
+        targetUtilL1: data.targetUtilL1 != null ? data.targetUtilL1.toString() : '',
+        controllerGain: data.controllerGain != null ? data.controllerGain.toString() : '',
+        softGateBandYears: data.softGateBandYears != null ? data.softGateBandYears.toString() : '',
+        slidingWindowMinutes: data.slidingWindowMinutes != null ? data.slidingWindowMinutes.toString() : '',
+        windowMode: data.windowMode || 'sliding',
       });
       logger.info('Config fetched successfully', data);
     } catch (err) {
@@ -201,15 +205,18 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       if (configForm.alpha1) {
         configUpdate.alpha1 = parseFloat(configForm.alpha1);
       }
-      if (configForm.waitTargetMinutes) {
-        configUpdate.waitTargetMinutes = parseFloat(configForm.waitTargetMinutes);
+      if (configForm.targetUtilL1) {
+        configUpdate.targetUtilL1 = parseFloat(configForm.targetUtilL1);
       }
       if (configForm.controllerGain) {
         configUpdate.controllerGain = parseFloat(configForm.controllerGain);
       }
+      if (configForm.softGateBandYears) {
+        configUpdate.softGateBandYears = parseFloat(configForm.softGateBandYears);
+      }
       if (configForm.slidingWindowMinutes) {
         configUpdate.window = {
-          mode: 'sliding',
+          mode: configForm.windowMode,
           minutes: parseFloat(configForm.slidingWindowMinutes),
         };
       }
@@ -240,17 +247,17 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
     onBack();
   };
 
-  const getWaitColor = (waitTime: number | undefined, target: number): string => {
-    if (!waitTime) return 'neutral';
-    if (waitTime <= target) return 'good';
-    if (waitTime <= target * 1.2) return 'warning';
+  const getOccupancyColor = (occupancy: number | undefined): string => {
+    if (!occupancy) return 'neutral';
+    if (occupancy < 30) return 'good';
+    if (occupancy < 50) return 'warning';
     return 'danger';
   };
 
   return (
     <Container variant="PAGE">
       <Header 
-        title="🚀 Adaptive Load Balancer Test Console"
+        title="📊 Capacity-Based Load Balancer with Soft Gate"
         actions={
           <div className="header-actions">
             <span className={`health-badge ${healthStatus.toLowerCase()}`}>
@@ -264,36 +271,56 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
       />
       
       <main className="load-balancer-content">
-        <Card variant="welcome" title="Adaptive Load Balancer Simulation">
+        <Card variant="welcome" title="Capacity-Based Load Balancer with Soft Gate">
           <p className="load-balancer-description">
-            <strong>This page simulates the production architecture:</strong>
+            <strong>Adaptive load balancing with hard capacity limits and smooth probabilistic transitions:</strong>
           </p>
           <div className="architecture-overview">
             <div className="arch-item">
-              <span className="arch-icon">📱</span>
+              <span className="arch-icon">🎯</span>
               <div>
-                <strong>Mobile App</strong>: Test buttons simulate <code>POST /arrivals/assign</code> calls
-                <br/><small>Mobile apps ONLY call this endpoint - backend handles everything else automatically</small>
+                <strong>Capacity-Based</strong>: Hard limits protect each level
+                <br/><small>L1: 500 soft / 550 hard | L2: 3000 | L3: 3000 | 45-min dwell time</small>
               </div>
             </div>
             <div className="arch-item">
-              <span className="arch-icon">📊</span>
+              <span className="arch-icon">🎛️</span>
               <div>
-                <strong>Admin Dashboard</strong>: Metrics display polls <code>GET /metrics</code>
-                <br/><small>Dashboard shows real-time statistics - backend calculates wait times, runs controller, etc.</small>
+                <strong>Utilization Controller</strong>: Auto-adjusts alpha1 to target 90% L1 utilization
+                <br/><small>Feedback loop runs every minute to optimize Level 1 occupancy</small>
               </div>
             </div>
             <div className="arch-item">
-              <span className="arch-icon">🤖</span>
+              <span className="arch-icon">📈</span>
               <div>
-                <strong>Backend (Automatic)</strong>: Tracks arrivals, manages queues, runs feedback controller every minute
-                <br/><small>Everything happens automatically - no manual updates needed!</small>
+                <strong>Sigmoid Soft Gate</strong>: Smooth probability curve around age cutoff
+                <br/><small>No hard jumps - uses probabilistic assignment near cutoff (±6 years)</small>
+              </div>
+            </div>
+            <div className="arch-item">
+              <span className="arch-icon">⚡</span>
+              <div>
+                <strong>Rate Limited</strong>: Max 11 per minute to Level 1
+                <br/><small>Prevents bursts from overwhelming capacity</small>
               </div>
             </div>
           </div>
           <p className="load-balancer-description" style={{ marginTop: '1rem', fontWeight: '600', color: '#2196f3' }}>
-            💡 Quick Start: (1) Click test buttons to assign pilgrims → (2) Watch metrics update automatically!
+            💡 Disabled always → L1 | Non-disabled → Sigmoid probability based on age vs dynamic cutoff
           </p>
+          <div className="info-banner" style={{ marginTop: '1rem', padding: '1rem', background: '#f5f5f5', borderRadius: '8px' }}>
+            <strong>🧮 System Flow:</strong>
+            <br/>
+            <code>1. Controller adjusts alpha1 based on L1 utilization (target: 90%)</code>
+            <br/>
+            <code>2. Age cutoff = tau-quantile where tau = 1 - (alpha1 - p_disabled)</code>
+            <br/>
+            <code>3. Sigmoid: p(L1) = 1 / (1 + exp(-(age - cutoff) / 3))</code>
+            <br/>
+            <code>4. Assign based on probability, capacity, and rate limit</code>
+            <br/><br/>
+            <strong>Example:</strong> If alpha1=8% and 2% disabled, cutoff=94th percentile. Age 72 near cutoff → ~50% chance L1.
+          </div>
         </Card>
 
         {error && (
@@ -481,10 +508,10 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
 
         {/* Dashboard Controls */}
         <div className="simulation-section dashboard-controls">
-          <h2>📊 Admin Dashboard Simulation</h2>
+          <h2>📊 Metrics Dashboard</h2>
           <div className="info-banner info-banner-dashboard">
-            <strong>ℹ️ Dashboard Polling:</strong> In production, the admin dashboard polls <code>GET /metrics</code> 
-            every 15-30 seconds to show real-time data. Enable auto-refresh below to simulate this behavior.
+            <strong>ℹ️ Real-Time Monitoring:</strong> View live occupancy counts, age cutoff, and distribution metrics. 
+            Enable auto-refresh to continuously poll <code>GET /metrics</code> endpoint.
           </div>
           
           <div className="dashboard-controls-row">
@@ -573,37 +600,61 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             <div className="config-display">
               <div className="config-grid">
                 <div className="config-item">
-                  <span className="config-label">Alpha1 (Target):</span>
-                  <span className="config-value">{config.alpha1.toFixed(3)}</span>
+                  <span className="config-label">Alpha1 (Current):</span>
+                  <span className="config-value">
+                    {config.alpha1 != null ? `${(config.alpha1 * 100).toFixed(2)}%` : 'N/A'}
+                  </span>
                 </div>
                 <div className="config-item">
                   <span className="config-label">Alpha1 Range:</span>
-                  <span className="config-value">{config.alpha1Min.toFixed(2)} - {config.alpha1Max.toFixed(2)}</span>
+                  <span className="config-value">
+                    {config.alpha1Min != null && config.alpha1Max != null
+                      ? `${(config.alpha1Min * 100).toFixed(1)}% - ${(config.alpha1Max * 100).toFixed(1)}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <div className="config-item">
-                  <span className="config-label">Wait Target:</span>
-                  <span className="config-value">{config.waitTargetMinutes} min</span>
-                </div>
-                <div className="config-item">
-                  <span className="config-label">Controller Gain:</span>
-                  <span className="config-value">{config.controllerGain.toFixed(3)}</span>
-                </div>
+                {config.targetUtilL1 != null && (
+                  <div className="config-item">
+                    <span className="config-label">Target L1 Utilization:</span>
+                    <span className="config-value">{(config.targetUtilL1 * 100).toFixed(0)}%</span>
+                  </div>
+                )}
+                {config.controllerGain != null && (
+                  <div className="config-item">
+                    <span className="config-label">Controller Gain:</span>
+                    <span className="config-value">{config.controllerGain.toFixed(3)}</span>
+                  </div>
+                )}
+                {config.softGateBandYears != null && (
+                  <div className="config-item">
+                    <span className="config-label">Soft Gate Band:</span>
+                    <span className="config-value">{config.softGateBandYears} years</span>
+                  </div>
+                )}
+                {config.dwellMinutes != null && (
+                  <div className="config-item">
+                    <span className="config-label">Dwell Time:</span>
+                    <span className="config-value">{config.dwellMinutes} min</span>
+                  </div>
+                )}
                 <div className="config-item">
                   <span className="config-label">Window Mode:</span>
-                  <span className="config-value">{config.window.mode} ({config.window.minutes} min)</span>
-                </div>
-                <div className="config-item">
-                  <span className="config-label">Soft Gate:</span>
                   <span className="config-value">
-                    {config.softGate.enabled ? `On (${config.softGate.bandYears}y)` : 'Off'}
+                    {config.windowMode || 'sliding'} ({config.slidingWindowMinutes || 45} min)
                   </span>
                 </div>
-                <div className="config-item">
-                  <span className="config-label">Randomization:</span>
-                  <span className="config-value">
-                    {config.randomization.enabled ? `On (${(config.randomization.rate * 100).toFixed(1)}%)` : 'Off'}
-                  </span>
-                </div>
+                {config.capacity && (
+                  <>
+                    <div className="config-item">
+                      <span className="config-label">L1 Capacity:</span>
+                      <span className="config-value">{config.capacity.l1CapSoft} soft / {config.capacity.l1CapHard} hard</span>
+                    </div>
+                    <div className="config-item">
+                      <span className="config-label">L2/L3 Capacity:</span>
+                      <span className="config-value">{config.capacity.l2Cap} each</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -612,37 +663,59 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
             <div className="config-form">
               <div className="form-row">
                 <div className="form-group">
-                  <label>Alpha1 Target</label>
+                  <label>Alpha1 (Initial Target)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.05"
+                    max="0.12"
+                    value={configForm.alpha1}
+                    onChange={(e) => setConfigForm({ ...configForm, alpha1: e.target.value })}
+                    placeholder="0.0769"
+                  />
+                  <small>Range: 0.05 - 0.12 (controller will adjust)</small>
+                </div>
+                <div className="form-group">
+                  <label>Target L1 Utilization</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={configForm.alpha1}
-                    onChange={(e) => setConfigForm({ ...configForm, alpha1: e.target.value })}
-                    placeholder="0.35"
+                    min="0.70"
+                    max="0.98"
+                    value={configForm.targetUtilL1}
+                    onChange={(e) => setConfigForm({ ...configForm, targetUtilL1: e.target.value })}
+                    placeholder="0.90"
                   />
-                </div>
-                <div className="form-group">
-                  <label>Wait Target (min)</label>
-                  <input
-                    type="number"
-                    step="1"
-                    value={configForm.waitTargetMinutes}
-                    onChange={(e) => setConfigForm({ ...configForm, waitTargetMinutes: e.target.value })}
-                    placeholder="12"
-                  />
+                  <small>Target: 90% of soft capacity (450/500)</small>
                 </div>
                 <div className="form-group">
                   <label>Controller Gain</label>
                   <input
                     type="number"
-                    step="0.001"
+                    step="0.01"
+                    min="0.01"
+                    max="0.20"
                     value={configForm.controllerGain}
                     onChange={(e) => setConfigForm({ ...configForm, controllerGain: e.target.value })}
-                    placeholder="0.03"
+                    placeholder="0.05"
                   />
+                  <small>Feedback controller sensitivity (default: 0.05)</small>
                 </div>
                 <div className="form-group">
-                  <label>Window (min)</label>
+                  <label>Soft Gate Band (years)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="10"
+                    value={configForm.softGateBandYears}
+                    onChange={(e) => setConfigForm({ ...configForm, softGateBandYears: e.target.value })}
+                    placeholder="3.0"
+                  />
+                  <small>Sigmoid transition width (default: 3 years)</small>
+                </div>
+                <div className="form-group">
+                  <label>Sliding Window (minutes)</label>
                   <input
                     type="number"
                     step="5"
@@ -650,6 +723,18 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                     onChange={(e) => setConfigForm({ ...configForm, slidingWindowMinutes: e.target.value })}
                     placeholder="45"
                   />
+                  <small>Rolling window for tracking arrivals</small>
+                </div>
+                <div className="form-group">
+                  <label>Window Mode</label>
+                  <select
+                    value={configForm.windowMode}
+                    onChange={(e) => setConfigForm({ ...configForm, windowMode: e.target.value })}
+                  >
+                    <option value="sliding">Sliding Window</option>
+                    <option value="decay">Exponential Decay</option>
+                  </select>
+                  <small>Method for tracking recent arrivals</small>
                 </div>
               </div>
               <Button
@@ -683,38 +768,58 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 </div>
                 <div className="info-row">
                   <span className="info-label">Age Cutoff:</span>
-                  <span className="info-value">{lastAssignment.decision.ageCutoff.toFixed(1)} years</span>
+                  <span className="info-value">
+                    {lastAssignment.decision.ageCutoff != null 
+                      ? `${lastAssignment.decision.ageCutoff.toFixed(1)} years` 
+                      : 'N/A'}
+                  </span>
                 </div>
                 <div className="info-row">
                   <span className="info-label">Alpha1:</span>
-                  <span className="info-value">{(lastAssignment.decision.alpha1 * 100).toFixed(1)}%</span>
+                  <span className="info-value">
+                    {lastAssignment.decision.alpha1 != null
+                      ? `${(lastAssignment.decision.alpha1 * 100).toFixed(1)}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">P(Disabled):</span>
-                  <span className="info-value">{(lastAssignment.decision.pDisabled * 100).toFixed(1)}%</span>
-                </div>
+                {lastAssignment.decision.pDisabled != null && (
+                  <div className="info-row">
+                    <span className="info-label">P(Disabled):</span>
+                    <span className="info-value">{(lastAssignment.decision.pDisabled * 100).toFixed(1)}%</span>
+                  </div>
+                )}
                 <div className="info-row reason">
                   <span className="info-label">Reason:</span>
                   <span className="info-value">{lastAssignment.decision.reason}</span>
                 </div>
               </div>
-              <div className="wait-times">
-                {lastAssignment.decision.waitEst[1] != null && (
-                  <div className="wait-item">
-                    <span>L1: {lastAssignment.decision.waitEst[1].toFixed(1)}m</span>
-                  </div>
-                )}
-                {lastAssignment.decision.waitEst[2] != null && (
-                  <div className="wait-item">
-                    <span>L2: {lastAssignment.decision.waitEst[2].toFixed(1)}m</span>
-                  </div>
-                )}
-                {lastAssignment.decision.waitEst[3] != null && (
-                  <div className="wait-item">
-                    <span>L3: {lastAssignment.decision.waitEst[3].toFixed(1)}m</span>
-                  </div>
-                )}
-              </div>
+              {(lastAssignment.decision.occupancy || lastAssignment.decision.waitEst) && (
+                <div className="wait-times">
+                  <h4>Occupancy at Assignment Time:</h4>
+                  {(() => {
+                    const occ = lastAssignment.decision.occupancy || lastAssignment.decision.waitEst;
+                    return (
+                      <>
+                        {occ && occ[1] != null && (
+                          <div className="wait-item">
+                            <span>L1: {occ[1]} people</span>
+                          </div>
+                        )}
+                        {occ && occ[2] != null && (
+                          <div className="wait-item">
+                            <span>L2: {occ[2]} people</span>
+                          </div>
+                        )}
+                        {occ && occ[3] != null && (
+                          <div className="wait-item">
+                            <span>L3: {occ[3]} people</span>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -743,71 +848,87 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
           <div className="simulation-section">
             <h2>📊 System Metrics</h2>
             
-            {/* Controller Metrics */}
+            {/* Controller State */}
             <div className="metrics-card">
-              <h3>🎛️ Controller State</h3>
+              <h3>🎛️ Feedback Controller State</h3>
               <div className="metrics-grid">
                 <div className="metric-item primary">
-                  <div className="metric-label">Alpha1 (Target)</div>
-                  <div className="metric-value">{(metrics.alpha1 * 100).toFixed(1)}%</div>
+                  <div className="metric-label">Alpha1 (Current)</div>
+                  <div className="metric-value">
+                    {metrics.alpha1 != null ? `${(metrics.alpha1 * 100).toFixed(2)}%` : 'N/A'}
+                  </div>
+                  <small>Auto-adjusted by controller</small>
+                </div>
+                <div className="metric-item primary">
+                  <div className="metric-label">Target L1 Utilization</div>
+                  <div className="metric-value">
+                    {metrics.targetUtilL1 != null ? `${(metrics.targetUtilL1 * 100).toFixed(0)}%` : 'N/A'}
+                  </div>
+                  <small>Controller target (typically 90%)</small>
                 </div>
                 <div className="metric-item primary">
                   <div className="metric-label">Age Cutoff</div>
                   <div className="metric-value">
-                    {metrics.ageCutoff != null ? `${metrics.ageCutoff.toFixed(1)} years` : 'N/A'}
+                    {metrics.ageCutoff != null ? `${metrics.ageCutoff.toFixed(1)} years` : 'N/A (insufficient data)'}
                   </div>
+                  <small>Dynamic cutoff from quantiles</small>
                 </div>
                 <div className="metric-item primary">
                   <div className="metric-label">P(Disabled)</div>
                   <div className="metric-value">
                     {metrics.pDisabled != null ? `${(metrics.pDisabled * 100).toFixed(1)}%` : 'N/A'}
                   </div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Wait Target</div>
-                  <div className="metric-value">{metrics.waitTargetMinutes} min</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Controller Gain</div>
-                  <div className="metric-value">
-                    {metrics.controllerGain != null ? metrics.controllerGain.toFixed(3) : 'N/A'}
-                  </div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Alpha1 Range</div>
-                  <div className="metric-value">
-                    {metrics.alpha1Min != null && metrics.alpha1Max != null 
-                      ? `${(metrics.alpha1Min * 100).toFixed(0)}-${(metrics.alpha1Max * 100).toFixed(0)}%`
-                      : 'N/A'
-                    }
-                  </div>
+                  <small>Fraction of disabled arrivals</small>
                 </div>
               </div>
             </div>
+            
+            {/* Capacity Info */}
+            {metrics.capacity && (
+              <div className="metrics-card">
+                <h3>🎯 Capacity Limits</h3>
+                <div className="metrics-grid">
+                  <div className="metric-item">
+                    <div className="metric-label">Level 1 (Soft / Hard)</div>
+                    <div className="metric-value">{metrics.capacity.l1CapSoft} / {metrics.capacity.l1CapHard}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Level 2</div>
+                    <div className="metric-value">{metrics.capacity.l2Cap}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Level 3</div>
+                    <div className="metric-value">{metrics.capacity.l3Cap}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Arrival Counts */}
-            <div className="metrics-card">
-              <h3>👥 Arrival Counts (Rolling Window)</h3>
-              <div className="metrics-grid">
-                <div className="metric-item">
-                  <div className="metric-label">Total Arrivals</div>
-                  <div className="metric-value">{metrics.counts.total}</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Disabled</div>
-                  <div className="metric-value">{metrics.counts.disabled}</div>
-                </div>
-                <div className="metric-item">
-                  <div className="metric-label">Non-Disabled</div>
-                  <div className="metric-value">{metrics.counts.nonDisabled}</div>
+            {metrics.counts && (
+              <div className="metrics-card">
+                <h3>👥 Arrival Counts (Rolling Window)</h3>
+                <div className="metrics-grid">
+                  <div className="metric-item">
+                    <div className="metric-label">Total Arrivals</div>
+                    <div className="metric-value">{metrics.counts.total || 0}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Disabled</div>
+                    <div className="metric-value">{metrics.counts.disabled || 0}</div>
+                  </div>
+                  <div className="metric-item">
+                    <div className="metric-label">Non-Disabled</div>
+                    <div className="metric-value">{metrics.counts.nonDisabled || 0}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Quantiles */}
             <div className="metrics-card">
               <h3>📈 Age Quantiles (Non-Disabled)</h3>
-              {metrics.quantilesNonDisabledAge && metrics.counts.nonDisabled > 0 ? (
+              {metrics.quantilesNonDisabledAge && metrics.counts && metrics.counts.nonDisabled > 0 ? (
                 <div className="metrics-grid">
                   <div className="metric-item">
                     <div className="metric-label">50th Percentile (Median)</div>
@@ -833,37 +954,63 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
               )}
             </div>
 
-            {/* Level States */}
-            <div className="metrics-card">
-              <h3>🏛️ Level States</h3>
-              <div className="levels-grid">
-                {[1, 2, 3].map((levelNum) => {
-                  const level = metrics.levels[levelNum as 1 | 2 | 3];
+            {/* Level Occupancy */}
+            {metrics.levels && (
+              <div className="metrics-card">
+                <h3>🏛️ Level Occupancy & Utilization</h3>
+                <div className="levels-grid">
+                  {[1, 2, 3].map((levelNum) => {
+                    const level = metrics.levels?.[levelNum as 1 | 2 | 3];
+                    const occupancy = level?.occupancy || level?.waitEst || level?.queueLength || 0;
+                    const capacity = level?.capacity;
+                    const utilization = level?.utilization;
+                    
+                    // Get capacity from config if not in level metrics
+                    const capFromConfig = metrics.capacity 
+                      ? (levelNum === 1 ? metrics.capacity.l1CapSoft : 
+                         levelNum === 2 ? metrics.capacity.l2Cap : metrics.capacity.l3Cap)
+                      : null;
+                    
+                    const effectiveCap = capacity || capFromConfig;
+                    const effectiveUtil = utilization != null 
+                      ? utilization 
+                      : (effectiveCap ? occupancy / effectiveCap : null);
+                  
                   return (
                     <div key={levelNum} className={`level-card level-${levelNum}`}>
                       <h4>Level {levelNum}</h4>
-                      {level ? (
+                      {level || occupancy > 0 ? (
                         <>
-                          {level.waitEst != null && (
-                            <div className="level-stat">
-                              <span className="stat-label">Wait Time:</span>
-                              <span className={`stat-value wait-${getWaitColor(level.waitEst, metrics.waitTargetMinutes)}`}>
-                                {level.waitEst.toFixed(1)} min
-                              </span>
-                            </div>
+                          <div className="level-stat">
+                            <span className="stat-label">Occupancy:</span>
+                            <span className={`stat-value wait-${getOccupancyColor(occupancy)}`}>
+                              {occupancy} people
+                            </span>
+                          </div>
+                          {effectiveCap && (
+                            <>
+                              <div className="level-stat">
+                                <span className="stat-label">Capacity:</span>
+                                <span className="stat-value">{effectiveCap}</span>
+                              </div>
+                              <div className="level-stat">
+                                <span className="stat-label">Utilization:</span>
+                                <span className={`stat-value wait-${
+                                  effectiveUtil == null ? 'neutral' :
+                                  effectiveUtil < 0.7 ? 'good' :
+                                  effectiveUtil < 0.95 ? 'warning' : 'danger'
+                                }`}>
+                                  {effectiveUtil != null ? `${(effectiveUtil * 100).toFixed(1)}%` : 'N/A'}
+                                </span>
+                              </div>
+                            </>
                           )}
-                          {level.queueLen != null && (
-                            <div className="level-stat">
-                              <span className="stat-label">Queue:</span>
-                              <span className="stat-value">{level.queueLen}</span>
-                            </div>
-                          )}
-                          {level.throughputPerMin != null && (
-                            <div className="level-stat">
-                              <span className="stat-label">Throughput:</span>
-                              <span className="stat-value">{level.throughputPerMin.toFixed(1)}/min</span>
-                            </div>
-                          )}
+                          <div className="level-stat">
+                            <span className="stat-label">Purpose:</span>
+                            <span className="stat-value">
+                              {levelNum === 1 ? 'Disabled + Elderly (soft gate)' : 'General (balanced)'}
+                            </span>
+                          </div>
                         </>
                       ) : (
                         <div className="no-data">No data</div>
@@ -873,6 +1020,7 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
                 })}
               </div>
             </div>
+            )}
           </div>
         )}
       </main>

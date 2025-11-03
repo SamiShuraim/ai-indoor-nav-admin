@@ -10,10 +10,17 @@ export interface ArrivalAssignmentRequest {
   isDisabled: boolean;
 }
 
-export interface WaitEstimate {
+export interface OccupancyCount {
   1?: number;
   2?: number;
   3?: number;
+}
+
+export interface CapacityInfo {
+  l1CapSoft: number;
+  l1CapHard: number;
+  l2Cap: number;
+  l3Cap: number;
 }
 
 export interface AssignmentDecision {
@@ -21,10 +28,11 @@ export interface AssignmentDecision {
   age: number;
   ageCutoff: number;
   alpha1: number;
-  pDisabled: number;
-  shareLeftForOld: number;
-  tauQuantile: number;
-  waitEst: WaitEstimate;
+  pDisabled?: number;
+  shareLeftForOld?: number;
+  tauQuantile?: number;
+  occupancy?: OccupancyCount; // Current occupancy at each level
+  waitEst?: OccupancyCount; // Legacy name - actually occupancy count
   reason: string;
 }
 
@@ -36,9 +44,7 @@ export interface ArrivalAssignmentResponse {
 
 export interface LevelStateUpdate {
   level: number;
-  waitEst?: number;
-  queueLen?: number;
-  throughputPerMin?: number;
+  queueLength?: number; // Occupancy count
 }
 
 export interface LevelStateRequest {
@@ -49,16 +55,7 @@ export interface LevelStateResponse {
   ok: boolean;
 }
 
-export interface ControlTickResponse {
-  alpha1: number;
-  ageCutoff: number;
-  pDisabled: number;
-  window: {
-    method: string;
-    slidingWindowMinutes?: number;
-    halfLifeMinutes?: number;
-  };
-}
+// Removed - no longer needed without feedback controller
 
 export interface CountsMetrics {
   total: number;
@@ -73,22 +70,22 @@ export interface QuantilesMetrics {
 }
 
 export interface LevelMetrics {
-  waitEst?: number;
-  queueLen?: number;
-  throughputPerMin?: number;
+  occupancy?: number; // Current occupancy count
+  capacity?: number; // Capacity limit
+  utilization?: number; // Utilization percentage (0-1)
+  queueLength?: number; // Legacy: Occupancy count
+  waitEst?: number; // Legacy: actually occupancy count
 }
 
 export interface MetricsResponse {
-  alpha1: number;
-  alpha1Min: number;
-  alpha1Max: number;
-  waitTargetMinutes: number;
-  controllerGain: number;
-  pDisabled: number;
-  ageCutoff: number;
-  counts: CountsMetrics;
-  quantilesNonDisabledAge: QuantilesMetrics;
-  levels: {
+  alpha1?: number;
+  targetUtilL1?: number; // Target utilization for Level 1 (e.g., 0.90)
+  pDisabled?: number;
+  ageCutoff?: number;
+  counts?: CountsMetrics;
+  quantilesNonDisabledAge?: QuantilesMetrics;
+  capacity?: CapacityInfo;
+  levels?: {
     1?: LevelMetrics;
     2?: LevelMetrics;
     3?: LevelMetrics;
@@ -98,47 +95,31 @@ export interface MetricsResponse {
 export interface WindowConfig {
   mode?: 'sliding' | 'decay';
   minutes?: number;
-}
-
-export interface SoftGateConfig {
-  enabled?: boolean;
-  bandYears?: number;
-}
-
-export interface RandomizationConfig {
-  enabled?: boolean;
-  rate?: number;
+  halfLifeMinutes?: number;
 }
 
 export interface ConfigUpdateRequest {
   alpha1?: number;
   alpha1Min?: number;
   alpha1Max?: number;
-  waitTargetMinutes?: number;
+  targetUtilL1?: number;
   controllerGain?: number;
+  softGateBandYears?: number;
   window?: WindowConfig;
-  softGate?: SoftGateConfig;
-  randomization?: RandomizationConfig;
 }
 
 export interface ConfigResponse {
   alpha1: number;
   alpha1Min: number;
   alpha1Max: number;
-  waitTargetMinutes: number;
-  controllerGain: number;
-  window: {
-    mode: string;
-    minutes: number;
-  };
-  softGate: {
-    enabled: boolean;
-    bandYears: number;
-  };
-  randomization: {
-    enabled: boolean;
-    rate: number;
-  };
+  targetUtilL1?: number;
+  controllerGain?: number;
+  softGateBandYears?: number;
+  dwellMinutes?: number;
+  slidingWindowMinutes?: number;
+  windowMode?: string;
+  halfLifeMinutes?: number;
+  capacity?: CapacityInfo;
 }
 
 export interface HealthResponse {
@@ -204,34 +185,8 @@ export const assignArrival = async (
   );
 };
 
-/**
- * Updates level state (wait times, queue lengths, throughput)
- */
-export const updateLevelState = async (
-  levels: LevelStateUpdate[]
-): Promise<LevelStateResponse> => {
-  const requestBody: LevelStateRequest = { levels };
-
-  return apiRequest<LevelStateResponse>(
-    API_ENDPOINTS.LOAD_BALANCER_LEVELS_STATE,
-    {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    }
-  );
-};
-
-/**
- * Manually triggers a controller tick
- */
-export const triggerControlTick = async (): Promise<ControlTickResponse> => {
-  return apiRequest<ControlTickResponse>(
-    API_ENDPOINTS.LOAD_BALANCER_CONTROL_TICK,
-    {
-      method: 'POST',
-    }
-  );
-};
+// Removed - no longer needed without feedback controller
+// The system now only tracks occupancy internally
 
 /**
  * Gets comprehensive metrics and statistics
