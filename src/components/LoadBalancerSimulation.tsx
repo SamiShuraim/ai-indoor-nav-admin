@@ -620,62 +620,12 @@ const LoadBalancerSimulation: React.FC<LoadBalancerSimulationProps> = ({ onBack 
         <div className="simulation-section dashboard-controls">
           <h2>📊 Metrics Dashboard</h2>
           <div className="info-banner info-banner-dashboard">
-            <strong>ℹ️ Real-Time Monitoring:</strong> View live occupancy counts, age cutoff, and distribution metrics. 
-            Enable auto-refresh to continuously poll <code>GET /metrics</code> endpoint.
+              <strong>ℹ️ Real-Time Monitoring:</strong> View live occupancy counts, age cutoff, and distribution
+              metrics.
           </div>
-          
-          <div className="dashboard-controls-row">
-            <div className="control-group">
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  className="toggle-checkbox"
-                />
-                <span className="toggle-text">
-                  {autoRefresh ? '🟢 Auto-Refresh ON' : '⚪ Auto-Refresh OFF'}
-                </span>
-              </label>
-              <small className="control-hint">
-                {autoRefresh ? `Fetching metrics every ${refreshInterval} seconds` : 'Manually refresh metrics as needed'}
-              </small>
-            </div>
-            
-            <div className="control-group">
-              <label>Refresh Interval (seconds):</label>
-              <select 
-                value={refreshInterval} 
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-                disabled={!autoRefresh}
-                className="interval-select"
-              >
-                <option value={5}>5 seconds</option>
-                <option value={10}>10 seconds</option>
-                <option value={15}>15 seconds (recommended)</option>
-                <option value={30}>30 seconds</option>
-                <option value={60}>60 seconds</option>
-              </select>
-            </div>
-            
-            <Button
-              variant="SECONDARY"
-              onClick={fetchMetrics}
-              disabled={isLoading}
-            >
-              🔄 Refresh Now
-            </Button>
-            
-            <Button
-              variant="SECONDARY"
-              onClick={handleResetSimulation}
-              disabled={isLoading}
-            >
-              ♻️ Reset Simulation
-            </Button>
-          </div>
-          
-          <div className="assignment-counts">
+
+
+            <div className="assignment-counts">
             <div className="count-card level-1-count">
               <div className="count-label">Level 1 Assignments</div>
               <div className="count-value">{levelAssignments[1]}</div>
