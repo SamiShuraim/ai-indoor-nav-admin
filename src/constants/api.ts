@@ -1,5 +1,5 @@
 // API Configuration Constants
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5090';
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://ai-indoor-nav-api.onrender.com';
 
 // MapTiler Configuration
 export const MAPTILER_API_KEY = process.env.REACT_APP_MAPTILER_API_KEY || '';
