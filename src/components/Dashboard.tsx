@@ -10,9 +10,10 @@ interface DashboardProps {
   onLogout: () => void;
   onNavigateToBuildings: () => void;
   onNavigateToLoadBalancer: () => void;
+  onNavigateToAPILoadTest: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings, onNavigateToLoadBalancer }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings, onNavigateToLoadBalancer, onNavigateToAPILoadTest }) => {
   // Component lifecycle logging
   useEffect(() => {
     logger.info('Dashboard component mounted');
@@ -56,6 +57,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings, 
     logger.userAction('Load Balancer Simulation card clicked');
     logger.info('Navigating to Load Balancer Simulation');
     onNavigateToLoadBalancer();
+  };
+
+  const handleAPILoadTestClick = () => {
+    logger.userAction('API Load Test card clicked');
+    logger.info('Navigating to API Load Test');
+    onNavigateToAPILoadTest();
   };
 
   logger.debug('Dashboard component rendering');
@@ -116,6 +123,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout, onNavigateToBuildings, 
             title={UI_MESSAGES.CARD_PROJECT_MANAGEMENT_TITLE}
             description={UI_MESSAGES.CARD_PROJECT_MANAGEMENT_DESC}
             onClick={handleProjectManagementClick}
+          />
+
+          <Card
+            title={UI_MESSAGES.CARD_API_LOAD_TEST_TITLE}
+            description={UI_MESSAGES.CARD_API_LOAD_TEST_DESC}
+            onClick={handleAPILoadTestClick}
           />
         </div>
       </main>
