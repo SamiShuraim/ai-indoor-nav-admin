@@ -296,27 +296,36 @@
 
 .metrics {
   margin-bottom: 15px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .metric {
   display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
+  flex-direction: column;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 6px;
+  gap: 5px;
 }
 
-.metric:last-child {
-  border-bottom: none;
+.metric.metric-average {
+  grid-column: 1 / -1;
 }
 
 .metric-label {
   font-weight: 600;
-  color: #495057;
+  color: #6c757d;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .metric-value {
-  color: #007bff;
-  font-weight: 600;
+  color: #2c3e50;
+  font-weight: 700;
+  font-size: 1.3rem;
 }
 
 .spec-check {

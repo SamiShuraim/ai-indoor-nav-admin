@@ -347,15 +347,15 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <h3>{getStatusIcon(summary.assignPassesSpec)} Assign API (/api/LoadBalancer/arrivals/assign)</h3>
               <div className="metrics">
                 <div className="metric">
-                  <span className="metric-label">Min:</span>
+                  <span className="metric-label">Min</span>
                   <span className="metric-value">{formatTime(summary.assignMin)}</span>
                 </div>
                 <div className="metric">
-                  <span className="metric-label">Max:</span>
+                  <span className="metric-label">Max</span>
                   <span className="metric-value">{formatTime(summary.assignMax)}</span>
                 </div>
-                <div className="metric">
-                  <span className="metric-label">Average:</span>
+                <div className="metric metric-average">
+                  <span className="metric-label">Average</span>
                   <span className="metric-value">{formatTime(summary.assignAvg)}</span>
                 </div>
               </div>
@@ -369,15 +369,15 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <h3>{getStatusIcon(summary.navigatePassesSpec)} Navigate API (/api/RouteNode/navigateToLevel)</h3>
               <div className="metrics">
                 <div className="metric">
-                  <span className="metric-label">Min:</span>
+                  <span className="metric-label">Min</span>
                   <span className="metric-value">{formatTime(summary.navigateMin)}</span>
                 </div>
                 <div className="metric">
-                  <span className="metric-label">Max:</span>
+                  <span className="metric-label">Max</span>
                   <span className="metric-value">{formatTime(summary.navigateMax)}</span>
                 </div>
-                <div className="metric">
-                  <span className="metric-label">Average:</span>
+                <div className="metric metric-average">
+                  <span className="metric-label">Average</span>
                   <span className="metric-value">{formatTime(summary.navigateAvg)}</span>
                 </div>
               </div>
@@ -391,15 +391,15 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <h3>Combined Total Time</h3>
               <div className="metrics">
                 <div className="metric">
-                  <span className="metric-label">Min:</span>
+                  <span className="metric-label">Min</span>
                   <span className="metric-value">{formatTime(summary.totalMin)}</span>
                 </div>
                 <div className="metric">
-                  <span className="metric-label">Max:</span>
+                  <span className="metric-label">Max</span>
                   <span className="metric-value">{formatTime(summary.totalMax)}</span>
                 </div>
-                <div className="metric">
-                  <span className="metric-label">Average:</span>
+                <div className="metric metric-average">
+                  <span className="metric-label">Average</span>
                   <span className="metric-value">{formatTime(summary.totalAvg)}</span>
                 </div>
               </div>
