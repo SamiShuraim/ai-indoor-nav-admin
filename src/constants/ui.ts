@@ -36,6 +36,8 @@ export const UI_MESSAGES = {
   CARD_PROJECT_MANAGEMENT_DESC: 'Access project planning and documentation',
   CARD_BUILDINGS_TITLE: 'Buildings & Floors',
   CARD_BUILDINGS_DESC: 'Manage buildings and floor layouts',
+  CARD_API_LOAD_TEST_TITLE: 'API Load Test',
+  CARD_API_LOAD_TEST_DESC: 'Test API response times with 50 concurrent users',
   
   // Buildings Management
   BUILDINGS_TITLE: 'Buildings & Floors Management',

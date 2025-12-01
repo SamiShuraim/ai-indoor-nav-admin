@@ -2,6 +2,7 @@ import {useEffect, useState} from 'react';
 import {BrowserRouter as Router, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom';
 import './App.css';
 import AdminLogin from './components/AdminLogin';
+import APILoadTest from './components/APILoadTest';
 import BuildingsManagement from './components/BuildingsManagement';
 import Dashboard from './components/Dashboard';
 import {FloorEditor} from './components/FloorEditor';
@@ -19,6 +20,7 @@ const ROUTES = {
   DASHBOARD: '/dashboard',
   BUILDINGS: '/buildings',
   LOAD_BALANCER: '/load-balancer',
+  API_LOAD_TEST: '/api-load-test',
   FLOOR_EDITOR: '/floor-editor/:floorId',
   FLOOR_EDITOR_PATH: (floorId: string) => `/floor-editor/${floorId}`,
 } as const;
@@ -135,6 +137,12 @@ function AppContent() {
     navigate(ROUTES.LOAD_BALANCER);
   };
 
+  const handleNavigateToAPILoadTest = () => {
+    logger.userAction('Navigate to API load test clicked');
+    logger.navigationChange('Navigating to', ROUTES.API_LOAD_TEST);
+    navigate(ROUTES.API_LOAD_TEST);
+  };
+
   const handleNavigateToFloorEditor = (floorId: string | number) => {
     const floorIdString = floorId.toString();
     logger.userAction('Navigate to floor editor clicked', { floorId, floorIdString });
@@ -196,6 +204,7 @@ function AppContent() {
                 onLogout={handleLogout}
                 onNavigateToBuildings={handleNavigateToBuildings}
                 onNavigateToLoadBalancer={handleNavigateToLoadBalancer}
+                onNavigateToAPILoadTest={handleNavigateToAPILoadTest}
               />
             ) : (
               <Navigate to={ROUTES.LOGIN} replace />
@@ -220,6 +229,18 @@ function AppContent() {
           element={
             token ? (
               <LoadBalancerSimulation 
+                onBack={handleNavigateToDashboard}
+              />
+            ) : (
+              <Navigate to={ROUTES.LOGIN} replace />
+            )
+          } 
+        />
+        <Route 
+          path={ROUTES.API_LOAD_TEST} 
+          element={
+            token ? (
+              <APILoadTest 
                 onBack={handleNavigateToDashboard}
               />
             ) : (
