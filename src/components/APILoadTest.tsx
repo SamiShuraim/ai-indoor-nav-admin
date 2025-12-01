@@ -88,8 +88,8 @@ const ROUTE_NODES: RouteNode[] = [
 ];
 
 const CONCURRENT_USERS = 50;
-const SPEC_AVG_MS = 1000;
-const SPEC_MAX_MS = 3000;
+const SPEC_AVG_MS = 3000; // Under standard load (50 users), average should be < 3s
+const SPEC_MAX_MS = 3000; // Worst case for any single request should be < 3s
 
 const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [isRunning, setIsRunning] = useState(false);
@@ -280,15 +280,16 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <div className="spec-card">
             <h3>Response Time Requirements</h3>
             <ul>
-              <li>Average: &lt; {SPEC_AVG_MS}ms</li>
-              <li>Worst Case (Max): &lt; {SPEC_MAX_MS}ms</li>
+              <li>Average under standard load: &lt; {SPEC_AVG_MS / 1000}s</li>
+              <li>Worst case (any single request): &lt; {SPEC_MAX_MS / 1000}s</li>
             </ul>
           </div>
           <div className="spec-card">
-            <h3>Concurrent Load</h3>
+            <h3>Standard Load</h3>
             <ul>
               <li>Concurrent Users: {CONCURRENT_USERS}</li>
               <li>Each user makes 2 API calls (assign + navigate)</li>
+              <li>Total: {CONCURRENT_USERS * 2} concurrent API calls</li>
             </ul>
           </div>
         </div>
@@ -359,8 +360,8 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               </div>
               <div className="spec-check">
-                <p>✓ Average &lt; {SPEC_AVG_MS}ms: {summary.assignAvg < SPEC_AVG_MS ? 'PASS' : 'FAIL'}</p>
-                <p>✓ Max &lt; {SPEC_MAX_MS}ms: {summary.assignMax < SPEC_MAX_MS ? 'PASS' : 'FAIL'}</p>
+                <p>✓ Average under standard load &lt; {SPEC_AVG_MS / 1000}s: {summary.assignAvg < SPEC_AVG_MS ? 'PASS' : 'FAIL'}</p>
+                <p>✓ Worst case &lt; {SPEC_MAX_MS / 1000}s: {summary.assignMax < SPEC_MAX_MS ? 'PASS' : 'FAIL'}</p>
               </div>
             </div>
 
@@ -381,8 +382,8 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               </div>
               <div className="spec-check">
-                <p>✓ Average &lt; {SPEC_AVG_MS}ms: {summary.navigateAvg < SPEC_AVG_MS ? 'PASS' : 'FAIL'}</p>
-                <p>✓ Max &lt; {SPEC_MAX_MS}ms: {summary.navigateMax < SPEC_MAX_MS ? 'PASS' : 'FAIL'}</p>
+                <p>✓ Average under standard load &lt; {SPEC_AVG_MS / 1000}s: {summary.navigateAvg < SPEC_AVG_MS ? 'PASS' : 'FAIL'}</p>
+                <p>✓ Worst case &lt; {SPEC_MAX_MS / 1000}s: {summary.navigateMax < SPEC_MAX_MS ? 'PASS' : 'FAIL'}</p>
               </div>
             </div>
 

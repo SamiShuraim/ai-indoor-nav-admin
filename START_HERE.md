@@ -7,9 +7,9 @@
 ## 📋 What You Have
 
 A fully functional **API Load Testing page** that tests if your backend can handle:
-- ✅ **50 concurrent users**
-- ✅ **< 1 second average response time**
-- ✅ **< 3 seconds worst-case response time**
+- ✅ **50 concurrent users** (standard load)
+- ✅ **< 3 seconds average response time** (under standard load)
+- ✅ **< 3 seconds worst-case response time** (any single request)
 
 ---
 
@@ -135,18 +135,18 @@ When working correctly, you'll see:
 
 ```
 ✅ Assign API (/api/LoadBalancer/arrivals/assign)
-   Min:     123ms
-   Max:     456ms  
-   Average: 234ms
-   ✓ Average < 1000ms: PASS
-   ✓ Max < 3000ms: PASS
+   Min:     234ms
+   Max:     2,456ms  
+   Average: 1,234ms
+   ✓ Average under standard load < 3s: PASS
+   ✓ Worst case < 3s: PASS
 
 ✅ Navigate API (/api/RouteNode/navigateToLevel)
-   Min:     234ms
-   Max:     678ms
-   Average: 345ms
-   ✓ Average < 1000ms: PASS
-   ✓ Max < 3000ms: PASS
+   Min:     345ms
+   Max:     2,789ms
+   Average: 1,567ms
+   ✓ Average under standard load < 3s: PASS
+   ✓ Worst case < 3s: PASS
 
 Success: 50/50 requests
 ```
