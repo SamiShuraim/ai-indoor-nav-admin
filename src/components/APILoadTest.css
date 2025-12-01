@@ -5,40 +5,57 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
+  background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 300px);
+  min-height: 100vh;
 }
 
 .test-header {
-  margin-bottom: 30px;
+  margin-bottom: 40px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .test-header h1 {
   font-size: 2rem;
-  margin: 20px 0;
-  color: #333;
+  margin: 10px 0;
+  color: #2c3e50;
+  font-weight: 700;
 }
 
 .back-button {
   padding: 10px 20px;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+  background-color: #ffffff;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s;
+  font-weight: 600;
+  color: #495057;
+  transition: all 0.3s;
 }
 
 .back-button:hover {
-  background-color: #e0e0e0;
+  background-color: #f8f9fa;
+  border-color: #007bff;
+  color: #007bff;
+  transform: translateX(-2px);
 }
 
 .test-info {
   margin-bottom: 30px;
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .test-info h2 {
   font-size: 1.5rem;
   margin-bottom: 15px;
-  color: #444;
+  color: #2c3e50;
+  font-weight: 600;
 }
 
 .spec-cards {
@@ -49,16 +66,25 @@
 }
 
 .spec-card {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
   border-radius: 8px;
   padding: 20px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: transform 0.3s;
+}
+
+.spec-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15);
 }
 
 .spec-card h3 {
   font-size: 1.2rem;
   margin-bottom: 10px;
-  color: #495057;
+  color: white;
+  font-weight: 600;
 }
 
 .spec-card ul {
@@ -69,62 +95,131 @@
 
 .spec-card li {
   padding: 5px 0;
-  color: #6c757d;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
 }
 
 .test-controls {
   margin-bottom: 30px;
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .run-button {
   padding: 15px 40px;
-  background-color: #007bff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
   font-weight: 600;
+  box-shadow: 0 4px 6px rgba(102, 126, 234, 0.4);
 }
 
 .run-button:hover:not(:disabled) {
-  background-color: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(102, 126, 234, 0.6);
 }
 
 .run-button:disabled {
-  background-color: #6c757d;
+  background: #6c757d;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.progress-container {
+  margin-top: 20px;
+  width: 100%;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #495057;
+  font-weight: 600;
 }
 
 .progress-bar {
-  margin-top: 15px;
   width: 100%;
   height: 30px;
   background-color: #e9ecef;
   border-radius: 15px;
   overflow: hidden;
+  position: relative;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.2s ease;
+  border-radius: 15px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.live-indicator {
+  color: #dc3545;
+  font-size: 0.9rem;
   font-weight: 600;
-  transition: width 0.3s ease;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .test-results {
   margin-top: 30px;
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .test-results h2 {
   font-size: 1.5rem;
   margin-bottom: 20px;
   color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .summary-cards {
@@ -135,21 +230,25 @@
 }
 
 .summary-card {
-  background: #ffffff;
-  border: 2px solid #dee2e6;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
   border-radius: 8px;
   padding: 20px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
 .summary-card h3 {
   font-size: 1.1rem;
   margin-bottom: 15px;
-  color: #495057;
+  color: white;
+  font-weight: 600;
 }
 
 .summary-card p {
   margin: 8px 0;
-  color: #6c757d;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
 }
 
 .api-results {
@@ -164,21 +263,28 @@
   border-radius: 8px;
   padding: 20px;
   background: white;
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.api-result-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 .api-result-card.pass {
   border-color: #28a745;
-  background-color: #f8fff9;
+  background: linear-gradient(135deg, #f8fff9 0%, #e8f5e9 100%);
 }
 
 .api-result-card.fail {
   border-color: #dc3545;
-  background-color: #fff8f8;
+  background: linear-gradient(135deg, #fff8f8 0%, #ffebee 100%);
 }
 
 .api-result-card.info {
   border-color: #17a2b8;
-  background-color: #f8fcfd;
+  background: linear-gradient(135deg, #f8fcfd 0%, #e0f7fa 100%);
 }
 
 .api-result-card h3 {
@@ -239,6 +345,7 @@
   overflow-x: auto;
   border: 1px solid #dee2e6;
   border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .results-table {
@@ -273,8 +380,27 @@
   background-color: #f8fff9;
 }
 
+.results-table tbody tr.success td {
+  animation: fadeIn 0.3s ease-in;
+}
+
 .results-table tbody tr.failure {
   background-color: #fff8f8;
+}
+
+.results-table tbody tr.failure td {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .error-cell {

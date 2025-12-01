@@ -229,22 +229,30 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setSummary(null);
     setProgress(0);
 
-    const testPromises: Promise<TestResult>[] = [];
-    
-    // Create all 50 concurrent requests
-    for (let i = 0; i < CONCURRENT_USERS; i++) {
-      testPromises.push(runSingleTest(i + 1));
-    }
-
-    // Wait for all to complete and update progress
     const allResults: TestResult[] = [];
-    for (let i = 0; i < testPromises.length; i++) {
-      const result = await testPromises[i];
-      allResults.push(result);
-      setProgress(((i + 1) / CONCURRENT_USERS) * 100);
-    }
+    let completed = 0;
+    
+    // Create all 50 concurrent requests with live updates
+    const testPromises = Array.from({ length: CONCURRENT_USERS }, (_, i) =>
+      runSingleTest(i + 1).then(result => {
+        // Update completion count and progress
+        completed++;
+        allResults.push(result);
+        
+        // Update progress bar in real-time
+        setProgress((completed / CONCURRENT_USERS) * 100);
+        
+        // Update results table in real-time (sorted by request number)
+        setResults([...allResults].sort((a, b) => a.requestNumber - b.requestNumber));
+        
+        return result;
+      })
+    );
 
-    setResults(allResults);
+    // Wait for all requests to complete
+    await Promise.all(testPromises);
+
+    // Calculate and display final summary
     setSummary(calculateSummary(allResults));
     setIsRunning(false);
   };
@@ -295,27 +303,45 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           {isRunning ? 'Running Test...' : 'Run Load Test'}
         </button>
         {isRunning && (
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }}>
-              {progress.toFixed(0)}%
+          <div className="progress-container">
+            <div className="progress-info">
+              <span>Completed: {results.length} / {CONCURRENT_USERS}</span>
+              <span>{progress.toFixed(0)}%</span>
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
             </div>
           </div>
         )}
       </div>
 
-      {summary && (
+      {(summary || results.length > 0) && (
         <div className="test-results">
-          <h2>Test Results</h2>
+          <h2>Test Results {isRunning && <span className="live-indicator">● LIVE</span>}</h2>
           
-          <div className="summary-cards">
-            <div className="summary-card">
-              <h3>Overall Statistics</h3>
-              <p>Success: {summary.successCount} / {CONCURRENT_USERS}</p>
-              <p>Failures: {summary.failureCount}</p>
+          {summary && (
+            <div className="summary-cards">
+              <div className="summary-card">
+                <h3>Overall Statistics</h3>
+                <p>Success: {summary.successCount} / {CONCURRENT_USERS}</p>
+                <p>Failures: {summary.failureCount}</p>
+              </div>
             </div>
-          </div>
+          )}
+          
+          {!summary && results.length > 0 && (
+            <div className="summary-cards">
+              <div className="summary-card">
+                <h3>In Progress...</h3>
+                <p>Completed: {results.length} / {CONCURRENT_USERS}</p>
+                <p>Success: {results.filter(r => r.success).length}</p>
+                <p>Failures: {results.filter(r => !r.success).length}</p>
+              </div>
+            </div>
+          )}
 
-          <div className="api-results">
+          {summary && (
+            <div className="api-results">
             <div className={`api-result-card ${summary.assignPassesSpec ? 'pass' : 'fail'}`}>
               <h3>{getStatusIcon(summary.assignPassesSpec)} Assign API (/api/LoadBalancer/arrivals/assign)</h3>
               <div className="metrics">
@@ -377,7 +403,8 @@ const APILoadTest: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           <div className="detailed-results">
             <h3>Detailed Results</h3>
